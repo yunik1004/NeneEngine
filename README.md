@@ -1,3 +1,3 @@
 # NeneEngine
 
-Simple game engine using DirectX12
+Simple game engine using DirectX 12
