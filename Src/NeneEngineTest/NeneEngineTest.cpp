@@ -3,6 +3,7 @@
 
 #include "NeneEngineTest/framework.h"
 #include "NeneEngineTest/NeneEngineTest.h"
+#include "NeneEngine/engine.hpp"
 
 #define MAX_LOADSTRING 100
 
@@ -26,6 +27,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(lpCmdLine);
 
     // TODO: Place code here.
+    auto nene_engine = new Nene::Engine();
+    delete nene_engine;
 
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);

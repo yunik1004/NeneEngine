@@ -1,0 +1,49 @@
+#pragma once
+
+#include <d3d12.h>
+#include <dxgi1_4.h>
+#include <wrl.h>
+
+namespace Nene {
+	class Engine {
+	public:
+		Engine(void);
+		~Engine(void);
+
+		void InitMainWindow(void);
+		void InitDirect3D(void);
+
+	protected:
+		void CreateD3D12Device(void); // Create Direct3D 12 device
+		void Check4xMsaaQualitySupport(void); // Check 4X MSAA quality support
+		void CreateCommandObjects(void); // Create command queue and list
+		void CreateSwapChain(void);
+
+		HWND mhMainWnd = nullptr; // main window handle
+
+		Microsoft::WRL::ComPtr<IDXGIFactory4> mdxgiFactory;
+		Microsoft::WRL::ComPtr<IDXGISwapChain> mSwapChain;
+		Microsoft::WRL::ComPtr<ID3D12Device> md3dDevice;
+		Microsoft::WRL::ComPtr<ID3D12Fence> mFence;
+
+		Microsoft::WRL::ComPtr<ID3D12CommandQueue> mCommandQueue;
+		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> mDirectCmdListAlloc;
+		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> mCommandList;
+
+		static const int SwapChainBufferCount = 2;
+
+		// Descriptor size
+		UINT mRtvDescriptorSize = 0;
+		UINT mDsvDescriptorSize = 0;
+		UINT mCbvSrvUavDescriptorSize = 0;
+
+		// Set true to use 4X MSAA (?.1.8).  The default is false.
+		bool      m4xMsaaState = false; // 4X MSAA enabled
+		UINT m4xMsaaQuality = 0; // quality level of 4X MSAA
+
+		DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+		int mClientWidth = 800;
+		int mClientHeight = 600;
+	};
+}
