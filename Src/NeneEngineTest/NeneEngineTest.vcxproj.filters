@@ -42,7 +42,7 @@
     <ClInclude Include="..\..\Include\NeneEngineTest\framework.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Include\NeneEngineTest\NeneEngineTest.h">
+    <ClInclude Include="..\..\Include\NeneEngineTest\NeneEngineTest.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Include\NeneEngineTest\Resource.h">

@@ -7,13 +7,32 @@
 namespace Nene {
 	class Engine {
 	public:
-		Engine(void);
-		~Engine(void);
+		static bool Create(HINSTANCE hInstance, int nCmdShow, WCHAR* szTitle, WCHAR* szWindowClass);
+		static Engine* GetInstance(void);
+		static bool Delete(void);
 
-		void InitMainWindow(void);
-		void InitDirect3D(void);
+		int Run(void);
 
 	protected:
+		static Engine* eInstance; // engine instance
+
+		bool InitEngine(HINSTANCE hInstance, int nCmdShow, WCHAR* szTitle, WCHAR* szWindowClass);
+
+		bool InitMainWindow(void);
+		void InitDirect3D(void);
+
+		/* Windows */
+		ATOM RegisterWndClass(void); // Registers the window class
+		BOOL InitWndInstance(void); // Saves instance handle and creates main window
+		static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam); // Processes messages for the main window
+
+		HINSTANCE hInstance = nullptr; // current instance
+		int nCmdShow = 0;
+		WCHAR* szTitle = nullptr; // The title bar text
+		WCHAR* szWindowClass = nullptr; // The main window class name
+		HWND hWnd = nullptr;
+
+		/* DirectX 12 */
 		void CreateD3D12Device(void); // Create Direct3D 12 device
 		void Check4xMsaaQualitySupport(void); // Check 4X MSAA quality support
 		void CreateCommandObjects(void); // Create command queue and list

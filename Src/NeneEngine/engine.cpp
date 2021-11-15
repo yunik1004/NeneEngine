@@ -8,16 +8,59 @@
 using namespace Microsoft::WRL;
 
 namespace Nene {
-	Engine::Engine(void) {
+	Engine* Engine::eInstance = nullptr;
+
+	bool Engine::Create(HINSTANCE hInstance, int nCmdShow, WCHAR* szTitle, WCHAR* szWindowClass) {
+		if (eInstance == nullptr) {
+			eInstance = new Engine();
+			return eInstance->InitEngine(hInstance, nCmdShow, szTitle, szWindowClass);
+		}
+
+		return true;
+	}
+
+	Engine* Engine::GetInstance(void) {
+		return eInstance;
+	}
+
+	bool Engine::Delete(void) {
+		return true;
+	}
+
+	int Engine::Run(void) {
+		// TODO
+
+		MSG msg;
+
+		// Main message loop:
+		while (GetMessage(&msg, nullptr, 0, 0)) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+
+		return (int)msg.wParam;
+	}
+
+	bool Engine::InitEngine(HINSTANCE hInstance, int nCmdShow, WCHAR* szTitle, WCHAR* szWindowClass) {
+		this->hInstance = hInstance;
+		this->nCmdShow = nCmdShow;
+		this->szTitle = szTitle;
+		this->szWindowClass = szWindowClass;
+
+		if (!InitMainWindow()) {
+			return false;
+		}
 		InitDirect3D();
+
+		return true;
 	}
 
-	Engine::~Engine(void) {
-		//
-	}
-
-	void Engine::InitMainWindow(void) {
-
+	bool Engine::InitMainWindow(void) {
+		RegisterWndClass();
+		if (!InitWndInstance()) {
+			return false;
+		}
+		return true;
 	}
 
 	void Engine::InitDirect3D(void) {
@@ -35,6 +78,52 @@ namespace Nene {
 
 		CreateCommandObjects();
 		CreateSwapChain();
+	}
+
+	ATOM Engine::RegisterWndClass(void) {
+		WNDCLASSEXW wcex;
+
+		wcex.cbSize = sizeof(WNDCLASSEX);
+
+		wcex.style = CS_HREDRAW | CS_VREDRAW;
+		wcex.lpfnWndProc = Engine::WndProc;
+		wcex.cbClsExtra = 0;
+		wcex.cbWndExtra = 0;
+		wcex.hInstance = hInstance;
+		wcex.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+		wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+		wcex.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+		wcex.lpszMenuName = 0;
+		wcex.lpszClassName = szWindowClass;
+		wcex.hIconSm = LoadIcon(nullptr, IDI_APPLICATION);
+
+		return RegisterClassExW(&wcex);
+	}
+
+	BOOL Engine::InitWndInstance(void) {
+		hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
+			CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+
+		if (!hWnd) {
+			return FALSE;
+		}
+
+		ShowWindow(hWnd, nCmdShow);
+		UpdateWindow(hWnd);
+
+		return TRUE;
+	}
+
+	LRESULT CALLBACK Engine::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+		switch (message)
+		{
+		case WM_DESTROY:
+			PostQuitMessage(0);
+			break;
+		default:
+			return DefWindowProc(hWnd, message, wParam, lParam);
+		}
+		return 0;
 	}
 
 	void Engine::CreateD3D12Device(void) {
