@@ -83,15 +83,15 @@ namespace Nene {
 	}
 
 	BOOL Engine::InitWndInstance(void) {
-		hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
+		mhMainWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
 			CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
 
-		if (!hWnd) {
+		if (!mhMainWnd) {
 			return FALSE;
 		}
 
-		ShowWindow(hWnd, nCmdShow);
-		UpdateWindow(hWnd);
+		ShowWindow(mhMainWnd, nCmdShow);
+		UpdateWindow(mhMainWnd);
 
 		return TRUE;
 	}
@@ -184,7 +184,6 @@ namespace Nene {
 		// Release the previous swapchain
 		mSwapChain.Reset();
 
-		/*
 		DXGI_SWAP_CHAIN_DESC sd;
 		sd.BufferDesc.Width = mClientWidth;
 		sd.BufferDesc.Height = mClientHeight;
@@ -202,11 +201,11 @@ namespace Nene {
 		sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 		sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
+		// Swap chain uses queue to perform flush
 		ThrowIfFailed(mdxgiFactory->CreateSwapChain(
 			mCommandQueue.Get(),
 			&sd,
 			mSwapChain.GetAddressOf()
 		));
-		*/
 	}
 }

@@ -30,15 +30,13 @@ namespace Nene {
 		int nCmdShow = 0;
 		WCHAR szTitle[NENE_MAX_LOADSTRING]; // The title bar text
 		WCHAR szWindowClass[NENE_MAX_LOADSTRING]; // The main window class name
-		HWND hWnd = nullptr;
+		HWND mhMainWnd = nullptr; // main window handle
 
 		/* DirectX 12 */
 		void CreateD3D12Device(void); // Create Direct3D 12 device
 		void Check4xMsaaQualitySupport(void); // Check 4X MSAA quality support
 		void CreateCommandObjects(void); // Create command queue and list
 		void CreateSwapChain(void);
-
-		HWND mhMainWnd = nullptr; // main window handle
 
 		Microsoft::WRL::ComPtr<IDXGIFactory4> mdxgiFactory;
 		Microsoft::WRL::ComPtr<IDXGISwapChain> mSwapChain;
