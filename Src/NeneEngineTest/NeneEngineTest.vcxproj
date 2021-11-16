@@ -170,7 +170,6 @@
     <Image Include="..\..\Resource\Icon\small.ico" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\Include\NeneEngineTest\framework.h" />
     <ClInclude Include="..\..\Include\NeneEngineTest\NeneEngineTest.hpp" />
     <ClInclude Include="..\..\Include\NeneEngineTest\Resource.h" />
     <ClInclude Include="..\..\Include\NeneEngineTest\targetver.h" />

@@ -8,22 +8,18 @@
 using namespace Microsoft::WRL;
 
 namespace Nene {
-	Engine* Engine::eInstance = nullptr;
+	Engine::Engine(HINSTANCE hInstance, int nCmdShow, WCHAR* szTitle, WCHAR* szWindowClass)
+		: hInstance(hInstance), nCmdShow(nCmdShow) {
+		wmemcpy(this->szTitle, szTitle, NENE_MAX_LOADSTRING);
+		wmemcpy(this->szWindowClass, szWindowClass, NENE_MAX_LOADSTRING);
+	}
 
-	bool Engine::Create(HINSTANCE hInstance, int nCmdShow, WCHAR* szTitle, WCHAR* szWindowClass) {
-		if (eInstance == nullptr) {
-			eInstance = new Engine();
-			return eInstance->InitEngine(hInstance, nCmdShow, szTitle, szWindowClass);
+	bool Engine::Init(void) {
+		if (!InitMainWindow()) {
+			return false;
 		}
+		InitDirect3D();
 
-		return true;
-	}
-
-	Engine* Engine::GetInstance(void) {
-		return eInstance;
-	}
-
-	bool Engine::Delete(void) {
 		return true;
 	}
 
@@ -39,20 +35,6 @@ namespace Nene {
 		}
 
 		return (int)msg.wParam;
-	}
-
-	bool Engine::InitEngine(HINSTANCE hInstance, int nCmdShow, WCHAR* szTitle, WCHAR* szWindowClass) {
-		this->hInstance = hInstance;
-		this->nCmdShow = nCmdShow;
-		this->szTitle = szTitle;
-		this->szWindowClass = szWindowClass;
-
-		if (!InitMainWindow()) {
-			return false;
-		}
-		InitDirect3D();
-
-		return true;
 	}
 
 	bool Engine::InitMainWindow(void) {

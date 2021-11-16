@@ -4,32 +4,32 @@
 #include <dxgi1_4.h>
 #include <wrl.h>
 
+#ifndef NENE_MAX_LOADSTRING
+#define NENE_MAX_LOADSTRING 100
+#endif // !NENE_MAX_LOADSTRING
+
+
 namespace Nene {
 	class Engine {
 	public:
-		static bool Create(HINSTANCE hInstance, int nCmdShow, WCHAR* szTitle, WCHAR* szWindowClass);
-		static Engine* GetInstance(void);
-		static bool Delete(void);
+		Engine(HINSTANCE hInstance, int nCmdShow, WCHAR* szTitle, WCHAR* szWindowClass);
 
+		bool Init(void);
 		int Run(void);
 
 	protected:
-		static Engine* eInstance; // engine instance
-
-		bool InitEngine(HINSTANCE hInstance, int nCmdShow, WCHAR* szTitle, WCHAR* szWindowClass);
-
 		bool InitMainWindow(void);
 		void InitDirect3D(void);
 
 		/* Windows */
-		ATOM RegisterWndClass(void); // Registers the window class
-		BOOL InitWndInstance(void); // Saves instance handle and creates main window
+		virtual ATOM RegisterWndClass(void); // Registers the window class
+		virtual BOOL InitWndInstance(void); // Saves instance handle and creates main window
 		static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam); // Processes messages for the main window
 
 		HINSTANCE hInstance = nullptr; // current instance
 		int nCmdShow = 0;
-		WCHAR* szTitle = nullptr; // The title bar text
-		WCHAR* szWindowClass = nullptr; // The main window class name
+		WCHAR szTitle[NENE_MAX_LOADSTRING]; // The title bar text
+		WCHAR szWindowClass[NENE_MAX_LOADSTRING]; // The main window class name
 		HWND hWnd = nullptr;
 
 		/* DirectX 12 */
