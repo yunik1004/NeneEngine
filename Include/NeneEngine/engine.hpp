@@ -37,6 +37,12 @@ namespace Nene {
 		void Check4xMsaaQualitySupport(void); // Check 4X MSAA quality support
 		void CreateCommandObjects(void); // Create command queue and list
 		void CreateSwapChain(void);
+		void CreateRtvAndDsvDescriptorHeap(void);
+		void CreateRtv(void);
+		void CreateDepthStencilBufferAndView(void);
+
+		D3D12_CPU_DESCRIPTOR_HANDLE CurrentBackBufferVIew(void) const;
+		D3D12_CPU_DESCRIPTOR_HANDLE DepthStencilView(void) const;
 
 		Microsoft::WRL::ComPtr<IDXGIFactory4> mdxgiFactory;
 		Microsoft::WRL::ComPtr<IDXGISwapChain> mSwapChain;
@@ -48,6 +54,12 @@ namespace Nene {
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> mCommandList;
 
 		static const int SwapChainBufferCount = 2;
+		int mCurrBackBuffer = 0;
+		Microsoft::WRL::ComPtr<ID3D12Resource> mSwapChainBuffer[SwapChainBufferCount];
+		Microsoft::WRL::ComPtr<ID3D12Resource> mDepthStencilBuffer;
+
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mRtvHeap;
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mDsvHeap;
 
 		// Descriptor size
 		UINT mRtvDescriptorSize = 0;
@@ -59,6 +71,7 @@ namespace Nene {
 		UINT m4xMsaaQuality = 0; // quality level of 4X MSAA
 
 		DXGI_FORMAT mBackBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+		DXGI_FORMAT mDepthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
 		int mClientWidth = 800;
 		int mClientHeight = 600;
