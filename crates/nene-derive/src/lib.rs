@@ -56,7 +56,9 @@ pub fn vertex(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 fn field_type_to_format(ty: &Type) -> TokenStream2 {
     if let Type::Array(arr) = ty
-        && let Expr::Lit(ExprLit { lit: Lit::Int(n), .. }) = &arr.len
+        && let Expr::Lit(ExprLit {
+            lit: Lit::Int(n), ..
+        }) = &arr.len
     {
         let count: usize = n.base10_parse().unwrap();
         if let Type::Path(p) = arr.elem.as_ref()
