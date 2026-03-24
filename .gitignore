@@ -1,0 +1,23 @@
+# Build artifacts
+/target
+*.o
+*.so
+*.a
+
+# Test files
+*_test
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cargo lock (keep for binaries, ignore for libraries)
+# Cargo.lock
