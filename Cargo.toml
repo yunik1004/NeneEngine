@@ -1,10 +1,18 @@
+[workspace]
+members = [".", "crates/nene-derive"]
+resolver = "2"
+
 [package]
-name = "nene_engine"
+name = "nene"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bytemuck = { version = "1", features = ["derive"] }
 cpal = "0.17.3"
+nene-derive = { path = "crates/nene-derive" }
+pollster = "0.3"
+glam = "0.32.1"
 symphonia = "0.5.5"
 wgpu = "29.0.0"
 winit = "0.30.13"
