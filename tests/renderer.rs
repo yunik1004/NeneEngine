@@ -1,5 +1,12 @@
 use nene::{renderer::HeadlessContext, vertex};
 
+fn write_temp_png(name: &str, width: u32, height: u32, pixel: [u8; 4]) -> std::path::PathBuf {
+    let img = image::RgbaImage::from_pixel(width, height, image::Rgba(pixel));
+    let path = std::env::temp_dir().join(name);
+    img.save(&path).unwrap();
+    path
+}
+
 #[vertex]
 struct TestVertex {
     position: [f32; 2],
@@ -81,4 +88,43 @@ fn submit_empty_multiple_times() {
     ctx.submit_empty();
     ctx.submit_empty();
     ctx.submit_empty();
+}
+
+#[test]
+fn texture_load_1x1() {
+    let Some(ctx) = make_ctx() else { return };
+    let path = write_temp_png("nene_test_1x1.png", 1, 1, [255, 0, 0, 255]);
+    let _ = ctx.load_texture(&path);
+}
+
+#[test]
+fn texture_load_rgba() {
+    let Some(ctx) = make_ctx() else { return };
+    let path = write_temp_png("nene_test_rgba.png", 64, 64, [128, 64, 32, 255]);
+    let _ = ctx.load_texture(&path);
+}
+
+#[test]
+fn texture_load_transparent() {
+    let Some(ctx) = make_ctx() else { return };
+    let path = write_temp_png("nene_test_transparent.png", 32, 32, [0, 0, 0, 0]);
+    let _ = ctx.load_texture(&path);
+}
+
+#[test]
+fn texture_load_multiple() {
+    let Some(ctx) = make_ctx() else { return };
+    let path_a = write_temp_png("nene_test_tex_a.png", 16, 16, [255, 0, 0, 255]);
+    let path_b = write_temp_png("nene_test_tex_b.png", 32, 32, [0, 255, 0, 255]);
+    let path_c = write_temp_png("nene_test_tex_c.png", 64, 64, [0, 0, 255, 255]);
+    let _ = ctx.load_texture(&path_a);
+    let _ = ctx.load_texture(&path_b);
+    let _ = ctx.load_texture(&path_c);
+}
+
+#[test]
+fn texture_load_non_square() {
+    let Some(ctx) = make_ctx() else { return };
+    let path = write_temp_png("nene_test_nonsquare.png", 128, 64, [255, 255, 255, 255]);
+    let _ = ctx.load_texture(&path);
 }

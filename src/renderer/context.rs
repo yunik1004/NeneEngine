@@ -2,7 +2,8 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use super::{Pipeline, PipelineDescriptor, RenderPass, VertexBuffer};
+use super::texture;
+use super::{Pipeline, PipelineDescriptor, RenderPass, Texture, VertexBuffer};
 
 fn create_instance() -> wgpu::Instance {
     wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -52,6 +53,19 @@ impl HeadlessContext {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         self.queue.submit([encoder.finish()]);
+    }
+
+    pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {
+        self.load_texture_with(path, texture::FilterMode::Linear)
+    }
+
+    pub fn load_texture_with(
+        &self,
+        path: impl AsRef<std::path::Path>,
+        filter: texture::FilterMode,
+    ) -> Texture {
+        let rgba = image::open(path).expect("Failed to open image").to_rgba8();
+        texture::create(&self.device, &self.queue, &rgba, filter)
     }
 }
 
@@ -129,11 +143,16 @@ impl Context {
                 source: wgpu::ShaderSource::Wgsl(desc.shader.into()),
             });
 
+        let texture_layout = desc
+            .use_texture
+            .then(|| texture::bind_group_layout(&self.device));
+        let bind_group_layouts: Vec<Option<&wgpu::BindGroupLayout>> =
+            texture_layout.iter().map(Some).collect();
         let layout = self
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[],
+                bind_group_layouts: &bind_group_layouts,
                 immediate_size: 0,
             });
 
@@ -183,8 +202,25 @@ impl Context {
         Pipeline { inner }
     }
 
+    pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {
+        self.load_texture_with(path, texture::FilterMode::Linear)
+    }
+
+    pub fn load_texture_with(
+        &self,
+        path: impl AsRef<std::path::Path>,
+        filter: texture::FilterMode,
+    ) -> Texture {
+        let rgba = image::open(path).expect("Failed to open image").to_rgba8();
+        texture::create(&self.device, &self.queue, &rgba, filter)
+    }
+
     pub fn device(&self) -> &wgpu::Device {
         &self.device
+    }
+
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.queue
     }
 
     pub fn surface_config(&self) -> &wgpu::SurfaceConfiguration {

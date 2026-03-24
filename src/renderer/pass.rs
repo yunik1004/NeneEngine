@@ -1,4 +1,4 @@
-use super::{Pipeline, VertexBuffer};
+use super::{Pipeline, Texture, VertexBuffer};
 
 pub struct RenderPass<'a> {
     pub(crate) inner: wgpu::RenderPass<'a>,
@@ -21,6 +21,10 @@ impl<'a> RenderPass<'a> {
             )
         };
         self.inner.set_vertex_buffer(slot, slice);
+    }
+
+    pub fn set_texture(&mut self, group: u32, texture: &Texture) {
+        self.inner.set_bind_group(group, &texture.bind_group, &[]);
     }
 
     pub fn draw(&mut self, vertices: std::ops::Range<u32>) {

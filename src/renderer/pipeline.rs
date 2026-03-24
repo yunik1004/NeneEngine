@@ -7,6 +7,7 @@ pub struct PipelineDescriptor<'a> {
     pub vertex_layout: VertexLayout,
     pub vertex_entry: &'a str,
     pub fragment_entry: &'a str,
+    pub use_texture: bool,
 }
 
 impl<'a> PipelineDescriptor<'a> {
@@ -16,7 +17,13 @@ impl<'a> PipelineDescriptor<'a> {
             vertex_layout,
             vertex_entry: "vs_main",
             fragment_entry: "fs_main",
+            use_texture: false,
         }
+    }
+
+    pub fn with_texture(mut self) -> Self {
+        self.use_texture = true;
+        self
     }
 }
 
