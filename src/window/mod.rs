@@ -41,11 +41,23 @@ impl Window {
         init: impl FnOnce(&mut Context) -> S + 'static,
         render: impl FnMut(&mut S, &mut crate::renderer::RenderPass<'_>) + 'static,
     ) {
+        self.run_with_update(init, |_, _| {}, render);
+    }
+
+    /// Like [`run_with`](Self::run_with) but with an `update` callback that runs before
+    /// each frame's render pass — useful for uploading GPU data (e.g. `TextRenderer::prepare`).
+    pub fn run_with_update<S: 'static>(
+        self,
+        init: impl FnOnce(&mut Context) -> S + 'static,
+        update: impl FnMut(&mut S, &mut Context) + 'static,
+        render: impl FnMut(&mut S, &mut crate::renderer::RenderPass<'_>) + 'static,
+    ) {
         let mut runner = WindowRunner {
             config: self.config,
             handle: None,
             renderer: None,
             init: Some(Box::new(init)),
+            update: Box::new(update),
             render: Box::new(render),
             state: None,
         };
@@ -56,6 +68,7 @@ impl Window {
 }
 
 type InitFn<S> = Box<dyn FnOnce(&mut Context) -> S>;
+type UpdateFn<S> = Box<dyn FnMut(&mut S, &mut Context)>;
 type RenderFn<S> = Box<dyn FnMut(&mut S, &mut crate::renderer::RenderPass<'_>)>;
 
 struct WindowRunner<S> {
@@ -63,6 +76,7 @@ struct WindowRunner<S> {
     handle: Option<Arc<WinitWindow>>,
     renderer: Option<Context>,
     init: Option<InitFn<S>>,
+    update: UpdateFn<S>,
     render: RenderFn<S>,
     state: Option<S>,
 }
@@ -109,6 +123,7 @@ impl<S> ApplicationHandler for WindowRunner<S> {
             }
             winit::event::WindowEvent::RedrawRequested => {
                 if let (Some(ctx), Some(state)) = (&mut self.renderer, &mut self.state) {
+                    (self.update)(state, ctx);
                     let render = &mut self.render;
                     ctx.render_with(|pass| render(state, pass));
                 }

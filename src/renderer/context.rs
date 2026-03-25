@@ -4,6 +4,7 @@ use winit::window::Window;
 
 use super::texture;
 use super::{Pipeline, PipelineDescriptor, RenderPass, Texture, VertexBuffer};
+use crate::text::TextRenderer;
 
 fn create_instance() -> wgpu::Instance {
     wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -66,6 +67,16 @@ impl HeadlessContext {
     ) -> Texture {
         let rgba = image::open(path).expect("Failed to open image").to_rgba8();
         texture::create(&self.device, &self.queue, &rgba, filter)
+    }
+
+    /// Create a [`TextRenderer`] backed by this headless context.
+    /// Uses `Rgba8UnormSrgb` as the target format.
+    pub fn create_text_renderer(&self) -> TextRenderer {
+        TextRenderer::new_raw(
+            &self.device,
+            &self.queue,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+        )
     }
 }
 

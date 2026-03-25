@@ -1,3 +1,5 @@
+use crate::text::TextRenderer;
+
 use super::{Pipeline, Texture, VertexBuffer};
 
 pub struct RenderPass<'a> {
@@ -29,5 +31,9 @@ impl<'a> RenderPass<'a> {
 
     pub fn draw(&mut self, vertices: std::ops::Range<u32>) {
         self.inner.draw(vertices, 0..1);
+    }
+
+    pub fn draw_text(&mut self, renderer: &TextRenderer) {
+        renderer.render(&mut self.inner);
     }
 }
