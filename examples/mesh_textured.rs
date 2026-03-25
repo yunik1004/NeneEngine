@@ -1,5 +1,5 @@
 use nene::{
-    math::{Isometry3, Perspective3, Point3, Rotation3, Vector3},
+    math::{Mat4, Vec3},
     mesh::Model,
     renderer::{
         Context, FilterMode, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, Texture,
@@ -104,17 +104,12 @@ fn write_quad_obj() -> std::path::PathBuf {
 }
 
 fn build_camera(angle: f32, aspect: f32) -> CameraUniform {
-    let proj = Perspective3::new(aspect, 45f32.to_radians(), 0.1, 100.0).to_homogeneous();
-    let view = Isometry3::look_at_rh(
-        &Point3::new(0.0, 0.0, 3.0),
-        &Point3::origin(),
-        &Vector3::y(),
-    )
-    .to_homogeneous();
-    let model = Rotation3::from_axis_angle(&Vector3::y_axis(), angle).to_homogeneous();
+    let proj = Mat4::perspective_rh(45f32.to_radians(), aspect, 0.1, 100.0);
+    let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 3.0), Vec3::ZERO, Vec3::Y);
+    let model = Mat4::from_rotation_y(angle);
     CameraUniform {
-        view_proj: (proj * view).data.0,
-        model: model.data.0,
+        view_proj: (proj * view).to_cols_array_2d(),
+        model: model.to_cols_array_2d(),
     }
 }
 

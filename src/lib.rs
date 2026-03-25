@@ -1,6 +1,8 @@
 pub mod audio;
 pub mod math;
 pub mod mesh;
+pub mod physics2d;
+pub mod physics3d;
 pub mod renderer;
 pub mod text;
 pub mod window;
