@@ -90,7 +90,12 @@ pub struct UvRect {
 
 impl UvRect {
     /// The full texture — `[0, 0, 1, 1]`.
-    pub const FULL: Self = Self { x: 0.0, y: 0.0, w: 1.0, h: 1.0 };
+    pub const FULL: Self = Self {
+        x: 0.0,
+        y: 0.0,
+        w: 1.0,
+        h: 1.0,
+    };
 }
 
 impl Default for UvRect {
@@ -162,8 +167,14 @@ impl SpriteBatch {
             .collect();
 
         // Pre-allocate vertex buffer (zeroed).
-        let vertices =
-            vec![SpriteVertex { position: [0.0; 2], uv: [0.0; 2], color: [0.0; 4] }; max_sprites * 4];
+        let vertices = vec![
+            SpriteVertex {
+                position: [0.0; 2],
+                uv: [0.0; 2],
+                color: [0.0; 4]
+            };
+            max_sprites * 4
+        ];
 
         let vertex_buffer = ctx.create_vertex_buffer(&vertices);
         let index_buffer = ctx.create_index_buffer(&indices);

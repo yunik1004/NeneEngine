@@ -1,11 +1,12 @@
 pub mod audio;
 pub mod camera;
 pub mod input;
-pub mod sprite;
+pub mod light;
 pub mod math;
 pub mod mesh;
 pub mod physics;
 pub mod renderer;
+pub mod sprite;
 pub mod text;
 pub mod time;
 pub mod window;

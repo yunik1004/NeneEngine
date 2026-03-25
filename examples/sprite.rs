@@ -25,7 +25,11 @@ fn make_texture(ctx: &mut Context) -> nene::renderer::Texture {
     for y in 0..size {
         for x in 0..size {
             let checker = ((x / tile) + (y / tile)) % 2 == 0;
-            let (r, g, b) = if checker { (220u8, 180, 255) } else { (80u8, 40, 160) };
+            let (r, g, b) = if checker {
+                (220u8, 180, 255)
+            } else {
+                (80u8, 40, 160)
+            };
             data.extend_from_slice(&[r, g, b, 255]);
         }
     }
@@ -58,15 +62,29 @@ fn main() {
 
             // Move player with WASD
             let mut dir = Vec2::ZERO;
-            if input.key_down(Key::KeyW) || input.key_down(Key::ArrowUp)    { dir.y += 1.0; }
-            if input.key_down(Key::KeyS) || input.key_down(Key::ArrowDown)  { dir.y -= 1.0; }
-            if input.key_down(Key::KeyA) || input.key_down(Key::ArrowLeft)  { dir.x -= 1.0; }
-            if input.key_down(Key::KeyD) || input.key_down(Key::ArrowRight) { dir.x += 1.0; }
-            if dir != Vec2::ZERO { state.player_pos += dir.normalize() * speed; }
+            if input.key_down(Key::KeyW) || input.key_down(Key::ArrowUp) {
+                dir.y += 1.0;
+            }
+            if input.key_down(Key::KeyS) || input.key_down(Key::ArrowDown) {
+                dir.y -= 1.0;
+            }
+            if input.key_down(Key::KeyA) || input.key_down(Key::ArrowLeft) {
+                dir.x -= 1.0;
+            }
+            if input.key_down(Key::KeyD) || input.key_down(Key::ArrowRight) {
+                dir.x += 1.0;
+            }
+            if dir != Vec2::ZERO {
+                state.player_pos += dir.normalize() * speed;
+            }
 
             // Rotate with Q/E
-            if input.key_down(Key::KeyQ) { state.angle += 2.0 * time.delta; }
-            if input.key_down(Key::KeyE) { state.angle -= 2.0 * time.delta; }
+            if input.key_down(Key::KeyQ) {
+                state.angle += 2.0 * time.delta;
+            }
+            if input.key_down(Key::KeyE) {
+                state.angle -= 2.0 * time.delta;
+            }
 
             let cfg = ctx.surface_config();
             let aspect = cfg.width as f32 / cfg.height as f32;
@@ -79,7 +97,12 @@ fn main() {
                     state.batch.draw(&Sprite {
                         position: Vec2::new(col as f32 * 1.5, row as f32 * 1.5),
                         size: Vec2::splat(1.2),
-                        uv: UvRect { x: 0.0, y: 0.0, w: 0.5, h: 0.5 },
+                        uv: UvRect {
+                            x: 0.0,
+                            y: 0.0,
+                            w: 0.5,
+                            h: 0.5,
+                        },
                         color: [0.6, 0.6, 0.6, 1.0],
                         ..Sprite::default()
                     });
@@ -96,7 +119,12 @@ fn main() {
                 position: state.player_pos,
                 size: Vec2::splat(1.0),
                 rotation: state.angle,
-                uv: UvRect { x: 0.5, y: 0.0, w: 0.5, h: 0.5 },
+                uv: UvRect {
+                    x: 0.5,
+                    y: 0.0,
+                    w: 0.5,
+                    h: 0.5,
+                },
                 color: tint,
             });
 
