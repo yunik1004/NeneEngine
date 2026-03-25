@@ -11,6 +11,8 @@ pub struct PipelineDescriptor<'a> {
     pub use_uniform: bool,
     pub alpha_blend: bool,
     pub depth_write: bool,
+    pub use_shadow_map: bool,
+    pub depth_only: bool,
 }
 
 impl<'a> PipelineDescriptor<'a> {
@@ -24,6 +26,8 @@ impl<'a> PipelineDescriptor<'a> {
             use_uniform: false,
             alpha_blend: false,
             depth_write: false,
+            use_shadow_map: false,
+            depth_only: false,
         }
     }
 
@@ -47,6 +51,17 @@ impl<'a> PipelineDescriptor<'a> {
     /// When enabled, uniform is at group 0; texture (if also enabled) moves to group 1.
     pub fn with_uniform(mut self) -> Self {
         self.use_uniform = true;
+        self
+    }
+
+    pub fn with_shadow_map(mut self) -> Self {
+        self.use_shadow_map = true;
+        self
+    }
+
+    pub fn depth_only(mut self) -> Self {
+        self.depth_only = true;
+        self.depth_write = true;
         self
     }
 }

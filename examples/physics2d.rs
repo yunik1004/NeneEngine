@@ -166,6 +166,7 @@ fn main() {
                 },
             );
         },
+        |_, _| {},
         |state, pass: &mut RenderPass| {
             pass.set_pipeline(&state.pipeline);
 

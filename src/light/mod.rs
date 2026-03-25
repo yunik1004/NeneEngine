@@ -4,6 +4,25 @@ use crate::math::Vec3;
 
 // ── WGSL snippets ─────────────────────────────────────────────────────────────
 
+/// WGSL helper for PCF shadow sampling.
+///
+/// Requires `texture_depth_2d` and `sampler_comparison` bindings.
+pub const SHADOW_WGSL: &str = r#"
+fn shadow_factor(
+    shadow_map:    texture_depth_2d,
+    shadow_samp:   sampler_comparison,
+    light_space:   vec4<f32>,
+    bias:          f32,
+) -> f32 {
+    let proj = light_space.xyz / light_space.w;
+    let uv   = proj.xy * vec2<f32>(0.5, -0.5) + 0.5;
+    if (proj.z > 1.0 || uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+        return 1.0;
+    }
+    return textureSampleCompare(shadow_map, shadow_samp, uv, proj.z - bias);
+}
+"#;
+
 /// WGSL struct + helper function for ambient light.
 pub const AMBIENT_LIGHT_WGSL: &str = r#"
 struct AmbientLight {
@@ -120,6 +139,27 @@ impl DirectionalLight {
             color,
             _pad: 0.0,
         }
+    }
+
+    /// Compute an orthographic view-projection matrix for shadow mapping.
+    ///
+    /// `scene_center` is the center of the scene to cover, `scene_radius` is the
+    /// half-size of the orthographic frustum in world units.
+    pub fn light_view_proj(&self, scene_center: crate::math::Vec3, scene_radius: f32) -> crate::math::Mat4 {
+        use crate::math::Mat4;
+        let up = if self.direction.abs().dot(crate::math::Vec3::Y) > 0.99 {
+            crate::math::Vec3::Z
+        } else {
+            crate::math::Vec3::Y
+        };
+        let pos = scene_center - self.direction * scene_radius;
+        let view = Mat4::look_at_rh(pos, scene_center, up);
+        let proj = Mat4::orthographic_rh(
+            -scene_radius, scene_radius,
+            -scene_radius, scene_radius,
+            0.0, scene_radius * 2.0,
+        );
+        proj * view
     }
 }
 

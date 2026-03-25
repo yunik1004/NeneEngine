@@ -2,6 +2,8 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
+use super::shadow;
+use super::shadow::ShadowMap;
 use super::texture;
 use super::uniform;
 use super::{
@@ -107,6 +109,10 @@ impl GpuDevice {
         filter: texture::FilterMode,
     ) -> Texture {
         texture::create(&self.device, &self.queue, width, height, rgba, filter)
+    }
+
+    pub fn create_shadow_map(&self, size: u32) -> ShadowMap {
+        shadow::create(&self.device, size)
     }
 }
 
@@ -320,16 +326,14 @@ impl Context {
         let texture_layout = desc
             .use_texture
             .then(|| texture::bind_group_layout(&self.gpu.device));
+        let shadow_layout = desc
+            .use_shadow_map
+            .then(|| shadow::bind_group_layout(&self.gpu.device));
 
-        // group 0: uniform (if enabled), else texture (if enabled)
-        // group 1: texture (if uniform also enabled)
-        let bind_group_layouts: Vec<Option<&wgpu::BindGroupLayout>> =
-            match (&uniform_layout, &texture_layout) {
-                (Some(u), Some(t)) => vec![Some(u), Some(t)],
-                (Some(u), None) => vec![Some(u)],
-                (None, Some(t)) => vec![Some(t)],
-                (None, None) => vec![],
-            };
+        let mut bind_group_layouts: Vec<Option<&wgpu::BindGroupLayout>> = Vec::new();
+        if let Some(u) = &uniform_layout { bind_group_layouts.push(Some(u)); }
+        if let Some(t) = &texture_layout { bind_group_layouts.push(Some(t)); }
+        if let Some(s) = &shadow_layout  { bind_group_layouts.push(Some(s)); }
 
         let layout = self
             .gpu
@@ -351,6 +355,17 @@ impl Context {
             })
             .collect();
 
+        let color_target = Some(wgpu::ColorTargetState {
+            format: self.surface_config.format,
+            blend: Some(if desc.alpha_blend {
+                wgpu::BlendState::ALPHA_BLENDING
+            } else {
+                wgpu::BlendState::REPLACE
+            }),
+            write_mask: wgpu::ColorWrites::ALL,
+        });
+        let color_targets = [color_target];
+
         let inner = self
             .gpu
             .device
@@ -367,25 +382,21 @@ impl Context {
                     }],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some(desc.fragment_entry),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: self.surface_config.format,
-                        blend: Some(if desc.alpha_blend {
-                            wgpu::BlendState::ALPHA_BLENDING
-                        } else {
-                            wgpu::BlendState::REPLACE
-                        }),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                }),
+                fragment: if desc.depth_only {
+                    None
+                } else {
+                    Some(wgpu::FragmentState {
+                        module: &shader,
+                        entry_point: Some(desc.fragment_entry),
+                        targets: &color_targets,
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    })
+                },
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: DEPTH_FORMAT,
-                    depth_write_enabled: Some(desc.depth_write),
-                    depth_compare: Some(if desc.depth_write {
+                    depth_write_enabled: Some(desc.depth_write || desc.depth_only),
+                    depth_compare: Some(if desc.depth_write || desc.depth_only {
                         wgpu::CompareFunction::LessEqual
                     } else {
                         wgpu::CompareFunction::Always
@@ -437,6 +448,37 @@ impl Context {
         filter: texture::FilterMode,
     ) -> Texture {
         self.gpu.create_texture_with(width, height, rgba, filter)
+    }
+
+    pub fn create_shadow_map(&self, size: u32) -> ShadowMap {
+        self.gpu.create_shadow_map(size)
+    }
+
+    pub fn shadow_pass<F: FnOnce(&mut RenderPass<'_>)>(&mut self, shadow_map: &ShadowMap, draw: F) {
+        let mut encoder = self
+            .gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let wgpu_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("shadow_pass"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &shadow_map.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            let mut pass = RenderPass::new(wgpu_pass);
+            draw(&mut pass);
+        }
+        self.gpu.queue.submit([encoder.finish()]);
     }
 
     pub(crate) fn device(&self) -> &wgpu::Device {

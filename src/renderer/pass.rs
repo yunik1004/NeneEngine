@@ -1,6 +1,6 @@
 use crate::text::TextRenderer;
 
-use super::{IndexBuffer, Pipeline, Texture, UniformBuffer, VertexBuffer};
+use super::{IndexBuffer, Pipeline, ShadowMap, Texture, UniformBuffer, VertexBuffer};
 
 pub struct RenderPass<'a> {
     pub(crate) inner: wgpu::RenderPass<'a>,
@@ -59,6 +59,10 @@ impl<'a> RenderPass<'a> {
         self.inner
             .set_index_buffer(slice, wgpu::IndexFormat::Uint32);
         self.inner.draw_indexed(0..count, 0, 0..1);
+    }
+
+    pub fn set_shadow_map(&mut self, group: u32, shadow_map: &ShadowMap) {
+        self.inner.set_bind_group(group, &shadow_map.bind_group, &[]);
     }
 
     pub fn draw_text(&mut self, renderer: &TextRenderer) {

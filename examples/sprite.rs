@@ -130,6 +130,7 @@ fn main() {
 
             state.batch.prepare(ctx, &state.camera, aspect);
         },
+        |_, _| {},
         |state, pass: &mut RenderPass| {
             state.batch.render(pass, &state.texture);
         },

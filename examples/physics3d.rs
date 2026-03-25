@@ -230,6 +230,7 @@ fn main() {
                 },
             );
         },
+        |_, _| {},
         |state, pass: &mut RenderPass| {
             pass.set_pipeline(&state.floor_pipeline);
             pass.set_uniform(0, &state.floor_uniform);

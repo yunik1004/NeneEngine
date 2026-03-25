@@ -131,6 +131,7 @@ fn main() {
 
             ctx.update_uniform_buffer(&state.uniform, &build_transform(state.pos, color));
         },
+        |_, _| {},
         |state, pass: &mut RenderPass| {
             pass.set_pipeline(&state.pipeline);
             pass.set_uniform(0, &state.uniform);

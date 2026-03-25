@@ -41,6 +41,7 @@ fn main() {
             );
             state.text.prepare(ctx);
         },
+        |_, _| {},
         |state, pass: &mut RenderPass| {
             pass.draw_text(&state.text);
         },

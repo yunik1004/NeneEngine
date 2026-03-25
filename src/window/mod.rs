@@ -45,7 +45,7 @@ impl Window {
         init: impl FnOnce(&mut Context) -> S + 'static,
         render: impl FnMut(&mut S, &mut crate::renderer::RenderPass<'_>) + 'static,
     ) {
-        self.run_with_update(init, |_, _, _, _| {}, render);
+        self.run_with_update(init, |_, _, _, _| {}, |_, _| {}, render);
     }
 
     /// Like [`run_with`](Self::run_with) but with an `update` callback that runs before
@@ -56,6 +56,7 @@ impl Window {
         self,
         init: impl FnOnce(&mut Context) -> S + 'static,
         update: impl FnMut(&mut S, &mut Context, &Input, &Time) + 'static,
+        pre_render: impl FnMut(&mut S, &mut Context) + 'static,
         render: impl FnMut(&mut S, &mut crate::renderer::RenderPass<'_>) + 'static,
     ) {
         let now = Instant::now();
@@ -73,6 +74,7 @@ impl Window {
             start: now,
             init: Some(Box::new(init)),
             update: Box::new(update),
+            pre_render: Box::new(pre_render),
             render: Box::new(render),
             state: None,
         };
@@ -84,6 +86,7 @@ impl Window {
 
 type InitFn<S> = Box<dyn FnOnce(&mut Context) -> S>;
 type UpdateFn<S> = Box<dyn FnMut(&mut S, &mut Context, &Input, &Time)>;
+type PreRenderFn<S> = Box<dyn FnMut(&mut S, &mut Context)>;
 type RenderFn<S> = Box<dyn FnMut(&mut S, &mut crate::renderer::RenderPass<'_>)>;
 
 struct WindowRunner<S> {
@@ -96,6 +99,7 @@ struct WindowRunner<S> {
     start: Instant,
     init: Option<InitFn<S>>,
     update: UpdateFn<S>,
+    pre_render: PreRenderFn<S>,
     render: RenderFn<S>,
     state: Option<S>,
 }
@@ -169,6 +173,7 @@ impl<S> ApplicationHandler for WindowRunner<S> {
 
                 if let (Some(ctx), Some(state)) = (&mut self.renderer, &mut self.state) {
                     (self.update)(state, ctx, &self.input, &self.time);
+                    (self.pre_render)(state, ctx);
                     let render = &mut self.render;
                     ctx.render_with(|pass| render(state, pass));
                 }
