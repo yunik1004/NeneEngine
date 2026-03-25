@@ -154,7 +154,7 @@ fn main() {
     })
     .run_with_update(
         init,
-        |state, ctx| {
+        |state, ctx, _input| {
             state.world.step();
             let pos = state.world.body(state.ball_handle).unwrap().translation();
             ctx.update_uniform_buffer(

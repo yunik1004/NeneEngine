@@ -209,7 +209,7 @@ fn main() {
     })
     .run_with_update(
         init,
-        |state, ctx| {
+        |state, ctx, _input| {
             state.world.step();
 
             let body = state.world.body(state.ball_handle).unwrap();

@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod input;
 pub mod math;
 pub mod mesh;
 pub mod physics2d;

@@ -137,7 +137,7 @@ fn main() {
     })
     .run_with_update(
         init,
-        |state, ctx| {
+        |state, ctx, _input| {
             state.angle += 0.01;
             let cfg = ctx.surface_config();
             let aspect = cfg.width as f32 / cfg.height as f32;
