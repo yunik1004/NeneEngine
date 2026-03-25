@@ -3,7 +3,10 @@ use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 use super::texture;
-use super::{Pipeline, PipelineDescriptor, RenderPass, Texture, VertexBuffer};
+use super::uniform;
+use super::{
+    IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, Texture, UniformBuffer, VertexBuffer,
+};
 use crate::text::TextRenderer;
 
 fn create_instance() -> wgpu::Instance {
@@ -47,6 +50,29 @@ impl HeadlessContext {
                 usage: wgpu::BufferUsages::VERTEX,
             });
         VertexBuffer { inner }
+    }
+
+    pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
+        let inner = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::cast_slice(indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+        IndexBuffer {
+            inner,
+            count: indices.len() as u32,
+        }
+    }
+
+    pub fn create_uniform_buffer<T: bytemuck::Pod>(&self, data: &T) -> UniformBuffer {
+        uniform::create(&self.device, bytemuck::bytes_of(data))
+    }
+
+    pub fn update_uniform_buffer<T: bytemuck::Pod>(&self, buf: &UniformBuffer, data: &T) {
+        self.queue
+            .write_buffer(&buf.inner, 0, bytemuck::bytes_of(data));
     }
 
     pub fn submit_empty(&self) {
@@ -177,6 +203,29 @@ impl Context {
         VertexBuffer { inner }
     }
 
+    pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
+        let inner = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::cast_slice(indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+        IndexBuffer {
+            inner,
+            count: indices.len() as u32,
+        }
+    }
+
+    pub fn create_uniform_buffer<T: bytemuck::Pod>(&self, data: &T) -> UniformBuffer {
+        uniform::create(&self.device, bytemuck::bytes_of(data))
+    }
+
+    pub fn update_uniform_buffer<T: bytemuck::Pod>(&self, buf: &UniformBuffer, data: &T) {
+        self.queue
+            .write_buffer(&buf.inner, 0, bytemuck::bytes_of(data));
+    }
+
     pub fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
         let shader = self
             .device
@@ -185,11 +234,23 @@ impl Context {
                 source: wgpu::ShaderSource::Wgsl(desc.shader.into()),
             });
 
+        let uniform_layout = desc
+            .use_uniform
+            .then(|| uniform::bind_group_layout(&self.device));
         let texture_layout = desc
             .use_texture
             .then(|| texture::bind_group_layout(&self.device));
+
+        // group 0: uniform (if enabled), else texture (if enabled)
+        // group 1: texture (if uniform also enabled)
         let bind_group_layouts: Vec<Option<&wgpu::BindGroupLayout>> =
-            texture_layout.iter().map(Some).collect();
+            match (&uniform_layout, &texture_layout) {
+                (Some(u), Some(t)) => vec![Some(u), Some(t)],
+                (Some(u), None) => vec![Some(u)],
+                (None, Some(t)) => vec![Some(t)],
+                (None, None) => vec![],
+            };
+
         let layout = self
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

@@ -1,6 +1,6 @@
 use crate::text::TextRenderer;
 
-use super::{Pipeline, Texture, VertexBuffer};
+use super::{IndexBuffer, Pipeline, Texture, UniformBuffer, VertexBuffer};
 
 pub struct RenderPass<'a> {
     pub(crate) inner: wgpu::RenderPass<'a>,
@@ -29,8 +29,24 @@ impl<'a> RenderPass<'a> {
         self.inner.set_bind_group(group, &texture.bind_group, &[]);
     }
 
+    pub fn set_uniform(&mut self, group: u32, buffer: &UniformBuffer) {
+        self.inner.set_bind_group(group, &buffer.bind_group, &[]);
+    }
+
     pub fn draw(&mut self, vertices: std::ops::Range<u32>) {
         self.inner.draw(vertices, 0..1);
+    }
+
+    pub fn draw_indexed(&mut self, indices: &IndexBuffer) {
+        // SAFETY: buffer outlives this render pass (stored in user state).
+        let slice = unsafe {
+            std::mem::transmute::<wgpu::BufferSlice<'_>, wgpu::BufferSlice<'a>>(
+                indices.inner.slice(..),
+            )
+        };
+        self.inner
+            .set_index_buffer(slice, wgpu::IndexFormat::Uint32);
+        self.inner.draw_indexed(0..indices.count, 0, 0..1);
     }
 
     pub fn draw_text(&mut self, renderer: &TextRenderer) {

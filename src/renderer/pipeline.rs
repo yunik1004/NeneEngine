@@ -8,6 +8,7 @@ pub struct PipelineDescriptor<'a> {
     pub vertex_entry: &'a str,
     pub fragment_entry: &'a str,
     pub use_texture: bool,
+    pub use_uniform: bool,
 }
 
 impl<'a> PipelineDescriptor<'a> {
@@ -18,11 +19,19 @@ impl<'a> PipelineDescriptor<'a> {
             vertex_entry: "vs_main",
             fragment_entry: "fs_main",
             use_texture: false,
+            use_uniform: false,
         }
     }
 
     pub fn with_texture(mut self) -> Self {
         self.use_texture = true;
+        self
+    }
+
+    /// Add a uniform buffer bind group.
+    /// When enabled, uniform is at group 0; texture (if also enabled) moves to group 1.
+    pub fn with_uniform(mut self) -> Self {
+        self.use_uniform = true;
         self
     }
 }

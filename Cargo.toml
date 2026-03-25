@@ -1,20 +1,22 @@
-[workspace]
-members = [".", "crates/nene-derive"]
-resolver = "2"
-
 [package]
 name = "nene"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = [".", "crates/nene-derive"]
+resolver = "2"
+
 [dependencies]
 bytemuck = { version = "1", features = ["derive"] }
+cosmic-text = "0.18.2"
 cpal = "0.17.3"
+glam = "0.32.1"
+gltf = "1.4.1"
+image = "0.25.10"
 nene-derive = { path = "crates/nene-derive" }
 pollster = "0.3"
-glam = "0.32.1"
 symphonia = "0.5.5"
+tobj = "4.0.3"
 wgpu = "29.0.0"
 winit = "0.30.13"
-image = "0.25.10"
-cosmic-text = "0.18.2"

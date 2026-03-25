@@ -128,11 +128,13 @@ impl<S> ApplicationHandler for WindowRunner<S> {
                     ctx.render_with(|pass| render(state, pass));
                 }
             }
-            _ => {
-                if let Some(handle) = &self.handle {
-                    handle.request_redraw();
-                }
-            }
+            _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(handle) = &self.handle {
+            handle.request_redraw();
         }
     }
 }

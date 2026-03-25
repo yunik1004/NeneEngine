@@ -54,6 +54,23 @@ pub fn vertex(_args: TokenStream, input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+#[proc_macro_attribute]
+pub fn uniform(_args: TokenStream, input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    let expanded = quote! {
+        #[repr(C)]
+        #[derive(Copy, Clone)]
+        #input
+
+        unsafe impl ::bytemuck::Zeroable for #name {}
+        unsafe impl ::bytemuck::Pod for #name {}
+    };
+
+    TokenStream::from(expanded)
+}
+
 fn field_type_to_format(ty: &Type) -> TokenStream2 {
     if let Type::Array(arr) = ty
         && let Expr::Lit(ExprLit {
