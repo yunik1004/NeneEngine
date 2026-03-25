@@ -19,7 +19,15 @@ fn shadow_factor(
     if (proj.z > 1.0 || uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
         return 1.0;
     }
-    return textureSampleCompare(shadow_map, shadow_samp, uv, proj.z - bias);
+    let texel = 1.0 / f32(textureDimensions(shadow_map).x);
+    var s = 0.0;
+    for (var x = -1; x <= 1; x++) {
+        for (var y = -1; y <= 1; y++) {
+            s += textureSampleCompare(shadow_map, shadow_samp,
+                uv + vec2<f32>(f32(x), f32(y)) * texel, proj.z - bias);
+        }
+    }
+    return s / 9.0;
 }
 "#;
 
@@ -145,7 +153,11 @@ impl DirectionalLight {
     ///
     /// `scene_center` is the center of the scene to cover, `scene_radius` is the
     /// half-size of the orthographic frustum in world units.
-    pub fn light_view_proj(&self, scene_center: crate::math::Vec3, scene_radius: f32) -> crate::math::Mat4 {
+    pub fn light_view_proj(
+        &self,
+        scene_center: crate::math::Vec3,
+        scene_radius: f32,
+    ) -> crate::math::Mat4 {
         use crate::math::Mat4;
         let up = if self.direction.abs().dot(crate::math::Vec3::Y) > 0.99 {
             crate::math::Vec3::Z
@@ -155,9 +167,12 @@ impl DirectionalLight {
         let pos = scene_center - self.direction * scene_radius;
         let view = Mat4::look_at_rh(pos, scene_center, up);
         let proj = Mat4::orthographic_rh(
-            -scene_radius, scene_radius,
-            -scene_radius, scene_radius,
-            0.0, scene_radius * 2.0,
+            -scene_radius,
+            scene_radius,
+            -scene_radius,
+            scene_radius,
+            0.0,
+            scene_radius * 2.0,
         );
         proj * view
     }

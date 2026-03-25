@@ -1,10 +1,15 @@
 /// Rotating textured cube with diffuse lighting and shadow mapping.
 use nene::{
     camera::Camera,
-    light::{AMBIENT_LIGHT_WGSL, DIRECTIONAL_LIGHT_WGSL, SHADOW_WGSL, AmbientLight, DirectionalLight},
+    light::{
+        AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight, SHADOW_WGSL,
+    },
     math::{Mat4, Vec3},
     mesh::MeshVertex,
-    renderer::{Context, FilterMode, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, ShadowMap, Texture, UniformBuffer, VertexBuffer},
+    renderer::{
+        Context, FilterMode, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, ShadowMap,
+        Texture, UniformBuffer, VertexBuffer,
+    },
     uniform,
     window::{Config, Window},
 };
@@ -23,7 +28,8 @@ fn vs_main(@location(0) pos: vec3<f32>) -> @builtin(position) vec4<f32> {
 "#;
 
 fn make_main_shader() -> String {
-    format!(r#"
+    format!(
+        r#"
 {SHADOW_WGSL}
 {AMBIENT_LIGHT_WGSL}
 {DIRECTIONAL_LIGHT_WGSL}
@@ -58,7 +64,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {{
     let world_pos = scene.model * vec4<f32>(in.position, 1.0);
     var out: VertexOutput;
     out.clip_pos    = scene.view_proj * world_pos;
-    out.world_normal = in.normal;
+    out.world_normal = (scene.model * vec4<f32>(in.normal, 0.0)).xyz;
     out.uv          = in.uv;
     out.light_space = scene.light_vp * world_pos;
     return out;
@@ -67,7 +73,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {{
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {{
     let albedo  = textureSample(tex, samp, in.uv);
-    let shadow  = shadow_factor(shadow_map, shadow_samp, in.light_space, 0.005);
+    let shadow  = shadow_factor(shadow_map, shadow_samp, in.light_space, 0.0);
     let diffuse = directional_light(scene.directional, in.world_normal) * shadow;
     let ambient = ambient_light(scene.ambient);
     return vec4<f32>(albedo.rgb * (ambient + diffuse), albedo.a);
@@ -82,36 +88,45 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {{
 fn cube_mesh() -> (Vec<MeshVertex>, Vec<u32>) {
     macro_rules! v {
         ($px:expr, $py:expr, $pz:expr, $nx:expr, $ny:expr, $nz:expr, $u:expr, $vv:expr) => {
-            MeshVertex { position: [$px, $py, $pz], normal: [$nx, $ny, $nz], uv: [$u, $vv] }
+            MeshVertex {
+                position: [$px, $py, $pz],
+                normal: [$nx, $ny, $nz],
+                uv: [$u, $vv],
+            }
         };
     }
     let vertices = vec![
-        v!(-0.5, -0.5,  0.5,  0.0,  0.0,  1.0,  0.0, 1.0),
-        v!( 0.5, -0.5,  0.5,  0.0,  0.0,  1.0,  1.0, 1.0),
-        v!( 0.5,  0.5,  0.5,  0.0,  0.0,  1.0,  1.0, 0.0),
-        v!(-0.5,  0.5,  0.5,  0.0,  0.0,  1.0,  0.0, 0.0),
-        v!( 0.5, -0.5, -0.5,  0.0,  0.0, -1.0,  0.0, 1.0),
-        v!(-0.5, -0.5, -0.5,  0.0,  0.0, -1.0,  1.0, 1.0),
-        v!(-0.5,  0.5, -0.5,  0.0,  0.0, -1.0,  1.0, 0.0),
-        v!( 0.5,  0.5, -0.5,  0.0,  0.0, -1.0,  0.0, 0.0),
-        v!(-0.5,  0.5,  0.5,  0.0,  1.0,  0.0,  0.0, 1.0),
-        v!( 0.5,  0.5,  0.5,  0.0,  1.0,  0.0,  1.0, 1.0),
-        v!( 0.5,  0.5, -0.5,  0.0,  1.0,  0.0,  1.0, 0.0),
-        v!(-0.5,  0.5, -0.5,  0.0,  1.0,  0.0,  0.0, 0.0),
-        v!(-0.5, -0.5, -0.5,  0.0, -1.0,  0.0,  0.0, 1.0),
-        v!( 0.5, -0.5, -0.5,  0.0, -1.0,  0.0,  1.0, 1.0),
-        v!( 0.5, -0.5,  0.5,  0.0, -1.0,  0.0,  1.0, 0.0),
-        v!(-0.5, -0.5,  0.5,  0.0, -1.0,  0.0,  0.0, 0.0),
-        v!( 0.5, -0.5,  0.5,  1.0,  0.0,  0.0,  0.0, 1.0),
-        v!( 0.5, -0.5, -0.5,  1.0,  0.0,  0.0,  1.0, 1.0),
-        v!( 0.5,  0.5, -0.5,  1.0,  0.0,  0.0,  1.0, 0.0),
-        v!( 0.5,  0.5,  0.5,  1.0,  0.0,  0.0,  0.0, 0.0),
-        v!(-0.5, -0.5, -0.5, -1.0,  0.0,  0.0,  0.0, 1.0),
-        v!(-0.5, -0.5,  0.5, -1.0,  0.0,  0.0,  1.0, 1.0),
-        v!(-0.5,  0.5,  0.5, -1.0,  0.0,  0.0,  1.0, 0.0),
-        v!(-0.5,  0.5, -0.5, -1.0,  0.0,  0.0,  0.0, 0.0),
+        v!(-0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 1.0),
+        v!(0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0),
+        v!(0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 0.0),
+        v!(-0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 0.0),
+        v!(0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.0, 1.0),
+        v!(-0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 1.0, 1.0),
+        v!(-0.5, 0.5, -0.5, 0.0, 0.0, -1.0, 1.0, 0.0),
+        v!(0.5, 0.5, -0.5, 0.0, 0.0, -1.0, 0.0, 0.0),
+        v!(-0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.0, 1.0),
+        v!(0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 1.0, 1.0),
+        v!(0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0),
+        v!(-0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.0, 0.0),
+        v!(-0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.0, 1.0),
+        v!(0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 1.0, 1.0),
+        v!(0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 1.0, 0.0),
+        v!(-0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 0.0, 0.0),
+        v!(0.5, -0.5, 0.5, 1.0, 0.0, 0.0, 0.0, 1.0),
+        v!(0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 1.0, 1.0),
+        v!(0.5, 0.5, -0.5, 1.0, 0.0, 0.0, 1.0, 0.0),
+        v!(0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 0.0, 0.0),
+        v!(-0.5, -0.5, -0.5, -1.0, 0.0, 0.0, 0.0, 1.0),
+        v!(-0.5, -0.5, 0.5, -1.0, 0.0, 0.0, 1.0, 1.0),
+        v!(-0.5, 0.5, 0.5, -1.0, 0.0, 0.0, 1.0, 0.0),
+        v!(-0.5, 0.5, -0.5, -1.0, 0.0, 0.0, 0.0, 0.0),
     ];
-    let indices: Vec<u32> = (0..6u32).flat_map(|f| { let b = f * 4; [b, b+1, b+2, b, b+2, b+3] }).collect();
+    let indices: Vec<u32> = (0..6u32)
+        .flat_map(|f| {
+            let b = f * 4;
+            [b, b + 1, b + 2, b, b + 2, b + 3]
+        })
+        .collect();
     (vertices, indices)
 }
 
@@ -151,14 +166,23 @@ fn make_checkerboard(ctx: &mut Context) -> Texture {
     for y in 0..size {
         for x in 0..size {
             let white = ((x / tile) + (y / tile)) % 2 == 0;
-            let (r, g, b) = if white { (220u8, 200, 255) } else { (80u8, 40, 120) };
+            let (r, g, b) = if white {
+                (220u8, 200, 255)
+            } else {
+                (80u8, 40, 120)
+            };
             data.extend_from_slice(&[r, g, b, 255]);
         }
     }
     ctx.create_texture_with(size, size, &data, FilterMode::Nearest)
 }
 
-fn build_scene(angle: f32, aspect: f32, ambient: &AmbientLight, directional: &DirectionalLight) -> SceneUniform {
+fn build_scene(
+    angle: f32,
+    aspect: f32,
+    ambient: &AmbientLight,
+    directional: &DirectionalLight,
+) -> SceneUniform {
     let camera = Camera::perspective(Vec3::new(0.0, 1.5, 4.0), 45.0, 0.1, 100.0);
     let light_vp = directional.light_view_proj(Vec3::ZERO, 3.0);
     SceneUniform {
@@ -186,7 +210,8 @@ fn init(ctx: &mut Context) -> State {
     let shadow_map = ctx.create_shadow_map(1024);
 
     let ambient = AmbientLight::new(Vec3::ONE, 0.15);
-    let directional = DirectionalLight::new(Vec3::new(1.0, -2.0, -1.0), Vec3::new(1.0, 0.95, 0.9), 1.0);
+    let directional =
+        DirectionalLight::new(Vec3::new(1.0, -2.0, -1.0), Vec3::new(1.0, 0.95, 0.9), 1.0);
 
     let cfg = ctx.surface_config();
     let aspect = cfg.width as f32 / cfg.height as f32;
@@ -224,7 +249,11 @@ fn init(ctx: &mut Context) -> State {
 }
 
 fn main() {
-    Window::new(Config { title: "Mesh".to_string(), ..Config::default() }).run_with_update(
+    Window::new(Config {
+        title: "Mesh".to_string(),
+        ..Config::default()
+    })
+    .run_with_update(
         init,
         |state, ctx, _input, time| {
             state.angle += std::f32::consts::TAU * 0.1 * time.delta;

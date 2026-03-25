@@ -11,7 +11,11 @@ pub(crate) fn create(device: &wgpu::Device, size: u32) -> ShadowMap {
 
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("shadow_map"),
-        size: wgpu::Extent3d { width: size, height: size, depth_or_array_layers: 1 },
+        size: wgpu::Extent3d {
+            width: size,
+            height: size,
+            depth_or_array_layers: 1,
+        },
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -45,7 +49,11 @@ pub(crate) fn create(device: &wgpu::Device, size: u32) -> ShadowMap {
         ],
     });
 
-    ShadowMap { view, bind_group, size }
+    ShadowMap {
+        view,
+        bind_group,
+        size,
+    }
 }
 
 pub(crate) fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {

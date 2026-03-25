@@ -62,7 +62,8 @@ impl<'a> RenderPass<'a> {
     }
 
     pub fn set_shadow_map(&mut self, group: u32, shadow_map: &ShadowMap) {
-        self.inner.set_bind_group(group, &shadow_map.bind_group, &[]);
+        self.inner
+            .set_bind_group(group, &shadow_map.bind_group, &[]);
     }
 
     pub fn draw_text(&mut self, renderer: &TextRenderer) {

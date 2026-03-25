@@ -331,9 +331,15 @@ impl Context {
             .then(|| shadow::bind_group_layout(&self.gpu.device));
 
         let mut bind_group_layouts: Vec<Option<&wgpu::BindGroupLayout>> = Vec::new();
-        if let Some(u) = &uniform_layout { bind_group_layouts.push(Some(u)); }
-        if let Some(t) = &texture_layout { bind_group_layouts.push(Some(t)); }
-        if let Some(s) = &shadow_layout  { bind_group_layouts.push(Some(s)); }
+        if let Some(u) = &uniform_layout {
+            bind_group_layouts.push(Some(u));
+        }
+        if let Some(t) = &texture_layout {
+            bind_group_layouts.push(Some(t));
+        }
+        if let Some(s) = &shadow_layout {
+            bind_group_layouts.push(Some(s));
+        }
 
         let layout = self
             .gpu
@@ -402,7 +408,15 @@ impl Context {
                         wgpu::CompareFunction::Always
                     }),
                     stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState::default(),
+                    bias: if desc.depth_only {
+                        wgpu::DepthBiasState {
+                            constant: 2,
+                            slope_scale: 4.0,
+                            clamp: 0.0,
+                        }
+                    } else {
+                        wgpu::DepthBiasState::default()
+                    },
                 }),
                 multisample: wgpu::MultisampleState::default(),
                 multiview_mask: None,
