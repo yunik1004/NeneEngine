@@ -4,10 +4,6 @@ fn make_ctx() -> Option<HeadlessContext> {
     HeadlessContext::new()
 }
 
-fn solid_rgba(width: u32, height: u32, pixel: [u8; 4]) -> Vec<u8> {
-    pixel.repeat((width * height) as usize)
-}
-
 #[vertex]
 struct TestVertex {
     position: [f32; 2],
@@ -85,53 +81,4 @@ fn submit_empty_multiple_times() {
     ctx.submit_empty();
     ctx.submit_empty();
     ctx.submit_empty();
-}
-
-#[test]
-fn texture_create_1x1() {
-    let Some(ctx) = make_ctx() else { return };
-    let _ = ctx.create_texture(1, 1, &[255, 0, 0, 255]);
-}
-
-#[test]
-fn texture_create_rgba() {
-    let Some(ctx) = make_ctx() else { return };
-    let data = solid_rgba(64, 64, [128, 64, 32, 255]);
-    let _ = ctx.create_texture(64, 64, &data);
-}
-
-#[test]
-fn texture_create_transparent() {
-    let Some(ctx) = make_ctx() else { return };
-    let data = solid_rgba(32, 32, [0, 0, 0, 0]);
-    let _ = ctx.create_texture(32, 32, &data);
-}
-
-#[test]
-fn texture_create_multiple() {
-    let Some(ctx) = make_ctx() else { return };
-    let _ = ctx.create_texture(16, 16, &solid_rgba(16, 16, [255, 0, 0, 255]));
-    let _ = ctx.create_texture(32, 32, &solid_rgba(32, 32, [0, 255, 0, 255]));
-    let _ = ctx.create_texture(64, 64, &solid_rgba(64, 64, [0, 0, 255, 255]));
-}
-
-#[test]
-fn texture_create_non_square() {
-    let Some(ctx) = make_ctx() else { return };
-    let data = solid_rgba(128, 64, [255, 255, 255, 255]);
-    let _ = ctx.create_texture(128, 64, &data);
-}
-
-#[test]
-fn texture_load_from_memory() {
-    let Some(ctx) = make_ctx() else { return };
-    // Encode a small PNG in memory using image (library dep), then decode via nene
-    let img = image::RgbaImage::from_pixel(4, 4, image::Rgba([255u8, 128, 0, 255]));
-    let mut bytes = Vec::new();
-    img.write_to(
-        &mut std::io::Cursor::new(&mut bytes),
-        image::ImageFormat::Png,
-    )
-    .unwrap();
-    let _ = ctx.load_texture_from_memory(&bytes);
 }

@@ -194,6 +194,14 @@ impl HeadlessContext {
         self.gpu.queue.submit([encoder.finish()]);
     }
 
+    pub fn create_shadow_map(&self, size: u32) -> ShadowMap {
+        shadow::create(&self.gpu.device, size)
+    }
+
+    pub fn create_render_target(&self, width: u32, height: u32) -> (wgpu::TextureView, Texture) {
+        texture::create_render_target(&self.gpu.device, width, height)
+    }
+
     pub fn create_text_renderer(&self) -> TextRenderer {
         TextRenderer::new_raw(
             &self.gpu.device,
