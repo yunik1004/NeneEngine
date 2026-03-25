@@ -94,13 +94,18 @@ fn write_temp_obj() -> std::path::PathBuf {
 }
 
 fn build_camera(angle: f32, aspect: f32) -> CameraUniform {
-    use nene::math::{Mat4, Vec3};
-    let proj = Mat4::perspective_rh(45f32.to_radians(), aspect, 0.1, 100.0);
-    let view = Mat4::look_at_rh(Vec3::new(0.0, 1.5, 4.0), Vec3::ZERO, Vec3::Y);
-    let model = Mat4::from_rotation_y(angle);
+    use nene::math::{Isometry3, Perspective3, Point3, Rotation3, Vector3};
+    let proj = Perspective3::new(aspect, 45f32.to_radians(), 0.1, 100.0).to_homogeneous();
+    let view = Isometry3::look_at_rh(
+        &Point3::new(0.0, 1.5, 4.0),
+        &Point3::origin(),
+        &Vector3::y(),
+    )
+    .to_homogeneous();
+    let model = Rotation3::from_axis_angle(&Vector3::y_axis(), angle).to_homogeneous();
     CameraUniform {
-        view_proj: (proj * view).to_cols_array_2d(),
-        model: model.to_cols_array_2d(),
+        view_proj: (proj * view).data.0,
+        model: model.data.0,
     }
 }
 

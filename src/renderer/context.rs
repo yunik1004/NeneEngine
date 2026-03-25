@@ -19,28 +19,13 @@ fn create_instance() -> wgpu::Instance {
     })
 }
 
-pub struct HeadlessContext {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+/// Shared GPU device + queue with all buffer/texture creation helpers.
+pub(crate) struct GpuDevice {
+    pub(crate) device: wgpu::Device,
+    pub(crate) queue: wgpu::Queue,
 }
 
-impl HeadlessContext {
-    pub fn new() -> Option<Self> {
-        let adapter = pollster::block_on(create_instance().request_adapter(
-            &wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::None,
-                compatible_surface: None,
-                force_fallback_adapter: false,
-            },
-        ))
-        .ok()?;
-
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
-
-        Some(Self { device, queue })
-    }
-
+impl GpuDevice {
     pub fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
         let inner = self
             .device
@@ -73,13 +58,6 @@ impl HeadlessContext {
     pub fn update_uniform_buffer<T: bytemuck::Pod>(&self, buf: &UniformBuffer, data: &T) {
         self.queue
             .write_buffer(&buf.inner, 0, bytemuck::bytes_of(data));
-    }
-
-    pub fn submit_empty(&self) {
-        let encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        self.queue.submit([encoder.finish()]);
     }
 
     pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {
@@ -125,22 +103,105 @@ impl HeadlessContext {
     ) -> Texture {
         texture::create(&self.device, &self.queue, width, height, rgba, filter)
     }
+}
 
-    /// Create a [`TextRenderer`] backed by this headless context.
-    /// Uses `Rgba8UnormSrgb` as the target format.
+pub struct HeadlessContext {
+    gpu: GpuDevice,
+}
+
+impl HeadlessContext {
+    pub fn new() -> Option<Self> {
+        let adapter = pollster::block_on(create_instance().request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::None,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            },
+        ))
+        .ok()?;
+
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
+
+        Some(Self {
+            gpu: GpuDevice { device, queue },
+        })
+    }
+
+    pub fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
+        self.gpu.create_vertex_buffer(data)
+    }
+
+    pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
+        self.gpu.create_index_buffer(indices)
+    }
+
+    pub fn create_uniform_buffer<T: bytemuck::Pod>(&self, data: &T) -> UniformBuffer {
+        self.gpu.create_uniform_buffer(data)
+    }
+
+    pub fn update_uniform_buffer<T: bytemuck::Pod>(&self, buf: &UniformBuffer, data: &T) {
+        self.gpu.update_uniform_buffer(buf, data)
+    }
+
+    pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {
+        self.gpu.load_texture(path)
+    }
+
+    pub fn load_texture_with(
+        &self,
+        path: impl AsRef<std::path::Path>,
+        filter: texture::FilterMode,
+    ) -> Texture {
+        self.gpu.load_texture_with(path, filter)
+    }
+
+    pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Texture {
+        self.gpu.load_texture_from_memory(bytes)
+    }
+
+    pub fn load_texture_from_memory_with(
+        &self,
+        bytes: &[u8],
+        filter: texture::FilterMode,
+    ) -> Texture {
+        self.gpu.load_texture_from_memory_with(bytes, filter)
+    }
+
+    pub fn create_texture(&self, width: u32, height: u32, rgba: &[u8]) -> Texture {
+        self.gpu.create_texture(width, height, rgba)
+    }
+
+    pub fn create_texture_with(
+        &self,
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+        filter: texture::FilterMode,
+    ) -> Texture {
+        self.gpu.create_texture_with(width, height, rgba, filter)
+    }
+
+    pub fn submit_empty(&self) {
+        let encoder = self
+            .gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        self.gpu.queue.submit([encoder.finish()]);
+    }
+
     pub fn create_text_renderer(&self) -> TextRenderer {
         TextRenderer::new_raw(
-            &self.device,
-            &self.queue,
+            &self.gpu.device,
+            &self.gpu.queue,
             wgpu::TextureFormat::Rgba8UnormSrgb,
         )
     }
 }
 
 pub struct Context {
+    gpu: GpuDevice,
     surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
     surface_config: wgpu::SurfaceConfiguration,
 }
 
@@ -185,49 +246,31 @@ impl Context {
         surface.configure(&device, &surface_config);
 
         Self {
+            gpu: GpuDevice { device, queue },
             surface,
-            device,
-            queue,
             surface_config,
         }
     }
 
     pub fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
-        let inner = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: None,
-                contents: bytemuck::cast_slice(data),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-        VertexBuffer { inner }
+        self.gpu.create_vertex_buffer(data)
     }
 
     pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
-        let inner = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: None,
-                contents: bytemuck::cast_slice(indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
-        IndexBuffer {
-            inner,
-            count: indices.len() as u32,
-        }
+        self.gpu.create_index_buffer(indices)
     }
 
     pub fn create_uniform_buffer<T: bytemuck::Pod>(&self, data: &T) -> UniformBuffer {
-        uniform::create(&self.device, bytemuck::bytes_of(data))
+        self.gpu.create_uniform_buffer(data)
     }
 
     pub fn update_uniform_buffer<T: bytemuck::Pod>(&self, buf: &UniformBuffer, data: &T) {
-        self.queue
-            .write_buffer(&buf.inner, 0, bytemuck::bytes_of(data));
+        self.gpu.update_uniform_buffer(buf, data)
     }
 
     pub fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
         let shader = self
+            .gpu
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
@@ -236,10 +279,10 @@ impl Context {
 
         let uniform_layout = desc
             .use_uniform
-            .then(|| uniform::bind_group_layout(&self.device));
+            .then(|| uniform::bind_group_layout(&self.gpu.device));
         let texture_layout = desc
             .use_texture
-            .then(|| texture::bind_group_layout(&self.device));
+            .then(|| texture::bind_group_layout(&self.gpu.device));
 
         // group 0: uniform (if enabled), else texture (if enabled)
         // group 1: texture (if uniform also enabled)
@@ -252,6 +295,7 @@ impl Context {
             };
 
         let layout = self
+            .gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
@@ -271,6 +315,7 @@ impl Context {
             .collect();
 
         let inner = self
+            .gpu
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: None,
@@ -306,7 +351,7 @@ impl Context {
     }
 
     pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {
-        self.load_texture_with(path, texture::FilterMode::Linear)
+        self.gpu.load_texture(path)
     }
 
     pub fn load_texture_with(
@@ -314,13 +359,11 @@ impl Context {
         path: impl AsRef<std::path::Path>,
         filter: texture::FilterMode,
     ) -> Texture {
-        let rgba = image::open(path).expect("Failed to open image").to_rgba8();
-        let (w, h) = rgba.dimensions();
-        texture::create(&self.device, &self.queue, w, h, &rgba, filter)
+        self.gpu.load_texture_with(path, filter)
     }
 
     pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Texture {
-        self.load_texture_from_memory_with(bytes, texture::FilterMode::Linear)
+        self.gpu.load_texture_from_memory(bytes)
     }
 
     pub fn load_texture_from_memory_with(
@@ -328,15 +371,11 @@ impl Context {
         bytes: &[u8],
         filter: texture::FilterMode,
     ) -> Texture {
-        let rgba = image::load_from_memory(bytes)
-            .expect("Failed to decode image")
-            .to_rgba8();
-        let (w, h) = rgba.dimensions();
-        texture::create(&self.device, &self.queue, w, h, &rgba, filter)
+        self.gpu.load_texture_from_memory_with(bytes, filter)
     }
 
     pub fn create_texture(&self, width: u32, height: u32, rgba: &[u8]) -> Texture {
-        self.create_texture_with(width, height, rgba, texture::FilterMode::Linear)
+        self.gpu.create_texture(width, height, rgba)
     }
 
     pub fn create_texture_with(
@@ -346,15 +385,15 @@ impl Context {
         rgba: &[u8],
         filter: texture::FilterMode,
     ) -> Texture {
-        texture::create(&self.device, &self.queue, width, height, rgba, filter)
+        self.gpu.create_texture_with(width, height, rgba, filter)
     }
 
-    pub fn device(&self) -> &wgpu::Device {
-        &self.device
+    pub(crate) fn device(&self) -> &wgpu::Device {
+        &self.gpu.device
     }
 
-    pub fn queue(&self) -> &wgpu::Queue {
-        &self.queue
+    pub(crate) fn queue(&self) -> &wgpu::Queue {
+        &self.gpu.queue
     }
 
     pub fn surface_config(&self) -> &wgpu::SurfaceConfiguration {
@@ -372,6 +411,7 @@ impl Context {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
+            .gpu
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
@@ -401,7 +441,7 @@ impl Context {
             draw(&mut pass);
         }
 
-        self.queue.submit([encoder.finish()]);
+        self.gpu.queue.submit([encoder.finish()]);
         frame.present();
     }
 
@@ -411,6 +451,7 @@ impl Context {
         }
         self.surface_config.width = width;
         self.surface_config.height = height;
-        self.surface.configure(&self.device, &self.surface_config);
+        self.surface
+            .configure(&self.gpu.device, &self.surface_config);
     }
 }
