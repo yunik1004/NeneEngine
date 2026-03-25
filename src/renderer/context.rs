@@ -32,9 +32,14 @@ impl GpuDevice {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: None,
                 contents: bytemuck::cast_slice(data),
-                usage: wgpu::BufferUsages::VERTEX,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             });
         VertexBuffer { inner }
+    }
+
+    pub fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
+        self.queue
+            .write_buffer(&buf.inner, 0, bytemuck::cast_slice(data));
     }
 
     pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
@@ -132,6 +137,10 @@ impl HeadlessContext {
         self.gpu.create_vertex_buffer(data)
     }
 
+    pub fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
+        self.gpu.update_vertex_buffer(buf, data)
+    }
+
     pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
         self.gpu.create_index_buffer(indices)
     }
@@ -199,10 +208,27 @@ impl HeadlessContext {
     }
 }
 
+pub(crate) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+fn create_depth_texture(device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {
+    let tex = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("depth"),
+        size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: DEPTH_FORMAT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    tex.create_view(&wgpu::TextureViewDescriptor::default())
+}
+
 pub struct Context {
     gpu: GpuDevice,
     surface: wgpu::Surface<'static>,
     surface_config: wgpu::SurfaceConfiguration,
+    depth_view: wgpu::TextureView,
 }
 
 impl Context {
@@ -245,15 +271,22 @@ impl Context {
         };
         surface.configure(&device, &surface_config);
 
+        let depth_view = create_depth_texture(&device, size.width, size.height);
+
         Self {
             gpu: GpuDevice { device, queue },
             surface,
             surface_config,
+            depth_view,
         }
     }
 
     pub fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
         self.gpu.create_vertex_buffer(data)
+    }
+
+    pub fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
+        self.gpu.update_vertex_buffer(buf, data)
     }
 
     pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
@@ -335,13 +368,27 @@ impl Context {
                     entry_point: Some(desc.fragment_entry),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: self.surface_config.format,
-                        blend: Some(wgpu::BlendState::REPLACE),
+                        blend: Some(if desc.alpha_blend {
+                            wgpu::BlendState::ALPHA_BLENDING
+                        } else {
+                            wgpu::BlendState::REPLACE
+                        }),
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 }),
                 primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: DEPTH_FORMAT,
+                    depth_write_enabled: Some(desc.depth_write),
+                    depth_compare: Some(if desc.depth_write {
+                        wgpu::CompareFunction::LessEqual
+                    } else {
+                        wgpu::CompareFunction::Always
+                    }),
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
                 multisample: wgpu::MultisampleState::default(),
                 multiview_mask: None,
                 cache: None,
@@ -432,7 +479,14 @@ impl Context {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Discard,
+                    }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
@@ -453,5 +507,6 @@ impl Context {
         self.surface_config.height = height;
         self.surface
             .configure(&self.gpu.device, &self.surface_config);
+        self.depth_view = create_depth_texture(&self.gpu.device, width, height);
     }
 }

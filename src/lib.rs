@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod camera;
 pub mod input;
+pub mod sprite;
 pub mod math;
 pub mod mesh;
 pub mod physics;

@@ -49,6 +49,18 @@ impl<'a> RenderPass<'a> {
         self.inner.draw_indexed(0..indices.count, 0, 0..1);
     }
 
+    /// Draw the first `count` indices from the index buffer.
+    pub fn draw_indexed_count(&mut self, indices: &IndexBuffer, count: u32) {
+        let slice = unsafe {
+            std::mem::transmute::<wgpu::BufferSlice<'_>, wgpu::BufferSlice<'a>>(
+                indices.inner.slice(..),
+            )
+        };
+        self.inner
+            .set_index_buffer(slice, wgpu::IndexFormat::Uint32);
+        self.inner.draw_indexed(0..count, 0, 0..1);
+    }
+
     pub fn draw_text(&mut self, renderer: &TextRenderer) {
         renderer.render(&mut self.inner);
     }
