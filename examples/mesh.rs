@@ -1,13 +1,14 @@
 /// Rotating textured cube with diffuse lighting.
 use nene::{
     camera::Camera,
-    light::{DIRECTIONAL_LIGHT_WGSL, DirectionalLight, DirectionalLightUniform},
+    light::{AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight},
     math::{Mat4, Vec3},
     mesh::MeshVertex,
     renderer::{
         Context, FilterMode, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, Texture,
         UniformBuffer, VertexBuffer,
     },
+    uniform,
     window::{Config, Window},
 };
 
@@ -15,12 +16,14 @@ use nene::{
 fn make_shader() -> String {
     format!(
         r#"
+{AMBIENT_LIGHT_WGSL}
 {DIRECTIONAL_LIGHT_WGSL}
 
 struct SceneUniform {{
-    view_proj: mat4x4<f32>,
-    model:     mat4x4<f32>,
-    light:     DirectionalLight,
+    view_proj:   mat4x4<f32>,
+    model:       mat4x4<f32>,
+    ambient:     AmbientLight,
+    directional: DirectionalLight,
 }};
 @group(0) @binding(0) var<uniform> scene: SceneUniform;
 @group(1) @binding(0) var tex:  texture_2d<f32>;
@@ -40,7 +43,7 @@ struct VertexOutput {{
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {{
     var out: VertexOutput;
-    out.clip_pos    = scene.view_proj * scene.model * vec4<f32>(in.position, 1.0);
+    out.clip_pos     = scene.view_proj * scene.model * vec4<f32>(in.position, 1.0);
     out.world_normal = in.normal;
     out.uv           = in.uv;
     return out;
@@ -49,23 +52,23 @@ fn vs_main(in: VertexInput) -> VertexOutput {{
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {{
     let albedo  = textureSample(tex, samp, in.uv);
-    let diffuse = directional_light(scene.light, in.world_normal);
-    let ambient = scene.light.color * 0.15;
-    return vec4<f32>(albedo.rgb * (ambient + diffuse), albedo.a);
+    let light = ambient_light(scene.ambient) + directional_light(scene.directional, in.world_normal);
+    return vec4<f32>(albedo.rgb * light, albedo.a);
 }}
 "#,
+        AMBIENT_LIGHT_WGSL = AMBIENT_LIGHT_WGSL,
         DIRECTIONAL_LIGHT_WGSL = DIRECTIONAL_LIGHT_WGSL,
     )
 }
 
 // ── GPU uniform (camera + light packed together) ───────────────────────────────
 
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[uniform]
 struct SceneUniform {
     view_proj: [[f32; 4]; 4],
     model: [[f32; 4]; 4],
-    light: DirectionalLightUniform,
+    ambient: AmbientLight,
+    directional: DirectionalLight,
 }
 
 // ── Cube geometry ─────────────────────────────────────────────────────────────
@@ -129,7 +132,8 @@ struct State {
     index_buffer: IndexBuffer,
     scene_buffer: UniformBuffer,
     texture: Texture,
-    light: DirectionalLight,
+    ambient: AmbientLight,
+    directional: DirectionalLight,
     angle: f32,
 }
 
@@ -151,12 +155,18 @@ fn make_checkerboard(ctx: &mut Context) -> Texture {
     ctx.create_texture_with(size, size, &data, FilterMode::Nearest)
 }
 
-fn build_scene(angle: f32, aspect: f32, light: &DirectionalLight) -> SceneUniform {
+fn build_scene(
+    angle: f32,
+    aspect: f32,
+    ambient: &AmbientLight,
+    directional: &DirectionalLight,
+) -> SceneUniform {
     let camera = Camera::perspective(Vec3::new(0.0, 1.5, 4.0), 45.0, 0.1, 100.0);
     SceneUniform {
         view_proj: camera.view_proj(aspect).to_cols_array_2d(),
         model: Mat4::from_rotation_y(angle).to_cols_array_2d(),
-        light: light.to_uniform(),
+        ambient: *ambient,
+        directional: *directional,
     }
 }
 
@@ -165,11 +175,13 @@ fn init(ctx: &mut Context) -> State {
     let vertex_buffer = ctx.create_vertex_buffer(&vertices);
     let index_buffer = ctx.create_index_buffer(&indices);
     let texture = make_checkerboard(ctx);
-    let light = DirectionalLight::new(Vec3::new(1.0, -2.0, -1.0), [1.0, 0.95, 0.9], 1.0);
+    let ambient = AmbientLight::new(Vec3::ONE, 0.15);
+    let directional =
+        DirectionalLight::new(Vec3::new(1.0, -2.0, -1.0), Vec3::new(1.0, 0.95, 0.9), 1.0);
 
     let cfg = ctx.surface_config();
     let aspect = cfg.width as f32 / cfg.height as f32;
-    let scene_buffer = ctx.create_uniform_buffer(&build_scene(0.0, aspect, &light));
+    let scene_buffer = ctx.create_uniform_buffer(&build_scene(0.0, aspect, &ambient, &directional));
 
     let shader = make_shader();
     let pipeline = ctx.create_pipeline(
@@ -185,7 +197,8 @@ fn init(ctx: &mut Context) -> State {
         index_buffer,
         scene_buffer,
         texture,
-        light,
+        ambient,
+        directional,
         angle: 0.0,
     }
 }
@@ -203,7 +216,7 @@ fn main() {
             let aspect = cfg.width as f32 / cfg.height as f32;
             ctx.update_uniform_buffer(
                 &state.scene_buffer,
-                &build_scene(state.angle, aspect, &state.light),
+                &build_scene(state.angle, aspect, &state.ambient, &state.directional),
             );
         },
         |state, pass: &mut RenderPass| {
