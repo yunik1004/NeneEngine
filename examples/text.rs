@@ -43,7 +43,7 @@ fn main() {
         },
         |_, _| {},
         |state, pass: &mut RenderPass| {
-            pass.draw_text(&state.text);
+            state.text.draw(pass);
         },
     );
 }

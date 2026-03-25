@@ -2,14 +2,11 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use super::shadow;
-use super::shadow::ShadowMap;
-use super::texture;
 use super::uniform;
-use super::{
-    IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, Texture, UniformBuffer, VertexBuffer,
-};
+use super::{IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer};
+use crate::shadow::{self, ShadowMap};
 use crate::text::TextRenderer;
+use crate::texture::{self, FilterMode, Texture};
 
 fn create_instance() -> wgpu::Instance {
     wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -68,13 +65,13 @@ impl GpuDevice {
     }
 
     pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {
-        self.load_texture_with(path, texture::FilterMode::Linear)
+        self.load_texture_with(path, FilterMode::Linear)
     }
 
     pub fn load_texture_with(
         &self,
         path: impl AsRef<std::path::Path>,
-        filter: texture::FilterMode,
+        filter: FilterMode,
     ) -> Texture {
         let rgba = image::open(path).expect("Failed to open image").to_rgba8();
         let (w, h) = rgba.dimensions();
@@ -82,14 +79,10 @@ impl GpuDevice {
     }
 
     pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Texture {
-        self.load_texture_from_memory_with(bytes, texture::FilterMode::Linear)
+        self.load_texture_from_memory_with(bytes, FilterMode::Linear)
     }
 
-    pub fn load_texture_from_memory_with(
-        &self,
-        bytes: &[u8],
-        filter: texture::FilterMode,
-    ) -> Texture {
+    pub fn load_texture_from_memory_with(&self, bytes: &[u8], filter: FilterMode) -> Texture {
         let rgba = image::load_from_memory(bytes)
             .expect("Failed to decode image")
             .to_rgba8();
@@ -98,7 +91,7 @@ impl GpuDevice {
     }
 
     pub fn create_texture(&self, width: u32, height: u32, rgba: &[u8]) -> Texture {
-        self.create_texture_with(width, height, rgba, texture::FilterMode::Linear)
+        self.create_texture_with(width, height, rgba, FilterMode::Linear)
     }
 
     pub fn create_texture_with(
@@ -106,7 +99,7 @@ impl GpuDevice {
         width: u32,
         height: u32,
         rgba: &[u8],
-        filter: texture::FilterMode,
+        filter: FilterMode,
     ) -> Texture {
         texture::create(&self.device, &self.queue, width, height, rgba, filter)
     }
@@ -166,7 +159,7 @@ impl HeadlessContext {
     pub fn load_texture_with(
         &self,
         path: impl AsRef<std::path::Path>,
-        filter: texture::FilterMode,
+        filter: FilterMode,
     ) -> Texture {
         self.gpu.load_texture_with(path, filter)
     }
@@ -175,11 +168,7 @@ impl HeadlessContext {
         self.gpu.load_texture_from_memory(bytes)
     }
 
-    pub fn load_texture_from_memory_with(
-        &self,
-        bytes: &[u8],
-        filter: texture::FilterMode,
-    ) -> Texture {
+    pub fn load_texture_from_memory_with(&self, bytes: &[u8], filter: FilterMode) -> Texture {
         self.gpu.load_texture_from_memory_with(bytes, filter)
     }
 
@@ -192,7 +181,7 @@ impl HeadlessContext {
         width: u32,
         height: u32,
         rgba: &[u8],
-        filter: texture::FilterMode,
+        filter: FilterMode,
     ) -> Texture {
         self.gpu.create_texture_with(width, height, rgba, filter)
     }
@@ -433,7 +422,7 @@ impl Context {
     pub fn load_texture_with(
         &self,
         path: impl AsRef<std::path::Path>,
-        filter: texture::FilterMode,
+        filter: FilterMode,
     ) -> Texture {
         self.gpu.load_texture_with(path, filter)
     }
@@ -442,11 +431,7 @@ impl Context {
         self.gpu.load_texture_from_memory(bytes)
     }
 
-    pub fn load_texture_from_memory_with(
-        &self,
-        bytes: &[u8],
-        filter: texture::FilterMode,
-    ) -> Texture {
+    pub fn load_texture_from_memory_with(&self, bytes: &[u8], filter: FilterMode) -> Texture {
         self.gpu.load_texture_from_memory_with(bytes, filter)
     }
 
@@ -459,13 +444,18 @@ impl Context {
         width: u32,
         height: u32,
         rgba: &[u8],
-        filter: texture::FilterMode,
+        filter: FilterMode,
     ) -> Texture {
         self.gpu.create_texture_with(width, height, rgba, filter)
     }
 
     pub fn create_shadow_map(&self, size: u32) -> ShadowMap {
         self.gpu.create_shadow_map(size)
+    }
+
+    /// Create a blank `width × height` texture usable as a render target and in shaders.
+    pub fn create_render_target(&self, width: u32, height: u32) -> (wgpu::TextureView, Texture) {
+        texture::create_render_target(&self.gpu.device, width, height)
     }
 
     pub fn shadow_pass<F: FnOnce(&mut RenderPass<'_>)>(&mut self, shadow_map: &ShadowMap, draw: F) {

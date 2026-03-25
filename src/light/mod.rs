@@ -4,33 +4,6 @@ use crate::math::Vec3;
 
 // ── WGSL snippets ─────────────────────────────────────────────────────────────
 
-/// WGSL helper for PCF shadow sampling.
-///
-/// Requires `texture_depth_2d` and `sampler_comparison` bindings.
-pub const SHADOW_WGSL: &str = r#"
-fn shadow_factor(
-    shadow_map:    texture_depth_2d,
-    shadow_samp:   sampler_comparison,
-    light_space:   vec4<f32>,
-    bias:          f32,
-) -> f32 {
-    let proj = light_space.xyz / light_space.w;
-    let uv   = proj.xy * vec2<f32>(0.5, -0.5) + 0.5;
-    if (proj.z > 1.0 || uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-        return 1.0;
-    }
-    let texel = 1.0 / f32(textureDimensions(shadow_map).x);
-    var s = 0.0;
-    for (var x = -1; x <= 1; x++) {
-        for (var y = -1; y <= 1; y++) {
-            s += textureSampleCompare(shadow_map, shadow_samp,
-                uv + vec2<f32>(f32(x), f32(y)) * texel, proj.z - bias);
-        }
-    }
-    return s / 9.0;
-}
-"#;
-
 /// WGSL struct + helper function for ambient light.
 pub const AMBIENT_LIGHT_WGSL: &str = r#"
 struct AmbientLight {

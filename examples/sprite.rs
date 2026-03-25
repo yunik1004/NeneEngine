@@ -4,21 +4,22 @@ use nene::{
     camera::Camera,
     input::{Key, MouseButton},
     math::Vec2,
-    renderer::{Context, FilterMode, RenderPass},
+    renderer::{Context, RenderPass},
     sprite::{Sprite, SpriteBatch, UvRect},
+    texture::{FilterMode, Texture},
     window::{Config, Window},
 };
 
 struct State {
     batch: SpriteBatch,
-    texture: nene::renderer::Texture,
+    texture: Texture,
     camera: Camera,
     player_pos: Vec2,
     angle: f32,
 }
 
 /// Build a simple 2×2 tile checkerboard texture (64×64, 32px tiles).
-fn make_texture(ctx: &mut Context) -> nene::renderer::Texture {
+fn make_texture(ctx: &mut Context) -> Texture {
     let size = 64u32;
     let tile = 32u32;
     let mut data = Vec::with_capacity((size * size * 4) as usize);

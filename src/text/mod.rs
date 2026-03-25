@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use cosmic_text::{Attrs, Buffer, CacheKey, FontSystem, Metrics, Shaping, SwashCache};
 use wgpu::util::DeviceExt;
 
-use crate::renderer::Context;
+use crate::renderer::{Context, RenderPass, Texture};
 
 const ATLAS_SIZE: u32 = 1024;
 
@@ -76,6 +76,7 @@ pub struct TextRenderer {
     atlas_texture: wgpu::Texture,
     atlas_bind_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
+    texture_pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
     pending: Vec<TextEntry>,
@@ -196,39 +197,44 @@ impl TextRenderer {
             immediate_size: 0,
         });
 
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("text_pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<TextVertex>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x2,
-                        1 => Float32x2,
-                        2 => Float32x4
-                    ],
-                }],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
-        });
+        let make_pipeline = |fmt: wgpu::TextureFormat| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("text_pipeline"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<TextVertex>() as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &wgpu::vertex_attr_array![
+                            0 => Float32x2,
+                            1 => Float32x2,
+                            2 => Float32x4
+                        ],
+                    }],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: fmt,
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+
+        let pipeline = make_pipeline(format);
+        let texture_pipeline = make_pipeline(wgpu::TextureFormat::Rgba8UnormSrgb);
 
         Self {
             font_system: FontSystem::new(),
@@ -240,6 +246,7 @@ impl TextRenderer {
             atlas_texture,
             atlas_bind_group,
             pipeline,
+            texture_pipeline,
             uniform_buffer,
             uniform_bind_group,
             pending: Vec::new(),
@@ -442,17 +449,182 @@ impl TextRenderer {
         self.glyph_cache.get(&key)?.as_ref()
     }
 
-    pub(crate) fn render(&self, pass: &mut wgpu::RenderPass<'_>) {
+    /// Render all queued text into a new `width × height` texture and return it.
+    ///
+    /// Coordinates are in pixels relative to the texture's top-left corner.
+    /// The returned [`Texture`] can be passed to [`RenderPass::set_texture`].
+    pub fn render_to_texture(&mut self, ctx: &Context, width: u32, height: u32) -> Texture {
+        let device = ctx.device();
+        let queue = ctx.queue();
+
+        // Per-texture uniform (screen size = texture size)
+        let uniform_data = [width as f32, height as f32];
+        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("text_texture_uniform"),
+            contents: bytemuck::cast_slice(&uniform_data),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+        let uniform_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        let uniform_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &uniform_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buf.as_entire_binding(),
+            }],
+        });
+
+        // Build vertices
+        let entries: Vec<TextEntry> = std::mem::take(&mut self.pending);
+        let mut vertices: Vec<TextVertex> = Vec::new();
+
+        for entry in &entries {
+            let metrics = cosmic_text::Metrics::new(entry.size, entry.size * 1.2);
+            let mut buffer = cosmic_text::Buffer::new(&mut self.font_system, metrics);
+            buffer.set_size(&mut self.font_system, None, None);
+            buffer.set_text(
+                &mut self.font_system,
+                &entry.text,
+                &cosmic_text::Attrs::new(),
+                cosmic_text::Shaping::Advanced,
+                None,
+            );
+            buffer.shape_until_scroll(&mut self.font_system, false);
+
+            for run in buffer.layout_runs() {
+                for glyph in run.glyphs.iter() {
+                    let physical = glyph.physical((entry.x, entry.y + run.line_y), 1.0);
+                    let cached = self.ensure_glyph(physical.cache_key);
+                    let Some(g) = cached else { continue };
+                    if g.width == 0 || g.height == 0 {
+                        continue;
+                    }
+
+                    let gx = (physical.x + g.offset_x) as f32;
+                    let gy = (physical.y - g.offset_y) as f32;
+                    let gw = g.width as f32;
+                    let gh = g.height as f32;
+                    let u0 = g.atlas_x as f32 / ATLAS_SIZE as f32;
+                    let v0 = g.atlas_y as f32 / ATLAS_SIZE as f32;
+                    let u1 = (g.atlas_x + g.width) as f32 / ATLAS_SIZE as f32;
+                    let v1 = (g.atlas_y + g.height) as f32 / ATLAS_SIZE as f32;
+                    let c = entry.color;
+                    let tl = TextVertex {
+                        pos: [gx, gy],
+                        uv: [u0, v0],
+                        color: c,
+                    };
+                    let tr = TextVertex {
+                        pos: [gx + gw, gy],
+                        uv: [u1, v0],
+                        color: c,
+                    };
+                    let bl = TextVertex {
+                        pos: [gx, gy + gh],
+                        uv: [u0, v1],
+                        color: c,
+                    };
+                    let br = TextVertex {
+                        pos: [gx + gw, gy + gh],
+                        uv: [u1, v1],
+                        color: c,
+                    };
+                    vertices.extend_from_slice(&[tl, tr, bl, tr, br, bl]);
+                }
+            }
+        }
+
+        // Upload atlas if dirty
+        if self.atlas_dirty {
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &self.atlas_texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &self.atlas_data,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(ATLAS_SIZE),
+                    rows_per_image: Some(ATLAS_SIZE),
+                },
+                wgpu::Extent3d {
+                    width: ATLAS_SIZE,
+                    height: ATLAS_SIZE,
+                    depth_or_array_layers: 1,
+                },
+            );
+            self.atlas_dirty = false;
+        }
+
+        // Create render target
+        let (target_view, texture) = ctx.create_render_target(width, height);
+
+        // Render pass
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("text_to_texture"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &target_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            if !vertices.is_empty() {
+                let vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("text_texture_vb"),
+                    contents: bytemuck::cast_slice(&vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+                pass.set_pipeline(&self.texture_pipeline);
+                pass.set_bind_group(0, &self.atlas_bind_group, &[]);
+                pass.set_bind_group(1, &uniform_bg, &[]);
+                pass.set_vertex_buffer(0, vb.slice(..));
+                pass.draw(0..vertices.len() as u32, 0..1);
+            }
+        }
+        queue.submit([encoder.finish()]);
+
+        texture
+    }
+
+    /// Draw the prepared text into a render pass.
+    /// Call [`prepare`](Self::prepare) before the render pass that uses this.
+    pub fn draw(&self, pass: &mut RenderPass<'_>) {
         let Some(ref vb) = self.vertex_buffer else {
             return;
         };
         if self.vertex_count == 0 {
             return;
         }
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &self.atlas_bind_group, &[]);
-        pass.set_bind_group(1, &self.uniform_bind_group, &[]);
-        pass.set_vertex_buffer(0, vb.slice(..));
-        pass.draw(0..self.vertex_count, 0..1);
+        let inner = &mut pass.inner;
+        inner.set_pipeline(&self.pipeline);
+        inner.set_bind_group(0, &self.atlas_bind_group, &[]);
+        inner.set_bind_group(1, &self.uniform_bind_group, &[]);
+        inner.set_vertex_buffer(0, vb.slice(..));
+        inner.draw(0..self.vertex_count, 0..1);
     }
 }

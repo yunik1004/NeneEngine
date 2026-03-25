@@ -1,15 +1,14 @@
 /// Rotating textured cube with diffuse lighting and shadow mapping.
 use nene::{
     camera::Camera,
-    light::{
-        AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight, SHADOW_WGSL,
-    },
+    light::{AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight},
     math::{Mat4, Vec3},
     mesh::MeshVertex,
     renderer::{
-        Context, FilterMode, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, ShadowMap,
-        Texture, UniformBuffer, VertexBuffer,
+        Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
+    shadow::{SHADOW_WGSL, ShadowMap},
+    texture::{FilterMode, Texture},
     uniform,
     window::{Config, Window},
 };
