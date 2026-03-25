@@ -66,7 +66,38 @@ impl HeadlessContext {
         filter: texture::FilterMode,
     ) -> Texture {
         let rgba = image::open(path).expect("Failed to open image").to_rgba8();
-        texture::create(&self.device, &self.queue, &rgba, filter)
+        let (w, h) = rgba.dimensions();
+        texture::create(&self.device, &self.queue, w, h, &rgba, filter)
+    }
+
+    pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Texture {
+        self.load_texture_from_memory_with(bytes, texture::FilterMode::Linear)
+    }
+
+    pub fn load_texture_from_memory_with(
+        &self,
+        bytes: &[u8],
+        filter: texture::FilterMode,
+    ) -> Texture {
+        let rgba = image::load_from_memory(bytes)
+            .expect("Failed to decode image")
+            .to_rgba8();
+        let (w, h) = rgba.dimensions();
+        texture::create(&self.device, &self.queue, w, h, &rgba, filter)
+    }
+
+    pub fn create_texture(&self, width: u32, height: u32, rgba: &[u8]) -> Texture {
+        self.create_texture_with(width, height, rgba, texture::FilterMode::Linear)
+    }
+
+    pub fn create_texture_with(
+        &self,
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+        filter: texture::FilterMode,
+    ) -> Texture {
+        texture::create(&self.device, &self.queue, width, height, rgba, filter)
     }
 
     /// Create a [`TextRenderer`] backed by this headless context.
@@ -223,7 +254,38 @@ impl Context {
         filter: texture::FilterMode,
     ) -> Texture {
         let rgba = image::open(path).expect("Failed to open image").to_rgba8();
-        texture::create(&self.device, &self.queue, &rgba, filter)
+        let (w, h) = rgba.dimensions();
+        texture::create(&self.device, &self.queue, w, h, &rgba, filter)
+    }
+
+    pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Texture {
+        self.load_texture_from_memory_with(bytes, texture::FilterMode::Linear)
+    }
+
+    pub fn load_texture_from_memory_with(
+        &self,
+        bytes: &[u8],
+        filter: texture::FilterMode,
+    ) -> Texture {
+        let rgba = image::load_from_memory(bytes)
+            .expect("Failed to decode image")
+            .to_rgba8();
+        let (w, h) = rgba.dimensions();
+        texture::create(&self.device, &self.queue, w, h, &rgba, filter)
+    }
+
+    pub fn create_texture(&self, width: u32, height: u32, rgba: &[u8]) -> Texture {
+        self.create_texture_with(width, height, rgba, texture::FilterMode::Linear)
+    }
+
+    pub fn create_texture_with(
+        &self,
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+        filter: texture::FilterMode,
+    ) -> Texture {
+        texture::create(&self.device, &self.queue, width, height, rgba, filter)
     }
 
     pub fn device(&self) -> &wgpu::Device {

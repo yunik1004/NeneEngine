@@ -45,10 +45,11 @@ pub(crate) fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout 
 pub(crate) fn create(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    rgba: &image::RgbaImage,
+    width: u32,
+    height: u32,
+    data: &[u8],
     filter: FilterMode,
 ) -> Texture {
-    let (width, height) = rgba.dimensions();
     let size = wgpu::Extent3d {
         width,
         height,
@@ -73,7 +74,7 @@ pub(crate) fn create(
             origin: wgpu::Origin3d::ZERO,
             aspect: wgpu::TextureAspect::All,
         },
-        rgba.as_raw(),
+        data,
         wgpu::TexelCopyBufferLayout {
             offset: 0,
             bytes_per_row: Some(4 * width),

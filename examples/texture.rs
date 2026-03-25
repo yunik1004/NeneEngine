@@ -1,5 +1,7 @@
 use nene::{
-    renderer::{FilterMode, Pipeline, PipelineDescriptor, RenderPass, Texture, VertexBuffer},
+    renderer::{
+        Context, FilterMode, Pipeline, PipelineDescriptor, RenderPass, Texture, VertexBuffer,
+    },
     vertex,
     window::{Config, Window},
 };
@@ -72,36 +74,32 @@ struct State {
     texture: Texture,
 }
 
-fn make_checkerboard() -> std::path::PathBuf {
+fn make_checkerboard(ctx: &mut Context) -> Texture {
     let size = 64u32;
     let tile = 8u32;
-    let mut img = image::RgbaImage::new(size, size);
+    let mut data = Vec::with_capacity((size * size * 4) as usize);
     for y in 0..size {
         for x in 0..size {
             let white = ((x / tile) + (y / tile)) % 2 == 0;
             let c = if white { 240 } else { 80 };
-            img.put_pixel(x, y, image::Rgba([c, c, c, 255]));
+            data.extend_from_slice(&[c, c, c, 255]);
         }
     }
-    let path = std::env::temp_dir().join("nene_checkerboard.png");
-    img.save(&path).unwrap();
-    path
+    ctx.create_texture_with(size, size, &data, FilterMode::Nearest)
 }
 
 fn main() {
-    let tex_path = make_checkerboard();
-
     Window::new(Config {
         title: "Texture".to_string(),
         ..Config::default()
     })
     .run_with(
-        move |ctx| State {
+        |ctx| State {
+            texture: make_checkerboard(ctx),
             vertex_buffer: ctx.create_vertex_buffer(VERTICES),
             pipeline: ctx.create_pipeline(
                 PipelineDescriptor::new(SHADER, QuadVertex::layout()).with_texture(),
             ),
-            texture: ctx.load_texture_with(&tex_path, FilterMode::Nearest),
         },
         |state, pass: &mut RenderPass| {
             pass.set_pipeline(&state.pipeline);
