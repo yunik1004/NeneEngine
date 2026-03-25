@@ -19,7 +19,7 @@ fn main() {
             text: TextRenderer::new(ctx),
             frame: 0,
         },
-        |state, ctx, _input| {
+        |state, ctx, _input, _time| {
             state.frame += 1;
             state.text.clear();
             state

@@ -1,4 +1,5 @@
 use nene::{
+    camera::Camera,
     math::{Mat4, Vec3},
     mesh::Model,
     renderer::{
@@ -104,12 +105,10 @@ fn write_quad_obj() -> std::path::PathBuf {
 }
 
 fn build_camera(angle: f32, aspect: f32) -> CameraUniform {
-    let proj = Mat4::perspective_rh(45f32.to_radians(), aspect, 0.1, 100.0);
-    let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 3.0), Vec3::ZERO, Vec3::Y);
-    let model = Mat4::from_rotation_y(angle);
+    let camera = Camera::perspective(Vec3::new(0.0, 0.0, 3.0), 45.0, 0.1, 100.0);
     CameraUniform {
-        view_proj: (proj * view).to_cols_array_2d(),
-        model: model.to_cols_array_2d(),
+        view_proj: camera.view_proj(aspect).to_cols_array_2d(),
+        model: Mat4::from_rotation_y(angle).to_cols_array_2d(),
     }
 }
 
@@ -149,8 +148,8 @@ fn main() {
     })
     .run_with_update(
         init,
-        |state, ctx, _input| {
-            state.angle += 0.01;
+        |state, ctx, _input, time| {
+            state.angle += std::f32::consts::TAU * 0.1 * time.delta;
             let cfg = ctx.surface_config();
             let aspect = cfg.width as f32 / cfg.height as f32;
             ctx.update_uniform_buffer(&state.camera_buffer, &build_camera(state.angle, aspect));

@@ -1,4 +1,4 @@
-use nene::physics2d::{ColliderBuilder, RigidBodyBuilder, RigidBodyType, World};
+use nene::physics::d2::{ColliderBuilder, RigidBodyBuilder, RigidBodyType, World};
 
 #[test]
 fn world_default_gravity() {

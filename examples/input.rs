@@ -89,8 +89,8 @@ fn main() {
     })
     .run_with_update(
         init,
-        |state, ctx, input| {
-            const SPEED: f32 = 0.05;
+        |state, ctx, input, time| {
+            let speed = 5.0 * time.delta;
 
             // Keyboard movement
             let mut dir = Vec2::ZERO;
@@ -114,7 +114,7 @@ fn main() {
             }
 
             if dir != Vec2::ZERO {
-                state.pos += dir.normalize() * SPEED;
+                state.pos += dir.normalize() * speed;
             }
 
             // One-shot key press

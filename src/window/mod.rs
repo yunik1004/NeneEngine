@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, DeviceId, WindowEvent},
@@ -6,7 +9,7 @@ use winit::{
     window::{Window as WinitWindow, WindowId},
 };
 
-use crate::{input::Input, renderer::Context};
+use crate::{input::Input, renderer::Context, time::Time};
 
 pub struct Config {
     pub title: String,
@@ -42,24 +45,32 @@ impl Window {
         init: impl FnOnce(&mut Context) -> S + 'static,
         render: impl FnMut(&mut S, &mut crate::renderer::RenderPass<'_>) + 'static,
     ) {
-        self.run_with_update(init, |_, _, _| {}, render);
+        self.run_with_update(init, |_, _, _, _| {}, render);
     }
 
     /// Like [`run_with`](Self::run_with) but with an `update` callback that runs before
     /// each frame's render pass.
     ///
-    /// The `update` closure receives `(&mut S, &mut Context, &Input)`.
+    /// The `update` closure receives `(&mut S, &mut Context, &Input, &Time)`.
     pub fn run_with_update<S: 'static>(
         self,
         init: impl FnOnce(&mut Context) -> S + 'static,
-        update: impl FnMut(&mut S, &mut Context, &Input) + 'static,
+        update: impl FnMut(&mut S, &mut Context, &Input, &Time) + 'static,
         render: impl FnMut(&mut S, &mut crate::renderer::RenderPass<'_>) + 'static,
     ) {
+        let now = Instant::now();
         let mut runner = WindowRunner {
             config: self.config,
             handle: None,
             renderer: None,
             input: Input::new(),
+            time: Time {
+                delta: 0.0,
+                elapsed: 0.0,
+                frame: 0,
+            },
+            last_frame: now,
+            start: now,
             init: Some(Box::new(init)),
             update: Box::new(update),
             render: Box::new(render),
@@ -72,7 +83,7 @@ impl Window {
 }
 
 type InitFn<S> = Box<dyn FnOnce(&mut Context) -> S>;
-type UpdateFn<S> = Box<dyn FnMut(&mut S, &mut Context, &Input)>;
+type UpdateFn<S> = Box<dyn FnMut(&mut S, &mut Context, &Input, &Time)>;
 type RenderFn<S> = Box<dyn FnMut(&mut S, &mut crate::renderer::RenderPass<'_>)>;
 
 struct WindowRunner<S> {
@@ -80,6 +91,9 @@ struct WindowRunner<S> {
     handle: Option<Arc<WinitWindow>>,
     renderer: Option<Context>,
     input: Input,
+    time: Time,
+    last_frame: Instant,
+    start: Instant,
     init: Option<InitFn<S>>,
     update: UpdateFn<S>,
     render: RenderFn<S>,
@@ -106,6 +120,10 @@ impl<S> ApplicationHandler for WindowRunner<S> {
         if let Some(init) = self.init.take() {
             self.state = Some(init(&mut ctx));
         }
+
+        // Reset clock so the first frame delta isn't inflated by init time.
+        self.last_frame = Instant::now();
+        self.start = self.last_frame;
 
         self.renderer = Some(ctx);
         self.handle = Some(window);
@@ -135,10 +153,22 @@ impl<S> ApplicationHandler for WindowRunner<S> {
                 self.input.on_scroll(delta);
             }
             WindowEvent::RedrawRequested => {
+                // Update timing.
+                let now = Instant::now();
+                let raw_delta = now.duration_since(self.last_frame);
+                // Clamp delta to 250 ms to avoid spiral-of-death on focus loss.
+                let delta = raw_delta.min(Duration::from_millis(250));
+                self.last_frame = now;
+                self.time = Time {
+                    delta: delta.as_secs_f32(),
+                    elapsed: now.duration_since(self.start).as_secs_f64(),
+                    frame: self.time.frame + 1,
+                };
+
                 self.input.process_gilrs();
 
                 if let (Some(ctx), Some(state)) = (&mut self.renderer, &mut self.state) {
-                    (self.update)(state, ctx, &self.input);
+                    (self.update)(state, ctx, &self.input, &self.time);
                     let render = &mut self.render;
                     ctx.render_with(|pass| render(state, pass));
                 }

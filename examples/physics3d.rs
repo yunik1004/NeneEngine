@@ -1,8 +1,9 @@
 /// 3D physics: a cube falls and bounces off a flat floor (perspective view).
 use nene::{
+    camera::Camera,
     math::{Mat4, Vec3},
     mesh::Model,
-    physics3d::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, World},
+    physics::d3::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, World},
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
@@ -130,9 +131,9 @@ fn scale_translate(sx: f32, sy: f32, sz: f32, tx: f32, ty: f32, tz: f32) -> [[f3
 }
 
 fn build_view_proj(aspect: f32) -> [[f32; 4]; 4] {
-    let proj = Mat4::perspective_rh(45f32.to_radians(), aspect, 0.1, 100.0);
-    let view = Mat4::look_at_rh(Vec3::new(4.0, 8.0, 12.0), Vec3::ZERO, Vec3::Y);
-    (proj * view).to_cols_array_2d()
+    Camera::perspective(Vec3::new(4.0, 8.0, 12.0), 45.0, 0.1, 100.0)
+        .view_proj(aspect)
+        .to_cols_array_2d()
 }
 
 fn init(ctx: &mut Context) -> State {
@@ -209,8 +210,8 @@ fn main() {
     })
     .run_with_update(
         init,
-        |state, ctx, _input| {
-            state.world.step();
+        |state, ctx, _input, time| {
+            state.world.step_dt(time.delta);
 
             let body = state.world.body(state.ball_handle).unwrap();
             let t = body.translation();

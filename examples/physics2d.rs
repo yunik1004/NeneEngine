@@ -2,8 +2,9 @@
 use std::f32::consts::TAU;
 
 use nene::{
+    camera::Camera,
     math::{Mat4, Vec3},
-    physics2d::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, World},
+    physics::d2::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, World},
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
@@ -50,7 +51,7 @@ struct State {
     floor_uniform: UniformBuffer,
     world: World,
     ball_handle: RigidBodyHandle,
-    ortho: Mat4,
+    camera: Camera,
 }
 
 fn circle_mesh(radius: f32, segments: u32) -> (Vec<Vert>, Vec<u32>) {
@@ -87,12 +88,12 @@ fn rect_mesh(w: f32, h: f32) -> (Vec<Vert>, Vec<u32>) {
     (verts, vec![0, 1, 2, 0, 2, 3])
 }
 
-fn build_ortho() -> Mat4 {
-    Mat4::orthographic_rh(-6.0, 6.0, -1.0, 11.0, -1.0, 1.0)
+fn build_camera() -> Camera {
+    Camera::orthographic_bounds(-6.0, 6.0, -1.0, 11.0, -1.0, 1.0)
 }
 
-fn mvp(ortho: Mat4, x: f32, y: f32) -> [[f32; 4]; 4] {
-    (ortho * Mat4::from_translation(Vec3::new(x, y, 0.0))).to_cols_array_2d()
+fn mvp(camera: &Camera, x: f32, y: f32) -> [[f32; 4]; 4] {
+    (camera.view_proj(1.0) * Mat4::from_translation(Vec3::new(x, y, 0.0))).to_cols_array_2d()
 }
 
 fn init(ctx: &mut Context) -> State {
@@ -111,7 +112,7 @@ fn init(ctx: &mut Context) -> State {
         ball_handle,
     );
 
-    let ortho = build_ortho();
+    let camera = build_camera();
 
     let (ball_v, ball_i) = circle_mesh(0.5, 32);
     let (floor_v, floor_i) = rect_mesh(10.0, 0.2);
@@ -122,11 +123,11 @@ fn init(ctx: &mut Context) -> State {
     let floor_ib = ctx.create_index_buffer(&floor_i);
 
     let ball_uniform = ctx.create_uniform_buffer(&Transform {
-        mvp: mvp(ortho, 0.0, 8.0),
+        mvp: mvp(&camera, 0.0, 8.0),
         color: [0.4, 0.7, 1.0, 1.0],
     });
     let floor_uniform = ctx.create_uniform_buffer(&Transform {
-        mvp: mvp(ortho, 0.0, 0.0),
+        mvp: mvp(&camera, 0.0, 0.0),
         color: [0.55, 0.55, 0.55, 1.0],
     });
 
@@ -143,7 +144,7 @@ fn init(ctx: &mut Context) -> State {
         floor_uniform,
         world,
         ball_handle,
-        ortho,
+        camera,
     }
 }
 
@@ -154,13 +155,13 @@ fn main() {
     })
     .run_with_update(
         init,
-        |state, ctx, _input| {
-            state.world.step();
+        |state, ctx, _input, time| {
+            state.world.step_dt(time.delta);
             let pos = state.world.body(state.ball_handle).unwrap().translation();
             ctx.update_uniform_buffer(
                 &state.ball_uniform,
                 &Transform {
-                    mvp: mvp(state.ortho, pos.x, pos.y),
+                    mvp: mvp(&state.camera, pos.x, pos.y),
                     color: [0.4, 0.7, 1.0, 1.0],
                 },
             );
