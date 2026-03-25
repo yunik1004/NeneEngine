@@ -1,3 +1,4 @@
+use nene::math::Mat4;
 use nene::mesh::{MeshVertex, Model};
 
 fn write_temp_obj(name: &str, content: &str) -> std::path::PathBuf {
@@ -54,6 +55,53 @@ fn write_triangle_gltf(name: &str) -> std::path::PathBuf {
   "bufferViews": [
     {{"buffer": 0, "byteOffset": 0,              "byteLength": {pos_len}}},
     {{"buffer": 0, "byteOffset": {normals_offset}, "byteLength": {nor_len}}},
+    {{"buffer": 0, "byteOffset": {indices_offset}, "byteLength": {idx_len}}}
+  ],
+  "buffers": [{{"byteLength": {total}, "uri": "data:application/octet-stream;base64,{b64}"}}]
+}}"#
+    );
+
+    let path = std::env::temp_dir().join(name);
+    std::fs::write(&path, json).unwrap();
+    path
+}
+
+/// Build a glTF where the node has a translation of (1, 2, 3).
+fn write_translated_gltf(name: &str) -> std::path::PathBuf {
+    let positions: &[[f32; 3]] = &[[-0.5, -0.5, 0.0], [0.5, -0.5, 0.0], [0.0, 0.5, 0.0]];
+    let indices: &[u16] = &[0, 1, 2];
+
+    let mut buf: Vec<u8> = Vec::new();
+    for v in positions {
+        for &f in v {
+            buf.extend_from_slice(&f.to_le_bytes());
+        }
+    }
+    let indices_offset = buf.len();
+    for &i in indices {
+        buf.extend_from_slice(&i.to_le_bytes());
+    }
+
+    let b64 = base64_encode(&buf);
+    let total = buf.len();
+    let pos_len = indices_offset;
+    let idx_len = total - indices_offset;
+
+    // translation column-major mat4: identity + translate(1,2,3)
+    let json = format!(
+        r#"{{
+  "asset": {{"version": "2.0"}},
+  "scene": 0,
+  "scenes": [{{"nodes": [0]}}],
+  "nodes": [{{"mesh": 0, "translation": [1.0, 2.0, 3.0]}}],
+  "meshes": [{{"primitives": [{{"attributes": {{"POSITION": 0}}, "indices": 1}}]}}],
+  "accessors": [
+    {{"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",
+      "min": [-0.5,-0.5,0.0], "max": [0.5,0.5,0.0]}},
+    {{"bufferView": 1, "componentType": 5123, "count": 3, "type": "SCALAR"}}
+  ],
+  "bufferViews": [
+    {{"buffer": 0, "byteOffset": 0,              "byteLength": {pos_len}}},
     {{"buffer": 0, "byteOffset": {indices_offset}, "byteLength": {idx_len}}}
   ],
   "buffers": [{{"byteLength": {total}, "uri": "data:application/octet-stream;base64,{b64}"}}]
@@ -248,6 +296,45 @@ fn load_gltf_indices_correct() {
     let model = Model::load(&path);
     let mesh = &model.meshes[0];
     assert_eq!(mesh.indices, vec![0, 1, 2]);
+}
+
+#[test]
+fn load_obj_transform_is_identity() {
+    let path = write_temp_obj("nene_test_obj_transform.obj", TRIANGLE_OBJ);
+    let model = Model::load(&path);
+    assert_eq!(model.meshes[0].transform, Mat4::IDENTITY);
+}
+
+#[test]
+fn load_obj_no_base_color() {
+    let path = write_temp_obj("nene_test_obj_color.obj", TRIANGLE_OBJ);
+    let model = Model::load(&path);
+    assert!(model.meshes[0].base_color.is_none());
+}
+
+#[test]
+fn load_gltf_transform_is_identity() {
+    let path = write_triangle_gltf("nene_test_gltf_identity.gltf");
+    let model = Model::load(&path);
+    assert_eq!(model.meshes[0].transform, Mat4::IDENTITY);
+}
+
+#[test]
+fn load_gltf_transform_node_translation() {
+    let path = write_translated_gltf("nene_test_gltf_translated.gltf");
+    let model = Model::load(&path);
+    let t = model.meshes[0].transform;
+    // translation column should be (1, 2, 3, 1)
+    assert_eq!(t.w_axis.x, 1.0);
+    assert_eq!(t.w_axis.y, 2.0);
+    assert_eq!(t.w_axis.z, 3.0);
+}
+
+#[test]
+fn load_gltf_no_base_color() {
+    let path = write_triangle_gltf("nene_test_gltf_no_tex.gltf");
+    let model = Model::load(&path);
+    assert!(model.meshes[0].base_color.is_none());
 }
 
 #[test]

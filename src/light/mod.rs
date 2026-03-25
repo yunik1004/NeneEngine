@@ -224,8 +224,12 @@ impl Default for PointLight {
 /// [`Context::update_uniform_buffer`]. Matches the WGSL struct from [`point_light_array_wgsl`].
 ///
 /// # Example
-/// ```rust
-/// let arr = PointLightArray::<8>::new(&[light_a, light_b]);
+/// ```rust,no_run
+/// # use nene::light::{PointLight, PointLightArray};
+/// # use nene::math::Vec3;
+/// let a = PointLight::new(Vec3::new(1.0, 2.0, 0.0), Vec3::ONE, 1.0, 10.0);
+/// let b = PointLight::new(Vec3::new(-1.0, 2.0, 0.0), Vec3::ONE, 1.0, 10.0);
+/// let arr = PointLightArray::<8>::new(&[a, b]);
 /// ```
 #[repr(C)]
 #[derive(Clone, Copy)]
