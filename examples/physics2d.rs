@@ -4,7 +4,7 @@ use std::f32::consts::TAU;
 use nene::{
     camera::Camera,
     math::{Mat4, Vec3},
-    physics::d2::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, World},
+    physics::d2::{BodyBuilder, BodyHandle, ColliderBuilder, World},
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
@@ -50,7 +50,7 @@ struct State {
     floor_ib: IndexBuffer,
     floor_uniform: UniformBuffer,
     world: World,
-    ball_handle: RigidBodyHandle,
+    ball_handle: BodyHandle,
     camera: Camera,
 }
 
@@ -99,18 +99,11 @@ fn mvp(camera: &Camera, x: f32, y: f32) -> [[f32; 4]; 4] {
 fn init(ctx: &mut Context) -> State {
     let mut world = World::new(); // gravity (0, -9.81)
 
-    // Fixed floor at y = 0
-    let floor_body = RigidBodyBuilder::fixed().build();
-    let floor_handle = world.add_body(floor_body);
-    world.add_collider(ColliderBuilder::cuboid(5.0, 0.1).build(), floor_handle);
+    let floor_handle = world.add_body(BodyBuilder::fixed());
+    world.add_collider(ColliderBuilder::cuboid(5.0, 0.1), floor_handle);
 
-    // Dynamic ball starting at y = 8
-    let ball_body = RigidBodyBuilder::dynamic().translation(0.0, 8.0).build();
-    let ball_handle = world.add_body(ball_body);
-    world.add_collider(
-        ColliderBuilder::ball(0.5).restitution(0.7).build(),
-        ball_handle,
-    );
+    let ball_handle = world.add_body(BodyBuilder::dynamic().translation(0.0, 8.0));
+    world.add_collider(ColliderBuilder::ball(0.5).restitution(0.7), ball_handle);
 
     let camera = build_camera();
 
@@ -157,7 +150,7 @@ fn main() {
         init,
         |state, ctx, _input, time| {
             state.world.step_dt(time.delta);
-            let pos = state.world.body(state.ball_handle).unwrap().translation();
+            let pos = state.world.position(state.ball_handle).unwrap();
             ctx.update_uniform_buffer(
                 &state.ball_uniform,
                 &Transform {

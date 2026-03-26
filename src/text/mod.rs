@@ -611,9 +611,9 @@ impl TextRenderer {
         texture
     }
 
-    /// Draw the prepared text into a render pass.
+    /// Render prepared text into a render pass.
     /// Call [`prepare`](Self::prepare) before the render pass that uses this.
-    pub fn draw(&self, pass: &mut RenderPass<'_>) {
+    pub fn render(&self, pass: &mut RenderPass<'_>) {
         let Some(ref vb) = self.vertex_buffer else {
             return;
         };

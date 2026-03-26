@@ -95,7 +95,7 @@ fn main() {
             // Background grid of static sprites (left half of texture atlas)
             for row in -3i32..=3 {
                 for col in -5i32..=5 {
-                    state.batch.draw(&Sprite {
+                    state.batch.queue(&Sprite {
                         position: Vec2::new(col as f32 * 1.5, row as f32 * 1.5),
                         size: Vec2::splat(1.2),
                         uv: UvRect {
@@ -116,7 +116,7 @@ fn main() {
             } else {
                 [1.0, 1.0, 1.0, 1.0]
             };
-            state.batch.draw(&Sprite {
+            state.batch.queue(&Sprite {
                 position: state.player_pos,
                 size: Vec2::splat(1.0),
                 rotation: state.angle,

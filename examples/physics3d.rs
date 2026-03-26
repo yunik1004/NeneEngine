@@ -3,7 +3,7 @@ use nene::{
     camera::Camera,
     math::{Mat4, Vec3},
     mesh::Model,
-    physics::d3::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, World},
+    physics::d3::{BodyBuilder, BodyHandle, ColliderBuilder, World},
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
@@ -116,7 +116,7 @@ struct State {
     ball_uniform: UniformBuffer,
     floor_uniform: UniformBuffer,
     world: World,
-    ball_handle: RigidBodyHandle,
+    ball_handle: BodyHandle,
 }
 
 fn write_temp_obj(name: &str, content: &str) -> std::path::PathBuf {
@@ -139,24 +139,11 @@ fn build_view_proj(aspect: f32) -> [[f32; 4]; 4] {
 fn init(ctx: &mut Context) -> State {
     let mut world = World::new(); // gravity (0, -9.81, 0)
 
-    // Fixed floor at y = -0.1 with a thick cuboid collider
-    let floor_body = RigidBodyBuilder::fixed()
-        .translation(0.0, -0.1, 0.0)
-        .build();
-    let floor_handle = world.add_body(floor_body);
-    world.add_collider(ColliderBuilder::cuboid(5.0, 0.1, 5.0).build(), floor_handle);
+    let floor_handle = world.add_body(BodyBuilder::fixed().translation(0.0, -0.1, 0.0));
+    world.add_collider(ColliderBuilder::cuboid(5.0, 0.1, 5.0), floor_handle);
 
-    // Dynamic ball cube starting at y = 8
-    let ball_body = RigidBodyBuilder::dynamic()
-        .translation(0.0, 8.0, 0.0)
-        .build();
-    let ball_handle = world.add_body(ball_body);
-    world.add_collider(
-        ColliderBuilder::cuboid(0.5, 0.5, 0.5)
-            .restitution(0.6)
-            .build(),
-        ball_handle,
-    );
+    let ball_handle = world.add_body(BodyBuilder::dynamic().translation(0.0, 8.0, 0.0));
+    world.add_collider(ColliderBuilder::cuboid(0.5, 0.5, 0.5).restitution(0.6), ball_handle);
 
     let path = write_temp_obj("nene_physics3d_cube.obj", CUBE_OBJ);
     let model = Model::load(&path);
@@ -213,8 +200,7 @@ fn main() {
         |state, ctx, _input, time| {
             state.world.step_dt(time.delta);
 
-            let body = state.world.body(state.ball_handle).unwrap();
-            let t = body.translation();
+            let t = state.world.position(state.ball_handle).unwrap();
             let model = scale_translate(1.0, 1.0, 1.0, t.x, t.y, t.z);
 
             let cfg = ctx.surface_config();

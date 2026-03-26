@@ -139,7 +139,7 @@ impl Default for Sprite {
 /// ```text
 /// // update:
 /// batch.clear();
-/// batch.draw(&sprite);
+/// batch.queue(&sprite);
 /// batch.prepare(ctx, &camera, aspect);
 ///
 /// // render:
@@ -205,7 +205,7 @@ impl SpriteBatch {
     }
 
     /// Queue a sprite for rendering. Silently ignored if over `max_sprites`.
-    pub fn draw(&mut self, sprite: &Sprite) {
+    pub fn queue(&mut self, sprite: &Sprite) {
         if self.cpu_vertices.len() / 4 >= self.max_sprites {
             return;
         }
