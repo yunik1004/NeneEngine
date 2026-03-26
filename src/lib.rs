@@ -6,6 +6,7 @@ pub mod math;
 pub mod mesh;
 pub mod physics;
 pub mod renderer;
+pub mod scene;
 pub mod shadow;
 pub mod sprite;
 pub mod text;
