@@ -5,8 +5,8 @@ use nene::{
     input::{Key, MouseButton},
     math::Vec2,
     renderer::{Context, RenderPass},
-    sprite::{Sprite, SpriteBatch, UvRect},
     renderer::{FilterMode, Texture},
+    sprite::{Sprite, SpriteBatch, UvRect},
     window::{Config, Window},
 };
 

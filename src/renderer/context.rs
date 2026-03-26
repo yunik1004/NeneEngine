@@ -2,11 +2,11 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
+use super::shadow::{self, ShadowMap};
+use super::texture::{self, FilterMode, Texture};
 use super::uniform;
 use super::{IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer};
-use super::shadow::{self, ShadowMap};
 use crate::text::TextRenderer;
-use super::texture::{self, FilterMode, Texture};
 
 fn create_instance() -> wgpu::Instance {
     wgpu::Instance::new(wgpu::InstanceDescriptor {

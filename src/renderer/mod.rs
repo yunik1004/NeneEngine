@@ -10,6 +10,6 @@ pub use buffer::{IndexBuffer, VertexBuffer};
 pub use context::{Context, HeadlessContext};
 pub use pass::RenderPass;
 pub use pipeline::{Pipeline, PipelineDescriptor, VertexAttribute, VertexFormat, VertexLayout};
-pub use shadow::{ShadowMap, SHADOW_WGSL};
+pub use shadow::{SHADOW_WGSL, ShadowMap};
 pub use texture::{FilterMode, Texture};
 pub use uniform::UniformBuffer;

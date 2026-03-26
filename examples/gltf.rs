@@ -10,7 +10,7 @@ use nene::{
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
-    renderer::{SHADOW_WGSL, ShadowMap, FilterMode, Texture},
+    renderer::{FilterMode, SHADOW_WGSL, ShadowMap, Texture},
     uniform,
     window::{Config, Window},
 };

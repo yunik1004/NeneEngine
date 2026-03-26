@@ -3,11 +3,11 @@ use nene::{
     camera::Camera,
     math::{Mat4, Vec3},
     mesh::MeshVertex,
+    renderer::Texture,
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
     text::TextRenderer,
-    renderer::Texture,
     uniform,
     window::{Config, Window},
 };
