@@ -107,6 +107,8 @@ pub enum VertexFormat {
     Float32x2,
     Float32x3,
     Float32x4,
+    /// Four unsigned bytes — maps to `vec4<u32>` in WGSL. Use for joint indices.
+    Uint8x4,
 }
 
 impl From<VertexFormat> for wgpu::VertexFormat {
@@ -115,6 +117,7 @@ impl From<VertexFormat> for wgpu::VertexFormat {
             VertexFormat::Float32x2 => wgpu::VertexFormat::Float32x2,
             VertexFormat::Float32x3 => wgpu::VertexFormat::Float32x3,
             VertexFormat::Float32x4 => wgpu::VertexFormat::Float32x4,
+            VertexFormat::Uint8x4 => wgpu::VertexFormat::Uint8x4,
         }
     }
 }

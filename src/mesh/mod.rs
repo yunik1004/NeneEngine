@@ -216,7 +216,7 @@ fn collect_node(
     }
 }
 
-fn to_rgba8(img: &gltf::image::Data) -> Image {
+pub(crate) fn to_rgba8(img: &gltf::image::Data) -> Image {
     use gltf::image::Format;
     let rgba = match img.format {
         Format::R8G8B8 => img
