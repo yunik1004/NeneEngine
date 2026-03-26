@@ -571,7 +571,15 @@ impl TextRenderer {
         }
 
         // Create render target
-        let (target_view, texture) = ctx.create_render_target(width, height);
+        // Use Rgba8UnormSrgb to match the format the text pipeline was compiled for.
+        let target = crate::renderer::texture::create_render_target(
+            device,
+            width,
+            height,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            false,
+        );
+        let target_view = &target.color_view;
 
         // Render pass
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -579,7 +587,7 @@ impl TextRenderer {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("text_to_texture"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &target_view,
+                    view: target_view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
@@ -608,7 +616,7 @@ impl TextRenderer {
         }
         queue.submit([encoder.finish()]);
 
-        texture
+        target.into_texture()
     }
 
     /// Render prepared text into a render pass.

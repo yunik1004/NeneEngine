@@ -79,5 +79,5 @@ fn texture_load_from_memory() {
 #[test]
 fn create_render_target() {
     let Some(ctx) = make_ctx() else { return };
-    let (_view, _tex): (_, Texture) = ctx.create_render_target(256, 128);
+    let _target = ctx.create_render_target(256, 128);
 }

@@ -13,6 +13,8 @@ pub struct PipelineDescriptor<'a> {
     pub depth_write: bool,
     pub use_shadow_map: bool,
     pub depth_only: bool,
+    /// Fullscreen-triangle pass: no vertex buffers, no depth stencil.
+    pub fullscreen: bool,
 }
 
 impl<'a> PipelineDescriptor<'a> {
@@ -28,6 +30,26 @@ impl<'a> PipelineDescriptor<'a> {
             depth_write: false,
             use_shadow_map: false,
             depth_only: false,
+            fullscreen: false,
+        }
+    }
+
+    /// Fullscreen-triangle pass (no vertex buffers, no depth stencil).
+    /// The vertex shader uses `@builtin(vertex_index)` to cover NDC space.
+    /// Call [`RenderPass::draw`]`(0..3)` to issue the draw.
+    pub fn fullscreen_pass(shader: &'a str) -> Self {
+        Self {
+            shader,
+            vertex_layout: VertexLayout { stride: 0, attributes: vec![] },
+            vertex_entry: "vs_main",
+            fragment_entry: "fs_main",
+            use_texture: false,
+            use_uniform: false,
+            alpha_blend: false,
+            depth_write: false,
+            use_shadow_map: false,
+            depth_only: false,
+            fullscreen: true,
         }
     }
 

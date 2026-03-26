@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 use super::shadow::{self, ShadowMap};
-use super::texture::{self, FilterMode, Texture};
+use super::texture::{self, FilterMode, RenderTarget, Texture};
 use super::uniform;
 use super::{IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer};
 use crate::text::TextRenderer;
@@ -108,8 +108,12 @@ impl GpuDevice {
         shadow::create(&self.device, size)
     }
 
-    pub fn create_render_target(&self, width: u32, height: u32) -> (wgpu::TextureView, Texture) {
-        texture::create_render_target(&self.device, width, height)
+    pub fn create_render_target(&self, width: u32, height: u32, format: wgpu::TextureFormat) -> RenderTarget {
+        texture::create_render_target(&self.device, width, height, format, false)
+    }
+
+    pub fn create_scene_target(&self, width: u32, height: u32, format: wgpu::TextureFormat) -> RenderTarget {
+        texture::create_render_target(&self.device, width, height, format, true)
     }
 
     pub fn create_text_renderer(&self) -> TextRenderer {
@@ -118,6 +122,97 @@ impl GpuDevice {
             &self.queue,
             wgpu::TextureFormat::Rgba8UnormSrgb,
         )
+    }
+
+    pub(crate) fn create_pipeline(&self, desc: PipelineDescriptor, color_format: wgpu::TextureFormat) -> Pipeline {
+        let shader = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(desc.shader.into()),
+        });
+
+        let uniform_layout = desc.use_uniform.then(|| uniform::bind_group_layout(&self.device));
+        let texture_layout = desc.use_texture.then(|| texture::bind_group_layout(&self.device));
+        let shadow_layout = desc.use_shadow_map.then(|| shadow::bind_group_layout(&self.device));
+
+        let mut bgl: Vec<Option<&wgpu::BindGroupLayout>> = Vec::new();
+        if let Some(u) = &uniform_layout { bgl.push(Some(u)); }
+        if let Some(t) = &texture_layout { bgl.push(Some(t)); }
+        if let Some(s) = &shadow_layout  { bgl.push(Some(s)); }
+
+        let layout = self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &bgl,
+            immediate_size: 0,
+        });
+
+        let attributes: Vec<wgpu::VertexAttribute> = desc.vertex_layout.attributes.into_iter()
+            .map(|a| wgpu::VertexAttribute {
+                offset: a.offset,
+                shader_location: a.location,
+                format: a.format.into(),
+            })
+            .collect();
+
+        let vertex_buffer_layout = wgpu::VertexBufferLayout {
+            array_stride: desc.vertex_layout.stride,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &attributes,
+        };
+
+        let color_target = Some(wgpu::ColorTargetState {
+            format: color_format,
+            blend: Some(if desc.alpha_blend { wgpu::BlendState::ALPHA_BLENDING } else { wgpu::BlendState::REPLACE }),
+            write_mask: wgpu::ColorWrites::ALL,
+        });
+        let color_targets = if desc.depth_only { vec![] } else { vec![color_target] };
+
+        let depth_stencil = if desc.fullscreen {
+            None
+        } else {
+            Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(desc.depth_write || desc.depth_only),
+                depth_compare: Some(if desc.depth_write || desc.depth_only {
+                    wgpu::CompareFunction::LessEqual
+                } else {
+                    wgpu::CompareFunction::Always
+                }),
+                stencil: wgpu::StencilState::default(),
+                bias: if desc.depth_only {
+                    wgpu::DepthBiasState { constant: 2, slope_scale: 4.0, clamp: 0.0 }
+                } else {
+                    wgpu::DepthBiasState::default()
+                },
+            })
+        };
+
+        let inner = self.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some(desc.vertex_entry),
+                buffers: if desc.fullscreen { &[] } else { std::slice::from_ref(&vertex_buffer_layout) },
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: if desc.depth_only {
+                None
+            } else {
+                Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some(desc.fragment_entry),
+                    targets: &color_targets,
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                })
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+        Pipeline { inner }
     }
 }
 
@@ -210,12 +305,106 @@ impl HeadlessContext {
         self.gpu.create_shadow_map(size)
     }
 
-    pub fn create_render_target(&self, width: u32, height: u32) -> (wgpu::TextureView, Texture) {
-        self.gpu.create_render_target(width, height)
+    /// Create a color-only render target (no depth).
+    pub fn create_render_target(&self, width: u32, height: u32) -> RenderTarget {
+        self.gpu.create_render_target(width, height, wgpu::TextureFormat::Rgba8UnormSrgb)
+    }
+
+    /// Create a render target with a depth buffer.
+    pub fn create_scene_target(&self, width: u32, height: u32) -> RenderTarget {
+        self.gpu.create_scene_target(width, height, wgpu::TextureFormat::Rgba8UnormSrgb)
+    }
+
+    /// Compile a render pipeline targeting `Rgba8UnormSrgb`.
+    pub fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
+        self.gpu.create_pipeline(desc, wgpu::TextureFormat::Rgba8UnormSrgb)
+    }
+
+    /// Render into an off-screen [`RenderTarget`].
+    pub fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(&mut self, target: &RenderTarget, draw: F) {
+        let mut encoder = self
+            .gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let wgpu_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("render_to_target"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &target.color_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: target.depth_view.as_ref().map(|dv| {
+                    wgpu::RenderPassDepthStencilAttachment {
+                        view: dv,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Discard,
+                        }),
+                        stencil_ops: None,
+                    }
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            let mut pass = RenderPass::new(wgpu_pass);
+            draw(&mut pass);
+        }
+        self.gpu.queue.submit([encoder.finish()]);
     }
 
     pub fn create_text_renderer(&self) -> TextRenderer {
         self.gpu.create_text_renderer()
+    }
+}
+
+/// Abstraction over [`Context`] and [`HeadlessContext`] for code that works in both environments.
+pub trait RenderContext {
+    fn create_scene_target(&self, width: u32, height: u32) -> RenderTarget;
+    fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline;
+    fn create_uniform_buffer<T: bytemuck::Pod>(&self, data: &T) -> UniformBuffer;
+    fn update_uniform_buffer<T: bytemuck::Pod>(&self, buf: &UniformBuffer, data: &T);
+    fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(&mut self, target: &RenderTarget, draw: F);
+}
+
+impl RenderContext for Context {
+    fn create_scene_target(&self, width: u32, height: u32) -> RenderTarget {
+        self.create_scene_target(width, height)
+    }
+    fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
+        self.create_pipeline(desc)
+    }
+    fn create_uniform_buffer<T: bytemuck::Pod>(&self, data: &T) -> UniformBuffer {
+        self.create_uniform_buffer(data)
+    }
+    fn update_uniform_buffer<T: bytemuck::Pod>(&self, buf: &UniformBuffer, data: &T) {
+        self.update_uniform_buffer(buf, data)
+    }
+    fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(&mut self, target: &RenderTarget, draw: F) {
+        self.render_to_target(target, draw)
+    }
+}
+
+impl RenderContext for HeadlessContext {
+    fn create_scene_target(&self, width: u32, height: u32) -> RenderTarget {
+        self.create_scene_target(width, height)
+    }
+    fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
+        self.create_pipeline(desc)
+    }
+    fn create_uniform_buffer<T: bytemuck::Pod>(&self, data: &T) -> UniformBuffer {
+        self.create_uniform_buffer(data)
+    }
+    fn update_uniform_buffer<T: bytemuck::Pod>(&self, buf: &UniformBuffer, data: &T) {
+        self.update_uniform_buffer(buf, data)
+    }
+    fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(&mut self, target: &RenderTarget, draw: F) {
+        self.render_to_target(target, draw)
     }
 }
 
@@ -316,119 +505,9 @@ impl Context {
         self.gpu.update_uniform_buffer(buf, data)
     }
 
+    /// Compile a render pipeline targeting the swapchain surface format.
     pub fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
-        let shader = self
-            .gpu
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(desc.shader.into()),
-            });
-
-        let uniform_layout = desc
-            .use_uniform
-            .then(|| uniform::bind_group_layout(&self.gpu.device));
-        let texture_layout = desc
-            .use_texture
-            .then(|| texture::bind_group_layout(&self.gpu.device));
-        let shadow_layout = desc
-            .use_shadow_map
-            .then(|| shadow::bind_group_layout(&self.gpu.device));
-
-        let mut bind_group_layouts: Vec<Option<&wgpu::BindGroupLayout>> = Vec::new();
-        if let Some(u) = &uniform_layout {
-            bind_group_layouts.push(Some(u));
-        }
-        if let Some(t) = &texture_layout {
-            bind_group_layouts.push(Some(t));
-        }
-        if let Some(s) = &shadow_layout {
-            bind_group_layouts.push(Some(s));
-        }
-
-        let layout = self
-            .gpu
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &bind_group_layouts,
-                immediate_size: 0,
-            });
-
-        let attributes: Vec<wgpu::VertexAttribute> = desc
-            .vertex_layout
-            .attributes
-            .into_iter()
-            .map(|a| wgpu::VertexAttribute {
-                offset: a.offset,
-                shader_location: a.location,
-                format: a.format.into(),
-            })
-            .collect();
-
-        let color_target = Some(wgpu::ColorTargetState {
-            format: self.surface_config.format,
-            blend: Some(if desc.alpha_blend {
-                wgpu::BlendState::ALPHA_BLENDING
-            } else {
-                wgpu::BlendState::REPLACE
-            }),
-            write_mask: wgpu::ColorWrites::ALL,
-        });
-        let color_targets = [color_target];
-
-        let inner = self
-            .gpu
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
-                layout: Some(&layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some(desc.vertex_entry),
-                    buffers: &[wgpu::VertexBufferLayout {
-                        array_stride: desc.vertex_layout.stride,
-                        step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &attributes,
-                    }],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                },
-                fragment: if desc.depth_only {
-                    None
-                } else {
-                    Some(wgpu::FragmentState {
-                        module: &shader,
-                        entry_point: Some(desc.fragment_entry),
-                        targets: &color_targets,
-                        compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    })
-                },
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: DEPTH_FORMAT,
-                    depth_write_enabled: Some(desc.depth_write || desc.depth_only),
-                    depth_compare: Some(if desc.depth_write || desc.depth_only {
-                        wgpu::CompareFunction::LessEqual
-                    } else {
-                        wgpu::CompareFunction::Always
-                    }),
-                    stencil: wgpu::StencilState::default(),
-                    bias: if desc.depth_only {
-                        wgpu::DepthBiasState {
-                            constant: 2,
-                            slope_scale: 4.0,
-                            clamp: 0.0,
-                        }
-                    } else {
-                        wgpu::DepthBiasState::default()
-                    },
-                }),
-                multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
-                cache: None,
-            });
-
-        Pipeline { inner }
+        self.gpu.create_pipeline(desc, self.surface_config.format)
     }
 
     pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {
@@ -469,9 +548,53 @@ impl Context {
         self.gpu.create_shadow_map(size)
     }
 
-    /// Create a blank `width × height` texture usable as a render target and in shaders.
-    pub fn create_render_target(&self, width: u32, height: u32) -> (wgpu::TextureView, Texture) {
-        self.gpu.create_render_target(width, height)
+    /// Create a color-only render target (no depth). Use for fullscreen effect passes.
+    pub fn create_render_target(&self, width: u32, height: u32) -> RenderTarget {
+        self.gpu.create_render_target(width, height, self.surface_config.format)
+    }
+
+    /// Create a render target with a depth buffer. Use for off-screen 3-D scene rendering.
+    pub fn create_scene_target(&self, width: u32, height: u32) -> RenderTarget {
+        self.gpu.create_scene_target(width, height, self.surface_config.format)
+    }
+
+    /// Render into an off-screen [`RenderTarget`].
+    /// If the target was created with [`create_scene_target`], depth testing is active.
+    pub fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(&mut self, target: &RenderTarget, draw: F) {
+        let mut encoder = self
+            .gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        {
+            let wgpu_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("render_to_target"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &target.color_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: target.depth_view.as_ref().map(|dv| {
+                    wgpu::RenderPassDepthStencilAttachment {
+                        view: dv,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Discard,
+                        }),
+                        stencil_ops: None,
+                    }
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            let mut pass = RenderPass::new(wgpu_pass);
+            draw(&mut pass);
+        }
+        self.gpu.queue.submit([encoder.finish()]);
     }
 
     pub fn shadow_pass<F: FnOnce(&mut RenderPass<'_>)>(&mut self, shadow_map: &ShadowMap, draw: F) {
