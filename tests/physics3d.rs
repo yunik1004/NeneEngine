@@ -1,4 +1,4 @@
-use nene::physics::d3::{BodyBuilder, BodyType, ColliderBuilder, World};
+use nene::physics::d3::{ColliderBuilder, RigidBodyBuilder, RigidBodyType, World};
 
 #[test]
 fn world_default_gravity() {
@@ -15,11 +15,13 @@ fn world_custom_gravity() {
 #[test]
 fn dynamic_body_falls_under_gravity() {
     let mut world = World::new();
-    let handle = world.add_body(BodyBuilder::dynamic().translation(0.0, 10.0, 0.0));
+    let handle = world.add_body(RigidBodyBuilder::dynamic().translation(0.0, 10.0, 0.0));
     world.add_collider(ColliderBuilder::ball(0.5), handle);
 
     let y_before = world.position(handle).unwrap().y;
-    for _ in 0..60 { world.step(); }
+    for _ in 0..60 {
+        world.step();
+    }
     let y_after = world.position(handle).unwrap().y;
 
     assert!(y_after < y_before, "dynamic body should fall under gravity");
@@ -28,8 +30,10 @@ fn dynamic_body_falls_under_gravity() {
 #[test]
 fn fixed_body_does_not_move() {
     let mut world = World::new();
-    let handle = world.add_body(BodyBuilder::fixed().translation(0.0, 0.0, 0.0));
-    for _ in 0..60 { world.step(); }
+    let handle = world.add_body(RigidBodyBuilder::fixed().translation(0.0, 0.0, 0.0));
+    for _ in 0..60 {
+        world.step();
+    }
     let pos = world.position(handle).unwrap();
     assert!(pos.x.abs() < 1e-6);
     assert!(pos.y.abs() < 1e-6);
@@ -39,8 +43,10 @@ fn fixed_body_does_not_move() {
 #[test]
 fn zero_gravity_body_stays_put() {
     let mut world = World::with_gravity([0.0, 0.0, 0.0]);
-    let handle = world.add_body(BodyBuilder::dynamic().translation(3.0, 5.0, 7.0));
-    for _ in 0..60 { world.step(); }
+    let handle = world.add_body(RigidBodyBuilder::dynamic().translation(3.0, 5.0, 7.0));
+    for _ in 0..60 {
+        world.step();
+    }
     let pos = world.position(handle).unwrap();
     assert!((pos.x - 3.0).abs() < 1e-4);
     assert!((pos.y - 5.0).abs() < 1e-4);
@@ -50,7 +56,7 @@ fn zero_gravity_body_stays_put() {
 #[test]
 fn add_collider_to_body() {
     let mut world = World::new();
-    let handle = world.add_body(BodyBuilder::dynamic());
+    let handle = world.add_body(RigidBodyBuilder::dynamic());
     let col_handle = world.add_collider(ColliderBuilder::ball(0.5), handle);
     world.remove_collider(col_handle);
 }
@@ -65,7 +71,7 @@ fn add_free_collider() {
 #[test]
 fn remove_body_invalidates_handle() {
     let mut world = World::new();
-    let handle = world.add_body(BodyBuilder::dynamic());
+    let handle = world.add_body(RigidBodyBuilder::dynamic());
     assert!(world.is_alive(handle));
     world.remove_body(handle);
     assert!(!world.is_alive(handle));
@@ -74,16 +80,16 @@ fn remove_body_invalidates_handle() {
 #[test]
 fn body_type_is_correct() {
     let mut world = World::new();
-    let dynamic = world.add_body(BodyBuilder::dynamic());
-    let fixed   = world.add_body(BodyBuilder::fixed());
-    assert_eq!(world.body_type(dynamic), Some(BodyType::Dynamic));
-    assert_eq!(world.body_type(fixed),   Some(BodyType::Fixed));
+    let dynamic = world.add_body(RigidBodyBuilder::dynamic());
+    let fixed = world.add_body(RigidBodyBuilder::fixed());
+    assert_eq!(world.body_type(dynamic), Some(RigidBodyType::Dynamic));
+    assert_eq!(world.body_type(fixed), Some(RigidBodyType::Fixed));
 }
 
 #[test]
 fn step_dt_advances_simulation() {
     let mut world = World::new();
-    let handle = world.add_body(BodyBuilder::dynamic().translation(0.0, 100.0, 0.0));
+    let handle = world.add_body(RigidBodyBuilder::dynamic().translation(0.0, 100.0, 0.0));
     world.add_collider(ColliderBuilder::ball(0.5), handle);
 
     let y_before = world.position(handle).unwrap().y;

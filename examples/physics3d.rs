@@ -3,7 +3,7 @@ use nene::{
     camera::Camera,
     math::{Mat4, Vec3},
     mesh::Model,
-    physics::d3::{BodyBuilder, BodyHandle, ColliderBuilder, World},
+    physics::d3::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, World},
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
@@ -116,7 +116,7 @@ struct State {
     ball_uniform: UniformBuffer,
     floor_uniform: UniformBuffer,
     world: World,
-    ball_handle: BodyHandle,
+    ball_handle: RigidBodyHandle,
 }
 
 fn write_temp_obj(name: &str, content: &str) -> std::path::PathBuf {
@@ -139,11 +139,14 @@ fn build_view_proj(aspect: f32) -> [[f32; 4]; 4] {
 fn init(ctx: &mut Context) -> State {
     let mut world = World::new(); // gravity (0, -9.81, 0)
 
-    let floor_handle = world.add_body(BodyBuilder::fixed().translation(0.0, -0.1, 0.0));
+    let floor_handle = world.add_body(RigidBodyBuilder::fixed().translation(0.0, -0.1, 0.0));
     world.add_collider(ColliderBuilder::cuboid(5.0, 0.1, 5.0), floor_handle);
 
-    let ball_handle = world.add_body(BodyBuilder::dynamic().translation(0.0, 8.0, 0.0));
-    world.add_collider(ColliderBuilder::cuboid(0.5, 0.5, 0.5).restitution(0.6), ball_handle);
+    let ball_handle = world.add_body(RigidBodyBuilder::dynamic().translation(0.0, 8.0, 0.0));
+    world.add_collider(
+        ColliderBuilder::cuboid(0.5, 0.5, 0.5).restitution(0.6),
+        ball_handle,
+    );
 
     let path = write_temp_obj("nene_physics3d_cube.obj", CUBE_OBJ);
     let model = Model::load(&path);

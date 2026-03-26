@@ -57,36 +57,50 @@ struct U {
 
 fn cube() -> (Vec<MeshVertex>, Vec<u32>) {
     let p: [[f32; 3]; 8] = [
-        [-0.5, -0.5, -0.5], [ 0.5, -0.5, -0.5],
-        [ 0.5,  0.5, -0.5], [-0.5,  0.5, -0.5],
-        [-0.5, -0.5,  0.5], [ 0.5, -0.5,  0.5],
-        [ 0.5,  0.5,  0.5], [-0.5,  0.5,  0.5],
+        [-0.5, -0.5, -0.5],
+        [0.5, -0.5, -0.5],
+        [0.5, 0.5, -0.5],
+        [-0.5, 0.5, -0.5],
+        [-0.5, -0.5, 0.5],
+        [0.5, -0.5, 0.5],
+        [0.5, 0.5, 0.5],
+        [-0.5, 0.5, 0.5],
     ];
     let n: [[f32; 3]; 6] = [
-        [0., 0.,-1.], [0., 0., 1.],
-        [-1., 0., 0.], [1., 0., 0.],
-        [0.,-1., 0.], [0., 1., 0.],
+        [0., 0., -1.],
+        [0., 0., 1.],
+        [-1., 0., 0.],
+        [1., 0., 0.],
+        [0., -1., 0.],
+        [0., 1., 0.],
     ];
     let faces: [([usize; 4], usize); 6] = [
-        ([0,1,2,3], 0), ([5,4,7,6], 1),
-        ([4,0,3,7], 2), ([1,5,6,2], 3),
-        ([4,5,1,0], 4), ([3,2,6,7], 5),
+        ([0, 1, 2, 3], 0),
+        ([5, 4, 7, 6], 1),
+        ([4, 0, 3, 7], 2),
+        ([1, 5, 6, 2], 3),
+        ([4, 5, 1, 0], 4),
+        ([3, 2, 6, 7], 5),
     ];
     let mut verts = Vec::new();
-    let mut idx   = Vec::new();
+    let mut idx = Vec::new();
     for (quad, ni) in faces {
         let base = verts.len() as u32;
         for &pi in &quad {
-            verts.push(MeshVertex { position: p[pi], normal: n[ni], uv: [0., 0.] });
+            verts.push(MeshVertex {
+                position: p[pi],
+                normal: n[ni],
+                uv: [0., 0.],
+            });
         }
-        idx.extend_from_slice(&[base, base+1, base+2, base, base+2, base+3]);
+        idx.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
     }
     (verts, idx)
 }
 
 struct Body {
-    id:    NodeId,
-    ubuf:  UniformBuffer,
+    id: NodeId,
+    ubuf: UniformBuffer,
     color: [f32; 4],
     scale: f32,
     angle: f32,
@@ -96,11 +110,11 @@ struct Body {
 
 struct State {
     pipeline: Pipeline,
-    vbuf:     VertexBuffer,
-    ibuf:     IndexBuffer,
-    scene:    Scene,
-    bodies:   [Body; 3],
-    camera:   Camera,
+    vbuf: VertexBuffer,
+    ibuf: IndexBuffer,
+    scene: Scene,
+    bodies: [Body; 3],
+    camera: Camera,
 }
 
 fn init(ctx: &mut Context) -> State {
@@ -116,33 +130,68 @@ fn init(ctx: &mut Context) -> State {
 
     let blank = U {
         view_proj: Mat4::IDENTITY.to_cols_array_2d(),
-        model:     Mat4::IDENTITY.to_cols_array_2d(),
-        color:     [1., 1., 1., 1.],
+        model: Mat4::IDENTITY.to_cols_array_2d(),
+        color: [1., 1., 1., 1.],
     };
 
     let mut scene = Scene::new();
-    let sun    = scene.add_node(Node::named("sun"));
-    let planet = scene.add_child(sun,
-        Node::named("planet")
-            .with_transform(Transform::from_position(Vec3::new(3.5, 0., 0.))));
-    let moon   = scene.add_child(planet,
-        Node::named("moon")
-            .with_transform(Transform::from_position(Vec3::new(1.4, 0., 0.))));
+    let sun = scene.add_node(Node::named("sun"));
+    let planet = scene.add_child(
+        sun,
+        Node::named("planet").with_transform(Transform::from_position(Vec3::new(3.5, 0., 0.))),
+    );
+    let moon = scene.add_child(
+        planet,
+        Node::named("moon").with_transform(Transform::from_position(Vec3::new(1.4, 0., 0.))),
+    );
     scene.update();
 
     let bodies = [
-        Body { id: sun,    ubuf: ctx.create_uniform_buffer(&blank), color: [1.0, 0.85, 0.1, 1.], scale: 0.9,  angle: 0., speed: 0.4,  orbit_radius: 0.  },
-        Body { id: planet, ubuf: ctx.create_uniform_buffer(&blank), color: [0.2, 0.5,  1.0, 1.], scale: 0.5,  angle: 0., speed: 1.1,  orbit_radius: 3.5 },
-        Body { id: moon,   ubuf: ctx.create_uniform_buffer(&blank), color: [0.8, 0.8,  0.8, 1.], scale: 0.22, angle: 0., speed: 2.8,  orbit_radius: 1.4 },
+        Body {
+            id: sun,
+            ubuf: ctx.create_uniform_buffer(&blank),
+            color: [1.0, 0.85, 0.1, 1.],
+            scale: 0.9,
+            angle: 0.,
+            speed: 0.4,
+            orbit_radius: 0.,
+        },
+        Body {
+            id: planet,
+            ubuf: ctx.create_uniform_buffer(&blank),
+            color: [0.2, 0.5, 1.0, 1.],
+            scale: 0.5,
+            angle: 0.,
+            speed: 1.1,
+            orbit_radius: 3.5,
+        },
+        Body {
+            id: moon,
+            ubuf: ctx.create_uniform_buffer(&blank),
+            color: [0.8, 0.8, 0.8, 1.],
+            scale: 0.22,
+            angle: 0.,
+            speed: 2.8,
+            orbit_radius: 1.4,
+        },
     ];
 
     State {
-        pipeline, vbuf, ibuf, scene, bodies,
+        pipeline,
+        vbuf,
+        ibuf,
+        scene,
+        bodies,
         camera: Camera::perspective(Vec3::new(0., 5., 12.), 45., 0.1, 100.),
     }
 }
 
-fn update(state: &mut State, ctx: &mut Context, _input: &nene::input::Input, time: &nene::time::Time) {
+fn update(
+    state: &mut State,
+    ctx: &mut Context,
+    _input: &nene::input::Input,
+    time: &nene::time::Time,
+) {
     let dt = time.delta;
 
     for body in &mut state.bodies {
@@ -160,18 +209,21 @@ fn update(state: &mut State, ctx: &mut Context, _input: &nene::input::Input, tim
 
     state.scene.update();
 
-    let cfg    = ctx.surface_config();
+    let cfg = ctx.surface_config();
     let aspect = cfg.width as f32 / cfg.height as f32;
-    let vp     = state.camera.view_proj(aspect);
+    let vp = state.camera.view_proj(aspect);
 
     for body in &state.bodies {
-        let model = state.scene.get(body.id).world_transform()
-            * Mat4::from_scale(Vec3::splat(body.scale));
-        ctx.update_uniform_buffer(&body.ubuf, &U {
-            view_proj: vp.to_cols_array_2d(),
-            model:     model.to_cols_array_2d(),
-            color:     body.color,
-        });
+        let model =
+            state.scene.get(body.id).world_transform() * Mat4::from_scale(Vec3::splat(body.scale));
+        ctx.update_uniform_buffer(
+            &body.ubuf,
+            &U {
+                view_proj: vp.to_cols_array_2d(),
+                model: model.to_cols_array_2d(),
+                color: body.color,
+            },
+        );
     }
 }
 

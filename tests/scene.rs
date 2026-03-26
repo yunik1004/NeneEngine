@@ -72,9 +72,8 @@ fn world_transform_default_is_identity() {
 #[test]
 fn world_transform_root_translation() {
     let mut scene = Scene::new();
-    let id = scene.add_node(
-        Node::new().with_transform(Transform::from_position(Vec3::new(1.0, 2.0, 3.0))),
-    );
+    let id = scene
+        .add_node(Node::new().with_transform(Transform::from_position(Vec3::new(1.0, 2.0, 3.0))));
     scene.update();
     let col = scene.get(id).world_transform().w_axis;
     assert!((col.x - 1.0).abs() < 1e-5);
@@ -85,9 +84,8 @@ fn world_transform_root_translation() {
 #[test]
 fn world_transform_inherits_parent_translation() {
     let mut scene = Scene::new();
-    let parent = scene.add_node(
-        Node::new().with_transform(Transform::from_position(Vec3::new(5.0, 0.0, 0.0))),
-    );
+    let parent = scene
+        .add_node(Node::new().with_transform(Transform::from_position(Vec3::new(5.0, 0.0, 0.0))));
     let child = scene.add_child(
         parent,
         Node::new().with_transform(Transform::from_position(Vec3::new(1.0, 0.0, 0.0))),
@@ -100,9 +98,8 @@ fn world_transform_inherits_parent_translation() {
 #[test]
 fn world_transform_three_levels() {
     let mut scene = Scene::new();
-    let root = scene.add_node(
-        Node::new().with_transform(Transform::from_position(Vec3::new(1.0, 0.0, 0.0))),
-    );
+    let root = scene
+        .add_node(Node::new().with_transform(Transform::from_position(Vec3::new(1.0, 0.0, 0.0))));
     let mid = scene.add_child(
         root,
         Node::new().with_transform(Transform::from_position(Vec3::new(2.0, 0.0, 0.0))),
@@ -119,11 +116,9 @@ fn world_transform_three_levels() {
 #[test]
 fn world_transform_rotation_applied() {
     let mut scene = Scene::new();
-    let id = scene.add_node(
-        Node::new().with_transform(Transform::from_rotation(Quat::from_rotation_y(
-            std::f32::consts::FRAC_PI_2,
-        ))),
-    );
+    let id = scene.add_node(Node::new().with_transform(Transform::from_rotation(
+        Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+    )));
     scene.update();
     // In a right-handed system a +90° Y rotation maps X → -Z
     let x_axis = scene.get(id).world_transform().x_axis;
@@ -134,9 +129,8 @@ fn world_transform_rotation_applied() {
 #[test]
 fn update_called_twice_is_stable() {
     let mut scene = Scene::new();
-    let id = scene.add_node(
-        Node::new().with_transform(Transform::from_position(Vec3::new(3.0, 0.0, 0.0))),
-    );
+    let id = scene
+        .add_node(Node::new().with_transform(Transform::from_position(Vec3::new(3.0, 0.0, 0.0))));
     scene.update();
     scene.update();
     let x = scene.get(id).world_transform().w_axis.x;

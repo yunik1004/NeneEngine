@@ -113,7 +113,11 @@ impl GpuDevice {
     }
 
     pub fn create_text_renderer(&self) -> TextRenderer {
-        TextRenderer::new_raw(&self.device, &self.queue, wgpu::TextureFormat::Rgba8UnormSrgb)
+        TextRenderer::new_raw(
+            &self.device,
+            &self.queue,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+        )
     }
 }
 

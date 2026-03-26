@@ -20,15 +20,24 @@ impl Default for Transform {
 
 impl Transform {
     pub fn from_position(position: Vec3) -> Self {
-        Self { position, ..Self::default() }
+        Self {
+            position,
+            ..Self::default()
+        }
     }
 
     pub fn from_rotation(rotation: Quat) -> Self {
-        Self { rotation, ..Self::default() }
+        Self {
+            rotation,
+            ..Self::default()
+        }
     }
 
     pub fn from_scale(scale: Vec3) -> Self {
-        Self { scale, ..Self::default() }
+        Self {
+            scale,
+            ..Self::default()
+        }
     }
 
     pub fn to_mat4(&self) -> Mat4 {
@@ -67,7 +76,10 @@ impl Node {
     }
 
     pub fn named(name: impl Into<String>) -> Self {
-        Self { name: Some(name.into()), ..Self::new() }
+        Self {
+            name: Some(name.into()),
+            ..Self::new()
+        }
     }
 
     pub fn with_transform(mut self, transform: Transform) -> Self {
@@ -108,7 +120,12 @@ impl Default for Scene {
 
 impl Scene {
     pub fn new() -> Self {
-        Self { nodes: Vec::new(), roots: Vec::new(), free: Vec::new(), count: 0 }
+        Self {
+            nodes: Vec::new(),
+            roots: Vec::new(),
+            free: Vec::new(),
+            count: 0,
+        }
     }
 
     fn alloc(&mut self, node: Node) -> NodeId {
@@ -134,7 +151,11 @@ impl Scene {
     pub fn add_child(&mut self, parent: NodeId, mut node: Node) -> NodeId {
         node.parent = Some(parent);
         let id = self.alloc(node);
-        self.nodes[parent.0].as_mut().expect("invalid parent NodeId").children.push(id);
+        self.nodes[parent.0]
+            .as_mut()
+            .expect("invalid parent NodeId")
+            .children
+            .push(id);
         id
     }
 
@@ -150,12 +171,11 @@ impl Scene {
             i += 1;
         }
 
-        if let Some(Some(n)) = self.nodes.get(id.0) {
-            if let Some(pid) = n.parent {
-                if let Some(Some(p)) = self.nodes.get_mut(pid.0) {
-                    p.children.retain(|&c| c != id);
-                }
-            }
+        if let Some(Some(n)) = self.nodes.get(id.0)
+            && let Some(pid) = n.parent
+            && let Some(Some(p)) = self.nodes.get_mut(pid.0)
+        {
+            p.children.retain(|&c| c != id);
         }
 
         self.roots.retain(|&r| r != id);

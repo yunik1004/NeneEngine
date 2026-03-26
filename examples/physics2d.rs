@@ -4,7 +4,7 @@ use std::f32::consts::TAU;
 use nene::{
     camera::Camera,
     math::{Mat4, Vec3},
-    physics::d2::{BodyBuilder, BodyHandle, ColliderBuilder, World},
+    physics::d2::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, World},
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
@@ -50,7 +50,7 @@ struct State {
     floor_ib: IndexBuffer,
     floor_uniform: UniformBuffer,
     world: World,
-    ball_handle: BodyHandle,
+    ball_handle: RigidBodyHandle,
     camera: Camera,
 }
 
@@ -99,10 +99,10 @@ fn mvp(camera: &Camera, x: f32, y: f32) -> [[f32; 4]; 4] {
 fn init(ctx: &mut Context) -> State {
     let mut world = World::new(); // gravity (0, -9.81)
 
-    let floor_handle = world.add_body(BodyBuilder::fixed());
+    let floor_handle = world.add_body(RigidBodyBuilder::fixed());
     world.add_collider(ColliderBuilder::cuboid(5.0, 0.1), floor_handle);
 
-    let ball_handle = world.add_body(BodyBuilder::dynamic().translation(0.0, 8.0));
+    let ball_handle = world.add_body(RigidBodyBuilder::dynamic().translation(0.0, 8.0));
     world.add_collider(ColliderBuilder::ball(0.5).restitution(0.7), ball_handle);
 
     let camera = build_camera();
