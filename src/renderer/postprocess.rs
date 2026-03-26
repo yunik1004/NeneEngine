@@ -47,8 +47,7 @@ impl Default for PostProcessSettings {
 
 // ── Internal GPU uniform ───────────────────────────────────────────────────────
 
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(encase::ShaderType)]
 struct PostUniform {
     exposure: f32,
     vignette: f32,
@@ -56,7 +55,6 @@ struct PostUniform {
     gamma: f32,
     saturation: f32,
     contrast: f32,
-    _pad: [f32; 2],
 }
 
 impl From<&PostProcessSettings> for PostUniform {
@@ -65,14 +63,13 @@ impl From<&PostProcessSettings> for PostUniform {
             exposure: s.exposure,
             vignette: s.vignette,
             tone_map: match s.tone_map {
-                ToneMap::None     => 0,
+                ToneMap::None => 0,
                 ToneMap::Reinhard => 1,
-                ToneMap::Aces     => 2,
+                ToneMap::Aces => 2,
             },
             gamma: s.gamma,
             saturation: s.saturation,
             contrast: s.contrast,
-            _pad: [0.0; 2],
         }
     }
 }
@@ -87,7 +84,6 @@ struct PostSettings {
     gamma:      f32,
     saturation: f32,
     contrast:   f32,
-    _pad:       vec2<f32>,
 };
 @group(0) @binding(0) var<uniform> u: PostSettings;
 @group(1) @binding(0) var t_scene: texture_2d<f32>;
@@ -201,13 +197,22 @@ impl PostProcessStack {
                 .with_texture(),
         );
         let ubuf = ctx.create_uniform_buffer(&PostUniform::from(&settings));
-        Self { settings, scene, pipeline, ubuf }
+        Self {
+            settings,
+            scene,
+            pipeline,
+            ubuf,
+        }
     }
 
     /// Render the scene into the internal off-screen target.
     ///
     /// Call this from `pre_render` or `update` before the main `render` callback.
-    pub fn scene_pass<F: FnOnce(&mut RenderPass<'_>)>(&self, ctx: &mut impl RenderContext, draw: F) {
+    pub fn scene_pass<F: FnOnce(&mut RenderPass<'_>)>(
+        &self,
+        ctx: &mut impl RenderContext,
+        draw: F,
+    ) {
         ctx.render_to_target(&self.scene, draw);
     }
 

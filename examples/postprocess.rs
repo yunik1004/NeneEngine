@@ -15,7 +15,6 @@ use nene::{
 const SHADER: &str = r#"
 struct Uniform {
     angle: f32,
-    _pad: vec3<f32>,
 };
 @group(0) @binding(0) var<uniform> u: Uniform;
 
@@ -53,7 +52,6 @@ struct Vert {
 #[nene::uniform]
 struct TriUniform {
     angle: f32,
-    _pad: [f32; 3],
 }
 
 struct State {
@@ -72,18 +70,34 @@ fn init(ctx: &mut Context) -> State {
 
     let pipeline = ctx.create_pipeline(
         PipelineDescriptor::new(SHADER, Vert::layout())
-            .with_uniform(),
+            .with_uniform()
+            .with_depth(),
     );
 
     let vertices = &[
-        Vert { position: [0.0,  0.6], color: [1.0, 0.2, 0.2] },
-        Vert { position: [-0.5, -0.4], color: [0.2, 1.0, 0.2] },
-        Vert { position: [0.5, -0.4], color: [0.2, 0.2, 1.0] },
+        Vert {
+            position: [0.0, 0.6],
+            color: [1.0, 0.2, 0.2],
+        },
+        Vert {
+            position: [-0.5, -0.4],
+            color: [0.2, 1.0, 0.2],
+        },
+        Vert {
+            position: [0.5, -0.4],
+            color: [0.2, 0.2, 1.0],
+        },
     ];
     let vbuf = ctx.create_vertex_buffer(vertices);
-    let ubuf = ctx.create_uniform_buffer(&TriUniform { angle: 0.0, _pad: [0.0; 3] });
+    let ubuf = ctx.create_uniform_buffer(&TriUniform { angle: 0.0 });
 
-    State { pp, pipeline, vbuf, ubuf, angle: 0.0 }
+    State {
+        pp,
+        pipeline,
+        vbuf,
+        ubuf,
+        angle: 0.0,
+    }
 }
 
 fn main() {
@@ -100,30 +114,35 @@ fn main() {
             // 1 — cycle tone mapping
             if input.key_pressed(Key::Digit1) {
                 state.pp.settings.tone_map = match state.pp.settings.tone_map {
-                    ToneMap::None     => ToneMap::Reinhard,
+                    ToneMap::None => ToneMap::Reinhard,
                     ToneMap::Reinhard => ToneMap::Aces,
-                    ToneMap::Aces     => ToneMap::None,
+                    ToneMap::Aces => ToneMap::None,
                 };
                 dirty = true;
             }
             // 2 — toggle vignette
             if input.key_pressed(Key::Digit2) {
-                state.pp.settings.vignette = if state.pp.settings.vignette > 0.0 { 0.0 } else { 1.2 };
+                state.pp.settings.vignette = if state.pp.settings.vignette > 0.0 {
+                    0.0
+                } else {
+                    1.2
+                };
                 dirty = true;
             }
             // 3 — toggle desaturation
             if input.key_pressed(Key::Digit3) {
-                state.pp.settings.saturation = if state.pp.settings.saturation > 0.5 { 0.0 } else { 1.0 };
+                state.pp.settings.saturation = if state.pp.settings.saturation > 0.5 {
+                    0.0
+                } else {
+                    1.0
+                };
                 dirty = true;
             }
             if dirty {
                 state.pp.apply_settings(ctx);
             }
 
-            ctx.update_uniform_buffer(
-                &state.ubuf,
-                &TriUniform { angle: state.angle, _pad: [0.0; 3] },
-            );
+            ctx.update_uniform_buffer(&state.ubuf, &TriUniform { angle: state.angle });
         },
         |state, ctx| {
             state.pp.scene_pass(ctx, |pass| {

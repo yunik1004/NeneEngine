@@ -14,3 +14,6 @@ pub mod window;
 
 pub use nene_derive::uniform;
 pub use nene_derive::vertex;
+
+#[doc(hidden)]
+pub use encase as __encase;

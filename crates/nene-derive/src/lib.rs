@@ -57,15 +57,10 @@ pub fn vertex(_args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn uniform(_args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = &input.ident;
 
     let expanded = quote! {
-        #[repr(C)]
-        #[derive(Copy, Clone)]
+        #[derive(Clone, Copy, ::nene::__encase::ShaderType)]
         #input
-
-        unsafe impl ::bytemuck::Zeroable for #name {}
-        unsafe impl ::bytemuck::Pod for #name {}
     };
 
     TokenStream::from(expanded)

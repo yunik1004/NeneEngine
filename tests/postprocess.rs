@@ -1,6 +1,6 @@
 use nene::renderer::{
-    postprocess::{PostProcessSettings, PostProcessStack, ToneMap},
     HeadlessContext,
+    postprocess::{PostProcessSettings, PostProcessStack, ToneMap},
 };
 
 fn make_ctx() -> Option<HeadlessContext> {

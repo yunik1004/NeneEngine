@@ -40,7 +40,10 @@ impl<'a> PipelineDescriptor<'a> {
     pub fn fullscreen_pass(shader: &'a str) -> Self {
         Self {
             shader,
-            vertex_layout: VertexLayout { stride: 0, attributes: vec![] },
+            vertex_layout: VertexLayout {
+                stride: 0,
+                attributes: vec![],
+            },
             vertex_entry: "vs_main",
             fragment_entry: "fs_main",
             use_texture: false,

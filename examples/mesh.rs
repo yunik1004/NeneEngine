@@ -130,17 +130,17 @@ fn cube_mesh() -> (Vec<MeshVertex>, Vec<u32>) {
 
 #[uniform]
 struct SceneUniform {
-    view_proj: [[f32; 4]; 4],
-    model: [[f32; 4]; 4],
-    light_vp: [[f32; 4]; 4],
+    view_proj: Mat4,
+    model: Mat4,
+    light_vp: Mat4,
     ambient: AmbientLight,
     directional: DirectionalLight,
 }
 
 #[uniform]
 struct ShadowUniform {
-    light_vp: [[f32; 4]; 4],
-    model: [[f32; 4]; 4],
+    light_vp: Mat4,
+    model: Mat4,
 }
 
 struct State {
@@ -184,9 +184,9 @@ fn build_scene(
     let camera = Camera::perspective(Vec3::new(0.0, 1.5, 4.0), 45.0, 0.1, 100.0);
     let light_vp = directional.light_view_proj(Vec3::ZERO, 3.0);
     SceneUniform {
-        view_proj: camera.view_proj(aspect).to_cols_array_2d(),
-        model: Mat4::from_rotation_y(angle).to_cols_array_2d(),
-        light_vp: light_vp.to_cols_array_2d(),
+        view_proj: camera.view_proj(aspect),
+        model: Mat4::from_rotation_y(angle),
+        light_vp,
         ambient: *ambient,
         directional: *directional,
     }
@@ -195,8 +195,8 @@ fn build_scene(
 fn build_shadow(angle: f32, directional: &DirectionalLight) -> ShadowUniform {
     let light_vp = directional.light_view_proj(Vec3::ZERO, 3.0);
     ShadowUniform {
-        light_vp: light_vp.to_cols_array_2d(),
-        model: Mat4::from_rotation_y(angle).to_cols_array_2d(),
+        light_vp,
+        model: Mat4::from_rotation_y(angle),
     }
 }
 

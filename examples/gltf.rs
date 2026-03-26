@@ -88,17 +88,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {{
 
 #[uniform]
 struct SceneUniform {
-    view_proj: [[f32; 4]; 4],
-    model: [[f32; 4]; 4],
-    light_vp: [[f32; 4]; 4],
+    view_proj: Mat4,
+    model: Mat4,
+    light_vp: Mat4,
     ambient: AmbientLight,
     directional: DirectionalLight,
 }
 
 #[uniform]
 struct ShadowUniform {
-    light_vp: [[f32; 4]; 4],
-    model: [[f32; 4]; 4],
+    light_vp: Mat4,
+    model: Mat4,
 }
 
 fn build_scene(
@@ -110,9 +110,9 @@ fn build_scene(
     let camera = Camera::perspective(Vec3::new(0.0, 2.0, 6.0), 45.0, 0.1, 100.0);
     let light_vp = directional.light_view_proj(Vec3::ZERO, 5.0);
     SceneUniform {
-        view_proj: camera.view_proj(aspect).to_cols_array_2d(),
-        model: model.to_cols_array_2d(),
-        light_vp: light_vp.to_cols_array_2d(),
+        view_proj: camera.view_proj(aspect),
+        model,
+        light_vp,
         ambient: *ambient,
         directional: *directional,
     }
@@ -120,10 +120,7 @@ fn build_scene(
 
 fn build_shadow(model: Mat4, directional: &DirectionalLight) -> ShadowUniform {
     let light_vp = directional.light_view_proj(Vec3::ZERO, 5.0);
-    ShadowUniform {
-        light_vp: light_vp.to_cols_array_2d(),
-        model: model.to_cols_array_2d(),
-    }
+    ShadowUniform { light_vp, model }
 }
 
 struct MeshGpu {

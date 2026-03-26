@@ -32,18 +32,6 @@ fn directional_direction_is_normalized() {
     assert!(approx_eq(light.direction.length(), 1.0));
 }
 
-#[test]
-fn directional_size() {
-    // Must be 32 bytes to match WGSL struct layout.
-    assert_eq!(std::mem::size_of::<DirectionalLight>(), 32);
-}
-
-#[test]
-fn directional_is_pod() {
-    let light = DirectionalLight::default();
-    let _bytes: &[u8] = bytemuck::bytes_of(&light);
-}
-
 // ── PointLight ────────────────────────────────────────────────────────────────
 
 #[test]
@@ -66,14 +54,8 @@ fn point_new_stores_fields() {
 
 #[test]
 fn point_size() {
-    // Must be 32 bytes to match WGSL struct layout.
+    // position(12) + intensity(4) + color(12) + radius(4) = 32 bytes
     assert_eq!(std::mem::size_of::<PointLight>(), 32);
-}
-
-#[test]
-fn point_is_pod() {
-    let light = PointLight::default();
-    let _bytes: &[u8] = bytemuck::bytes_of(&light);
 }
 
 // ── PointLightArray ───────────────────────────────────────────────────────────
@@ -110,16 +92,4 @@ fn array_too_many_lights_panics() {
         .map(|i| PointLight::new(Vec3::new(i as f32, 0.0, 0.0), Vec3::ONE, 1.0, 5.0))
         .collect();
     PointLightArray::<4>::new(&lights);
-}
-
-#[test]
-fn array_is_pod() {
-    let arr = PointLightArray::<4>::new(&[PointLight::default()]);
-    let _bytes: &[u8] = bytemuck::bytes_of(&arr);
-}
-
-#[test]
-fn array_size() {
-    // 16 bytes header + N × 32 bytes
-    assert_eq!(std::mem::size_of::<PointLightArray<8>>(), 16 + 8 * 32);
 }

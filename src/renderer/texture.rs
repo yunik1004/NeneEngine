@@ -73,7 +73,11 @@ pub(crate) fn create_render_target(
     format: wgpu::TextureFormat,
     with_depth: bool,
 ) -> RenderTarget {
-    let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
+    let size = wgpu::Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    };
 
     let color_tex = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("render_target"),
@@ -126,7 +130,11 @@ pub(crate) fn create_render_target(
         None
     };
 
-    RenderTarget { color_view, depth_view, texture: Texture { bind_group } }
+    RenderTarget {
+        color_view,
+        depth_view,
+        texture: Texture { bind_group },
+    }
 }
 
 pub(crate) fn create(
@@ -137,7 +145,11 @@ pub(crate) fn create(
     data: &[u8],
     filter: FilterMode,
 ) -> Texture {
-    let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
+    let size = wgpu::Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    };
     let tex = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
         size,
