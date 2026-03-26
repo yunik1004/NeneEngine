@@ -8,7 +8,8 @@ pub struct PipelineDescriptor<'a> {
     pub vertex_entry: &'a str,
     pub fragment_entry: &'a str,
     pub use_texture: bool,
-    pub use_uniform: bool,
+    /// Number of uniform buffer bind groups (each occupies one group slot).
+    pub uniform_count: u32,
     pub alpha_blend: bool,
     pub depth_write: bool,
     pub use_shadow_map: bool,
@@ -25,7 +26,7 @@ impl<'a> PipelineDescriptor<'a> {
             vertex_entry: "vs_main",
             fragment_entry: "fs_main",
             use_texture: false,
-            use_uniform: false,
+            uniform_count: 0,
             alpha_blend: false,
             depth_write: false,
             use_shadow_map: false,
@@ -47,7 +48,7 @@ impl<'a> PipelineDescriptor<'a> {
             vertex_entry: "vs_main",
             fragment_entry: "fs_main",
             use_texture: false,
-            use_uniform: false,
+            uniform_count: 0,
             alpha_blend: false,
             depth_write: false,
             use_shadow_map: false,
@@ -72,10 +73,12 @@ impl<'a> PipelineDescriptor<'a> {
         self
     }
 
-    /// Add a uniform buffer bind group.
-    /// When enabled, uniform is at group 0; texture (if also enabled) moves to group 1.
+    /// Add one uniform buffer bind group.
+    ///
+    /// Each call reserves the next group slot. Call twice for two separate
+    /// uniform bindings (e.g. scene + joint matrices).
     pub fn with_uniform(mut self) -> Self {
-        self.use_uniform = true;
+        self.uniform_count += 1;
         self
     }
 

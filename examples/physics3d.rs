@@ -102,8 +102,8 @@ f 5//6 4//6 8//6
 
 #[uniform]
 struct CameraUniform {
-    view_proj: [[f32; 4]; 4],
-    model: [[f32; 4]; 4],
+    view_proj: Mat4,
+    model: Mat4,
 }
 
 struct State {
@@ -125,15 +125,12 @@ fn write_temp_obj(name: &str, content: &str) -> std::path::PathBuf {
     path
 }
 
-fn scale_translate(sx: f32, sy: f32, sz: f32, tx: f32, ty: f32, tz: f32) -> [[f32; 4]; 4] {
-    (Mat4::from_translation(Vec3::new(tx, ty, tz)) * Mat4::from_scale(Vec3::new(sx, sy, sz)))
-        .to_cols_array_2d()
+fn scale_translate(sx: f32, sy: f32, sz: f32, tx: f32, ty: f32, tz: f32) -> Mat4 {
+    Mat4::from_translation(Vec3::new(tx, ty, tz)) * Mat4::from_scale(Vec3::new(sx, sy, sz))
 }
 
-fn build_view_proj(aspect: f32) -> [[f32; 4]; 4] {
-    Camera::perspective(Vec3::new(4.0, 8.0, 12.0), 45.0, 0.1, 100.0)
-        .view_proj(aspect)
-        .to_cols_array_2d()
+fn build_view_proj(aspect: f32) -> Mat4 {
+    Camera::perspective(Vec3::new(4.0, 8.0, 12.0), 45.0, 0.1, 100.0).view_proj(aspect)
 }
 
 fn init(ctx: &mut Context) -> State {

@@ -3,7 +3,7 @@ use std::f32::consts::TAU;
 
 use nene::{
     camera::Camera,
-    math::{Mat4, Vec3},
+    math::{Mat4, Vec3, Vec4},
     physics::d2::{ColliderBuilder, RigidBodyBuilder, RigidBodyHandle, World},
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
@@ -37,8 +37,8 @@ struct Vert {
 
 #[uniform]
 struct Transform {
-    mvp: [[f32; 4]; 4],
-    color: [f32; 4],
+    mvp: Mat4,
+    color: Vec4,
 }
 
 struct State {
@@ -92,8 +92,8 @@ fn build_camera() -> Camera {
     Camera::orthographic_bounds(-6.0, 6.0, -1.0, 11.0, -1.0, 1.0)
 }
 
-fn mvp(camera: &Camera, x: f32, y: f32) -> [[f32; 4]; 4] {
-    (camera.view_proj(1.0) * Mat4::from_translation(Vec3::new(x, y, 0.0))).to_cols_array_2d()
+fn mvp(camera: &Camera, x: f32, y: f32) -> Mat4 {
+    camera.view_proj(1.0) * Mat4::from_translation(Vec3::new(x, y, 0.0))
 }
 
 fn init(ctx: &mut Context) -> State {
@@ -117,11 +117,11 @@ fn init(ctx: &mut Context) -> State {
 
     let ball_uniform = ctx.create_uniform_buffer(&Transform {
         mvp: mvp(&camera, 0.0, 8.0),
-        color: [0.4, 0.7, 1.0, 1.0],
+        color: Vec4::new(0.4, 0.7, 1.0, 1.0),
     });
     let floor_uniform = ctx.create_uniform_buffer(&Transform {
         mvp: mvp(&camera, 0.0, 0.0),
-        color: [0.55, 0.55, 0.55, 1.0],
+        color: Vec4::new(0.55, 0.55, 0.55, 1.0),
     });
 
     let pipeline =
@@ -155,7 +155,7 @@ fn main() {
                 &state.ball_uniform,
                 &Transform {
                     mvp: mvp(&state.camera, pos.x, pos.y),
-                    color: [0.4, 0.7, 1.0, 1.0],
+                    color: Vec4::new(0.4, 0.7, 1.0, 1.0),
                 },
             );
         },

@@ -157,9 +157,8 @@ impl GpuDevice {
                 source: wgpu::ShaderSource::Wgsl(desc.shader.into()),
             });
 
-        let uniform_layout = desc
-            .use_uniform
-            .then(|| uniform::bind_group_layout(&self.device));
+        let uniform_layout =
+            (desc.uniform_count > 0).then(|| uniform::bind_group_layout(&self.device));
         let texture_layout = desc
             .use_texture
             .then(|| texture::bind_group_layout(&self.device));
@@ -169,7 +168,9 @@ impl GpuDevice {
 
         let mut bgl: Vec<Option<&wgpu::BindGroupLayout>> = Vec::new();
         if let Some(u) = &uniform_layout {
-            bgl.push(Some(u));
+            for _ in 0..desc.uniform_count {
+                bgl.push(Some(u));
+            }
         }
         if let Some(t) = &texture_layout {
             bgl.push(Some(t));

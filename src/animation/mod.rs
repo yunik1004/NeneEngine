@@ -233,7 +233,11 @@ pub struct Animator {
 
 impl Animator {
     pub fn new() -> Self {
-        Self { time: 0.0, speed: 1.0, looping: true }
+        Self {
+            time: 0.0,
+            speed: 1.0,
+            looping: true,
+        }
     }
 
     /// Advance the animation by `dt` seconds.
@@ -270,7 +274,9 @@ impl Animator {
             "skeleton has {} joints but JointMatrices buffer is only {N}",
             mats.len()
         );
-        let mut buf = JointMatrices { mats: [Mat4::IDENTITY; N] };
+        let mut buf = JointMatrices {
+            mats: [Mat4::IDENTITY; N],
+        };
         buf.mats[..mats.len()].copy_from_slice(&mats);
         buf
     }
@@ -404,7 +410,11 @@ impl AnimatedModel {
             }
         }
 
-        Some(AnimatedModel { meshes, skeleton, clips })
+        Some(AnimatedModel {
+            meshes,
+            skeleton,
+            clips,
+        })
     }
 }
 
@@ -432,22 +442,37 @@ fn load_clips(
                     match reader.read_outputs()? {
                         ReadOutputs::Translations(it) => {
                             let values = it.map(Vec3::from).collect();
-                            Some(AnimChannel::Translation(Channel { joint, times, values }))
+                            Some(AnimChannel::Translation(Channel {
+                                joint,
+                                times,
+                                values,
+                            }))
                         }
                         ReadOutputs::Rotations(rots) => {
-                            let values =
-                                rots.into_f32().map(Quat::from_array).collect();
-                            Some(AnimChannel::Rotation(Channel { joint, times, values }))
+                            let values = rots.into_f32().map(Quat::from_array).collect();
+                            Some(AnimChannel::Rotation(Channel {
+                                joint,
+                                times,
+                                values,
+                            }))
                         }
                         ReadOutputs::Scales(it) => {
                             let values = it.map(Vec3::from).collect();
-                            Some(AnimChannel::Scale(Channel { joint, times, values }))
+                            Some(AnimChannel::Scale(Channel {
+                                joint,
+                                times,
+                                values,
+                            }))
                         }
                         ReadOutputs::MorphTargetWeights(_) => None,
                     }
                 })
                 .collect();
-            Clip { name: anim.name().unwrap_or("").to_string(), duration, channels }
+            Clip {
+                name: anim.name().unwrap_or("").to_string(),
+                duration,
+                channels,
+            }
         })
         .collect()
 }
@@ -469,7 +494,9 @@ fn collect_skinned_node(
             }
             let reader = primitive.reader(|buf| Some(&buffers[buf.index()]));
 
-            let Some(pos_iter) = reader.read_positions() else { continue };
+            let Some(pos_iter) = reader.read_positions() else {
+                continue;
+            };
             let positions: Vec<[f32; 3]> = pos_iter.collect();
             let n = positions.len();
 
@@ -502,13 +529,15 @@ fn collect_skinned_node(
                 .zip(uvs)
                 .zip(joints)
                 .zip(weights)
-                .map(|((((position, normal), uv), joints), weights)| SkinnedVertex {
-                    position,
-                    normal,
-                    uv,
-                    joints,
-                    weights,
-                })
+                .map(
+                    |((((position, normal), uv), joints), weights)| SkinnedVertex {
+                        position,
+                        normal,
+                        uv,
+                        joints,
+                        weights,
+                    },
+                )
                 .collect();
 
             let indices = reader
@@ -521,10 +550,17 @@ fn collect_skinned_node(
                 .pbr_metallic_roughness()
                 .base_color_texture()
                 .and_then(|info| {
-                    images.get(info.texture().source().index()).map(crate::mesh::to_rgba8)
+                    images
+                        .get(info.texture().source().index())
+                        .map(crate::mesh::to_rgba8)
                 });
 
-            out.push(SkinnedMesh { vertices, indices, transform: world, base_color });
+            out.push(SkinnedMesh {
+                vertices,
+                indices,
+                transform: world,
+                base_color,
+            });
         }
     }
 

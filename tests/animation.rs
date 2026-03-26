@@ -1,6 +1,6 @@
 use nene::animation::{
-    AnimChannel, AnimatedModel, Animator, Channel, Clip, Joint, JointPose, Skeleton,
-    SkinnedVertex, skinning_wgsl,
+    AnimChannel, AnimatedModel, Animator, Channel, Clip, Joint, JointPose, Skeleton, SkinnedVertex,
+    skinning_wgsl,
 };
 use nene::math::{Mat4, Vec3};
 
@@ -22,7 +22,10 @@ fn joint_pose_identity_is_mat4_identity() {
 
 #[test]
 fn joint_pose_translation_only() {
-    let pose = JointPose { translation: Vec3::new(1.0, 2.0, 3.0), ..JointPose::IDENTITY };
+    let pose = JointPose {
+        translation: Vec3::new(1.0, 2.0, 3.0),
+        ..JointPose::IDENTITY
+    };
     let m = pose.to_mat4();
     let p = m.transform_point3(Vec3::ZERO);
     assert!(vec3_approx(p, Vec3::new(1.0, 2.0, 3.0)));
@@ -75,7 +78,11 @@ fn channel_clamps_after_last() {
 
 #[test]
 fn clip_sample_fills_missing_joints_with_identity() {
-    let clip = Clip { name: "".into(), duration: 1.0, channels: vec![] };
+    let clip = Clip {
+        name: "".into(),
+        duration: 1.0,
+        channels: vec![],
+    };
     let poses = clip.sample(0.5, 3);
     assert_eq!(poses.len(), 3);
     assert!(poses[0].to_mat4().abs_diff_eq(Mat4::IDENTITY, 1e-5));
@@ -118,12 +125,23 @@ fn parent_child_transform_propagates() {
     // Expected: child joint matrix = translation(1,0,0) * identity * identity_ibm
     let skeleton = Skeleton {
         joints: vec![
-            Joint { name: "root".into(), parent: None, inverse_bind: Mat4::IDENTITY },
-            Joint { name: "child".into(), parent: Some(0), inverse_bind: Mat4::IDENTITY },
+            Joint {
+                name: "root".into(),
+                parent: None,
+                inverse_bind: Mat4::IDENTITY,
+            },
+            Joint {
+                name: "child".into(),
+                parent: Some(0),
+                inverse_bind: Mat4::IDENTITY,
+            },
         ],
     };
     let poses = vec![
-        JointPose { translation: Vec3::new(1.0, 0.0, 0.0), ..JointPose::IDENTITY },
+        JointPose {
+            translation: Vec3::new(1.0, 0.0, 0.0),
+            ..JointPose::IDENTITY
+        },
         JointPose::IDENTITY,
     ];
     let mats = skeleton.compute_joint_matrices(&poses);
@@ -137,9 +155,16 @@ fn inverse_bind_cancels_bind_pose() {
     let bind = Mat4::from_translation(Vec3::new(2.0, 0.0, 0.0));
     let inv_bind = bind.inverse();
     let skeleton = Skeleton {
-        joints: vec![Joint { name: "j".into(), parent: None, inverse_bind: inv_bind }],
+        joints: vec![Joint {
+            name: "j".into(),
+            parent: None,
+            inverse_bind: inv_bind,
+        }],
     };
-    let poses = vec![JointPose { translation: Vec3::new(2.0, 0.0, 0.0), ..JointPose::IDENTITY }];
+    let poses = vec![JointPose {
+        translation: Vec3::new(2.0, 0.0, 0.0),
+        ..JointPose::IDENTITY
+    }];
     let mats = skeleton.compute_joint_matrices(&poses);
     // In bind pose the joint matrix should be identity (no net deformation)
     assert!(mats[0].abs_diff_eq(Mat4::IDENTITY, 1e-5));
@@ -149,7 +174,11 @@ fn inverse_bind_cancels_bind_pose() {
 
 #[test]
 fn animator_advances_time() {
-    let clip = Clip { name: "".into(), duration: 2.0, channels: vec![] };
+    let clip = Clip {
+        name: "".into(),
+        duration: 2.0,
+        channels: vec![],
+    };
     let mut anim = Animator::new();
     anim.update(0.5, &clip);
     assert!(approx_eq(anim.time, 0.5));
@@ -157,7 +186,11 @@ fn animator_advances_time() {
 
 #[test]
 fn animator_loops() {
-    let clip = Clip { name: "".into(), duration: 1.0, channels: vec![] };
+    let clip = Clip {
+        name: "".into(),
+        duration: 1.0,
+        channels: vec![],
+    };
     let mut anim = Animator::new();
     anim.looping = true;
     anim.update(1.7, &clip);
@@ -166,7 +199,11 @@ fn animator_loops() {
 
 #[test]
 fn animator_no_loop_clamps() {
-    let clip = Clip { name: "".into(), duration: 1.0, channels: vec![] };
+    let clip = Clip {
+        name: "".into(),
+        duration: 1.0,
+        channels: vec![],
+    };
     let mut anim = Animator::new();
     anim.looping = false;
     anim.update(5.0, &clip);
@@ -175,7 +212,11 @@ fn animator_no_loop_clamps() {
 
 #[test]
 fn animator_speed_multiplier() {
-    let clip = Clip { name: "".into(), duration: 10.0, channels: vec![] };
+    let clip = Clip {
+        name: "".into(),
+        duration: 10.0,
+        channels: vec![],
+    };
     let mut anim = Animator::new();
     anim.speed = 2.0;
     anim.update(1.0, &clip);

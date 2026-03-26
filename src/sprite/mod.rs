@@ -178,7 +178,7 @@ impl SpriteBatch {
 
         let vertex_buffer = ctx.create_vertex_buffer(&vertices);
         let index_buffer = ctx.create_index_buffer(&indices);
-        let uniform_buffer = ctx.create_uniform_buffer(&[[0.0f32; 4]; 4]);
+        let uniform_buffer = ctx.create_uniform_buffer(&crate::math::Mat4::IDENTITY);
 
         let pipeline = ctx.create_pipeline(
             PipelineDescriptor::new(SHADER, vertex_layout())
@@ -242,10 +242,7 @@ impl SpriteBatch {
 
     /// Upload sprite data to the GPU. Call in the `update` callback after all [`draw`](Self::draw) calls.
     pub fn prepare(&self, ctx: &mut Context, camera: &Camera, aspect: f32) {
-        ctx.update_uniform_buffer(
-            &self.uniform_buffer,
-            &camera.view_proj(aspect).to_cols_array_2d(),
-        );
+        ctx.update_uniform_buffer(&self.uniform_buffer, &camera.view_proj(aspect));
         if !self.cpu_vertices.is_empty() {
             ctx.update_vertex_buffer(&self.vertex_buffer, &self.cpu_vertices);
         }

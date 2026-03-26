@@ -42,8 +42,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 #[uniform]
 struct SceneUniform {
-    view_proj: [[f32; 4]; 4],
-    model: [[f32; 4]; 4],
+    view_proj: Mat4,
+    model: Mat4,
 }
 
 struct State {
@@ -104,8 +104,8 @@ fn init(ctx: &mut Context) -> State {
     let aspect = cfg.width as f32 / cfg.height as f32;
     let camera = Camera::perspective(Vec3::new(0.0, 0.0, 4.0), 45.0, 0.1, 100.0);
     let scene_buffer = ctx.create_uniform_buffer(&SceneUniform {
-        view_proj: camera.view_proj(aspect).to_cols_array_2d(),
-        model: Mat4::IDENTITY.to_cols_array_2d(),
+        view_proj: camera.view_proj(aspect),
+        model: Mat4::IDENTITY,
     });
 
     let mut text = TextRenderer::new(ctx);
@@ -141,8 +141,8 @@ fn main() {
             ctx.update_uniform_buffer(
                 &state.scene_buffer,
                 &SceneUniform {
-                    view_proj: camera.view_proj(aspect).to_cols_array_2d(),
-                    model: Mat4::from_rotation_y(state.angle).to_cols_array_2d(),
+                    view_proj: camera.view_proj(aspect),
+                    model: Mat4::from_rotation_y(state.angle),
                 },
             );
 

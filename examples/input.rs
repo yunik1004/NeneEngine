@@ -6,7 +6,7 @@
 /// - Gamepad left stick: moves the square
 use nene::{
     input::{GamepadAxis, Key, MouseButton},
-    math::{Mat4, Vec2, Vec3},
+    math::{Mat4, Vec2, Vec3, Vec4},
     renderer::{Context, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer},
     uniform, vertex,
     window::{Config, Window},
@@ -37,8 +37,8 @@ struct Vert {
 
 #[uniform]
 struct Transform {
-    mvp: [[f32; 4]; 4],
-    color: [f32; 4],
+    mvp: Mat4,
+    color: Vec4,
 }
 
 struct State {
@@ -61,17 +61,15 @@ fn ortho() -> Mat4 {
     Mat4::orthographic_rh(-8.0, 8.0, -4.5, 4.5, -1.0, 1.0)
 }
 
-fn build_transform(pos: Vec2, color: [f32; 4]) -> Transform {
+fn build_transform(pos: Vec2, color: Vec4) -> Transform {
     let mvp = ortho() * Mat4::from_translation(Vec3::new(pos.x, pos.y, 0.0));
-    Transform {
-        mvp: mvp.to_cols_array_2d(),
-        color,
-    }
+    Transform { mvp, color }
 }
 
 fn init(ctx: &mut Context) -> State {
     let vb = ctx.create_vertex_buffer(QUAD);
-    let uniform = ctx.create_uniform_buffer(&build_transform(Vec2::ZERO, [0.3, 0.6, 1.0, 1.0]));
+    let uniform =
+        ctx.create_uniform_buffer(&build_transform(Vec2::ZERO, Vec4::new(0.3, 0.6, 1.0, 1.0)));
     let pipeline =
         ctx.create_pipeline(PipelineDescriptor::new(SHADER, Vert::layout()).with_uniform());
     State {
@@ -124,9 +122,9 @@ fn main() {
 
             // Color: red while left mouse held, default otherwise
             let color = if input.mouse_down(MouseButton::Left) {
-                [1.0, 0.2, 0.2, 1.0]
+                Vec4::new(1.0, 0.2, 0.2, 1.0)
             } else {
-                [0.3, 0.6, 1.0, 1.0]
+                Vec4::new(0.3, 0.6, 1.0, 1.0)
             };
 
             ctx.update_uniform_buffer(&state.uniform, &build_transform(state.pos, color));

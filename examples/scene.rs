@@ -5,7 +5,7 @@
 /// own uniform buffer in the update phase.
 use nene::{
     camera::Camera,
-    math::{Mat4, Quat, Vec3},
+    math::{Mat4, Quat, Vec3, Vec4},
     mesh::MeshVertex,
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
@@ -50,9 +50,9 @@ fn fs_main(in: VO) -> @location(0) vec4<f32> {
 
 #[uniform]
 struct U {
-    view_proj: [[f32; 4]; 4],
-    model: [[f32; 4]; 4],
-    color: [f32; 4],
+    view_proj: Mat4,
+    model: Mat4,
+    color: Vec4,
 }
 
 fn cube() -> (Vec<MeshVertex>, Vec<u32>) {
@@ -101,7 +101,7 @@ fn cube() -> (Vec<MeshVertex>, Vec<u32>) {
 struct Body {
     id: NodeId,
     ubuf: UniformBuffer,
-    color: [f32; 4],
+    color: Vec4,
     scale: f32,
     angle: f32,
     speed: f32,
@@ -129,9 +129,9 @@ fn init(ctx: &mut Context) -> State {
     );
 
     let blank = U {
-        view_proj: Mat4::IDENTITY.to_cols_array_2d(),
-        model: Mat4::IDENTITY.to_cols_array_2d(),
-        color: [1., 1., 1., 1.],
+        view_proj: Mat4::IDENTITY,
+        model: Mat4::IDENTITY,
+        color: Vec4::ONE,
     };
 
     let mut scene = Scene::new();
@@ -150,7 +150,7 @@ fn init(ctx: &mut Context) -> State {
         Body {
             id: sun,
             ubuf: ctx.create_uniform_buffer(&blank),
-            color: [1.0, 0.85, 0.1, 1.],
+            color: Vec4::new(1.0, 0.85, 0.1, 1.),
             scale: 0.9,
             angle: 0.,
             speed: 0.4,
@@ -159,7 +159,7 @@ fn init(ctx: &mut Context) -> State {
         Body {
             id: planet,
             ubuf: ctx.create_uniform_buffer(&blank),
-            color: [0.2, 0.5, 1.0, 1.],
+            color: Vec4::new(0.2, 0.5, 1.0, 1.),
             scale: 0.5,
             angle: 0.,
             speed: 1.1,
@@ -168,7 +168,7 @@ fn init(ctx: &mut Context) -> State {
         Body {
             id: moon,
             ubuf: ctx.create_uniform_buffer(&blank),
-            color: [0.8, 0.8, 0.8, 1.],
+            color: Vec4::new(0.8, 0.8, 0.8, 1.),
             scale: 0.22,
             angle: 0.,
             speed: 2.8,
@@ -219,8 +219,8 @@ fn update(
         ctx.update_uniform_buffer(
             &body.ubuf,
             &U {
-                view_proj: vp.to_cols_array_2d(),
-                model: model.to_cols_array_2d(),
+                view_proj: vp,
+                model,
                 color: body.color,
             },
         );
