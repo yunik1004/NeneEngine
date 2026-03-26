@@ -8,9 +8,10 @@ use std::f32::consts::{PI, TAU};
 
 use nene::{
     animation::{
-        AnimChannel, AnimatedModel, Animator, Channel, Clip, Joint, JointMatrices, Skeleton,
+        AnimChannel, Animator, Channel, Clip, Joint, JointMatrices, Skeleton,
         SkinnedMesh, SkinnedVertex, skinning_wgsl,
     },
+    mesh::Model,
     camera::Camera,
     light::{AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight},
     math::{Mat4, Quat, Vec3, Vec4},
@@ -124,9 +125,10 @@ struct SceneUniform {
 
 // ── Procedural model ──────────────────────────────────────────────────────────
 
-fn build_model() -> AnimatedModel {
-    AnimatedModel {
-        meshes: vec![build_mesh()],
+fn build_model() -> Model {
+    Model {
+        meshes: vec![],
+        skinned_meshes: vec![build_mesh()],
         skeleton: build_skeleton(),
         clips: vec![build_clip()],
     }
@@ -292,7 +294,7 @@ struct State {
     ibuf: IndexBuffer,
     scene_buf: UniformBuffer,
     joint_buf: UniformBuffer,
-    model: AnimatedModel,
+    model: Model,
     animator: Animator,
     camera_angle: f32,
     ambient: AmbientLight,
@@ -330,7 +332,7 @@ fn init(ctx: &mut Context) -> State {
     let scene_buf = ctx.create_uniform_buffer(&scene_uniform);
     let joint_buf = ctx.create_uniform_buffer(&joint_mats);
 
-    let mesh = &model.meshes[0];
+    let mesh = &model.skinned_meshes[0];
     let vbuf = ctx.create_vertex_buffer(&mesh.vertices);
     let ibuf = ctx.create_index_buffer(&mesh.indices);
 
@@ -402,7 +404,7 @@ fn main() {
             pass.set_uniform(0, &state.scene_buf);
             pass.set_uniform(1, &state.joint_buf);
             pass.set_vertex_buffer(0, &state.vbuf);
-            pass.draw_indexed_count(&state.ibuf, state.model.meshes[0].indices.len() as u32);
+            pass.draw_indexed_count(&state.ibuf, state.model.skinned_meshes[0].indices.len() as u32);
         },
     );
 }

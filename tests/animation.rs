@@ -1,7 +1,8 @@
 use nene::animation::{
-    AnimChannel, AnimatedModel, Animator, Channel, Clip, Joint, JointPose, Skeleton, SkinnedVertex,
+    AnimChannel, Animator, Channel, Clip, Joint, JointPose, Skeleton, SkinnedVertex,
     skinning_wgsl,
 };
+use nene::mesh::Model;
 use nene::math::{Mat4, Vec3};
 
 fn approx_eq(a: f32, b: f32) -> bool {
@@ -247,12 +248,11 @@ fn skinning_wgsl_contains_joint_matrices() {
     assert!(wgsl.contains("array<mat4x4<f32>, 64>"));
 }
 
-// ── AnimatedModel::load ───────────────────────────────────────────────────────
+// ── Model::load (glTF, no skin) ───────────────────────────────────────────────
 
 #[test]
-fn load_non_skinned_gltf_returns_none() {
-    // A glTF without a skin should return None from AnimatedModel::load.
-    // Reuse the sample cube glTF from the gltf example (positions only, no skin).
+fn load_non_skinned_gltf_is_not_skinned() {
+    // A glTF without a skin should produce a non-skinned Model.
     let json = r#"{
         "asset": {"version":"2.0"},
         "scene": 0,
@@ -260,7 +260,7 @@ fn load_non_skinned_gltf_returns_none() {
         "nodes": [{"mesh":0}],
         "meshes": [{"primitives":[{"attributes":{"POSITION":0},"indices":1}]}],
         "accessors": [
-            {"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"},
+            {"bufferView":0,"componentType":5126,"count":3,"type":"VEC3","min":[-1.0,-1.0,-1.0],"max":[1.0,1.0,1.0]},
             {"bufferView":1,"componentType":5125,"count":3,"type":"SCALAR"}
         ],
         "bufferViews": [
@@ -271,5 +271,7 @@ fn load_non_skinned_gltf_returns_none() {
     }"#;
     let path = std::env::temp_dir().join("nene_test_no_skin.gltf");
     std::fs::write(&path, json).unwrap();
-    assert!(AnimatedModel::load(&path).is_none());
+    let model = Model::load(&path);
+    assert!(!model.is_skinned());
+    assert!(!model.is_animated());
 }
