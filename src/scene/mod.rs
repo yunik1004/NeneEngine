@@ -97,6 +97,7 @@ pub struct Scene {
     nodes: Vec<Option<Node>>,
     roots: Vec<NodeId>,
     free: Vec<usize>,
+    count: usize,
 }
 
 impl Default for Scene {
@@ -107,10 +108,11 @@ impl Default for Scene {
 
 impl Scene {
     pub fn new() -> Self {
-        Self { nodes: Vec::new(), roots: Vec::new(), free: Vec::new() }
+        Self { nodes: Vec::new(), roots: Vec::new(), free: Vec::new(), count: 0 }
     }
 
     fn alloc(&mut self, node: Node) -> NodeId {
+        self.count += 1;
         if let Some(slot) = self.free.pop() {
             self.nodes[slot] = Some(node);
             NodeId(slot)
@@ -138,7 +140,6 @@ impl Scene {
 
     /// Remove `id` and all its descendants from the scene.
     pub fn remove_node(&mut self, id: NodeId) {
-        // Collect the full subtree.
         let mut to_remove = vec![id];
         let mut i = 0;
         while i < to_remove.len() {
@@ -149,7 +150,6 @@ impl Scene {
             i += 1;
         }
 
-        // Detach from parent.
         if let Some(Some(n)) = self.nodes.get(id.0) {
             if let Some(pid) = n.parent {
                 if let Some(Some(p)) = self.nodes.get_mut(pid.0) {
@@ -160,53 +160,48 @@ impl Scene {
 
         self.roots.retain(|&r| r != id);
 
+        self.count -= to_remove.len();
         for rid in to_remove {
             self.nodes[rid.0] = None;
             self.free.push(rid.0);
         }
     }
 
-    /// Borrow a node.
     pub fn get(&self, id: NodeId) -> &Node {
         self.nodes[id.0].as_ref().expect("invalid NodeId")
     }
 
-    /// Mutably borrow a node.
     /// Remember to call [`Scene::update`] afterwards to refresh world transforms.
     pub fn get_mut(&mut self, id: NodeId) -> &mut Node {
         self.nodes[id.0].as_mut().expect("invalid NodeId")
     }
 
-    /// The top-level nodes (those with no parent).
     pub fn roots(&self) -> &[NodeId] {
         &self.roots
     }
 
-    /// Total number of live nodes.
     pub fn len(&self) -> usize {
-        self.nodes.iter().filter(|n| n.is_some()).count()
+        self.count
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.count == 0
     }
 
     /// Recompute world transforms for every node, top-down.
     /// Call this once per frame after modifying any transforms.
     pub fn update(&mut self) {
-        for root in self.roots.clone() {
+        for i in 0..self.roots.len() {
+            let root = self.roots[i];
             self.update_subtree(root, Mat4::IDENTITY);
         }
     }
 
     fn update_subtree(&mut self, id: NodeId, parent_world: Mat4) {
-        let world = {
-            let node = self.nodes[id.0].as_ref().unwrap();
-            parent_world * node.transform.to_mat4()
-        };
+        let world = parent_world * self.nodes[id.0].as_ref().unwrap().transform.to_mat4();
         self.nodes[id.0].as_mut().unwrap().world_transform = world;
-        let children: Vec<NodeId> = self.nodes[id.0].as_ref().unwrap().children.clone();
-        for child in children {
+        for i in 0..self.nodes[id.0].as_ref().unwrap().children.len() {
+            let child = self.nodes[id.0].as_ref().unwrap().children[i];
             self.update_subtree(child, world);
         }
     }
@@ -221,7 +216,7 @@ impl Scene {
     fn walk_subtree<F: FnMut(NodeId, &Node)>(&self, id: NodeId, f: &mut F) {
         if let Some(Some(node)) = self.nodes.get(id.0) {
             f(id, node);
-            for &child in &node.children.clone() {
+            for &child in &node.children {
                 self.walk_subtree(child, f);
             }
         }

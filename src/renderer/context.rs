@@ -107,6 +107,14 @@ impl GpuDevice {
     pub fn create_shadow_map(&self, size: u32) -> ShadowMap {
         shadow::create(&self.device, size)
     }
+
+    pub fn create_render_target(&self, width: u32, height: u32) -> (wgpu::TextureView, Texture) {
+        texture::create_render_target(&self.device, width, height)
+    }
+
+    pub fn create_text_renderer(&self) -> TextRenderer {
+        TextRenderer::new_raw(&self.device, &self.queue, wgpu::TextureFormat::Rgba8UnormSrgb)
+    }
 }
 
 pub struct HeadlessContext {
@@ -195,19 +203,15 @@ impl HeadlessContext {
     }
 
     pub fn create_shadow_map(&self, size: u32) -> ShadowMap {
-        shadow::create(&self.gpu.device, size)
+        self.gpu.create_shadow_map(size)
     }
 
     pub fn create_render_target(&self, width: u32, height: u32) -> (wgpu::TextureView, Texture) {
-        texture::create_render_target(&self.gpu.device, width, height)
+        self.gpu.create_render_target(width, height)
     }
 
     pub fn create_text_renderer(&self) -> TextRenderer {
-        TextRenderer::new_raw(
-            &self.gpu.device,
-            &self.gpu.queue,
-            wgpu::TextureFormat::Rgba8UnormSrgb,
-        )
+        self.gpu.create_text_renderer()
     }
 }
 
@@ -463,7 +467,7 @@ impl Context {
 
     /// Create a blank `width × height` texture usable as a render target and in shaders.
     pub fn create_render_target(&self, width: u32, height: u32) -> (wgpu::TextureView, Texture) {
-        texture::create_render_target(&self.gpu.device, width, height)
+        self.gpu.create_render_target(width, height)
     }
 
     pub fn shadow_pass<F: FnOnce(&mut RenderPass<'_>)>(&mut self, shadow_map: &ShadowMap, draw: F) {

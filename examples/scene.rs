@@ -15,8 +15,6 @@ use nene::{
     window::{Config, Window},
 };
 
-// ── WGSL ──────────────────────────────────────────────────────────────────────
-
 const SHADER: &str = r#"
 struct U {
     view_proj: mat4x4<f32>,
@@ -57,8 +55,6 @@ struct U {
     color: [f32; 4],
 }
 
-// ── cube geometry ─────────────────────────────────────────────────────────────
-
 fn cube() -> (Vec<MeshVertex>, Vec<u32>) {
     let p: [[f32; 3]; 8] = [
         [-0.5, -0.5, -0.5], [ 0.5, -0.5, -0.5],
@@ -88,24 +84,23 @@ fn cube() -> (Vec<MeshVertex>, Vec<u32>) {
     (verts, idx)
 }
 
-// ── state ─────────────────────────────────────────────────────────────────────
-
 struct Body {
     id:    NodeId,
     ubuf:  UniformBuffer,
     color: [f32; 4],
     scale: f32,
+    angle: f32,
+    speed: f32,
+    orbit_radius: f32,
 }
 
 struct State {
-    pipeline:     Pipeline,
-    vbuf:         VertexBuffer,
-    ibuf:         IndexBuffer,
-    scene:        Scene,
-    bodies:       [Body; 3],    // [sun, planet, moon]
-    sun_spin:     f32,
-    planet_orbit: f32,
-    moon_orbit:   f32,
+    pipeline: Pipeline,
+    vbuf:     VertexBuffer,
+    ibuf:     IndexBuffer,
+    scene:    Scene,
+    bodies:   [Body; 3],
+    camera:   Camera,
 }
 
 fn init(ctx: &mut Context) -> State {
@@ -125,7 +120,6 @@ fn init(ctx: &mut Context) -> State {
         color:     [1., 1., 1., 1.],
     };
 
-    // Scene hierarchy: sun → planet → moon
     let mut scene = Scene::new();
     let sun    = scene.add_node(Node::named("sun"));
     let planet = scene.add_child(sun,
@@ -137,42 +131,38 @@ fn init(ctx: &mut Context) -> State {
     scene.update();
 
     let bodies = [
-        Body { id: sun,    ubuf: ctx.create_uniform_buffer(&blank), color: [1.0, 0.85, 0.1, 1.], scale: 0.9 },
-        Body { id: planet, ubuf: ctx.create_uniform_buffer(&blank), color: [0.2, 0.5,  1.0, 1.], scale: 0.5 },
-        Body { id: moon,   ubuf: ctx.create_uniform_buffer(&blank), color: [0.8, 0.8,  0.8, 1.], scale: 0.22 },
+        Body { id: sun,    ubuf: ctx.create_uniform_buffer(&blank), color: [1.0, 0.85, 0.1, 1.], scale: 0.9,  angle: 0., speed: 0.4,  orbit_radius: 0.  },
+        Body { id: planet, ubuf: ctx.create_uniform_buffer(&blank), color: [0.2, 0.5,  1.0, 1.], scale: 0.5,  angle: 0., speed: 1.1,  orbit_radius: 3.5 },
+        Body { id: moon,   ubuf: ctx.create_uniform_buffer(&blank), color: [0.8, 0.8,  0.8, 1.], scale: 0.22, angle: 0., speed: 2.8,  orbit_radius: 1.4 },
     ];
 
-    State { pipeline, vbuf, ibuf, scene, bodies,
-            sun_spin: 0., planet_orbit: 0., moon_orbit: 0. }
+    State {
+        pipeline, vbuf, ibuf, scene, bodies,
+        camera: Camera::perspective(Vec3::new(0., 5., 12.), 45., 0.1, 100.),
+    }
 }
-
-// ── per-frame update ──────────────────────────────────────────────────────────
 
 fn update(state: &mut State, ctx: &mut Context, _input: &nene::input::Input, time: &nene::time::Time) {
     let dt = time.delta;
-    state.sun_spin     += dt * 0.4;
-    state.planet_orbit += dt * 1.1;
-    state.moon_orbit   += dt * 2.8;
 
-    // Rotate sun in place
+    for body in &mut state.bodies {
+        body.angle += dt * body.speed;
+    }
+
+    // Sun rotates in place; planet and moon orbit their parent via local position.
     state.scene.get_mut(state.bodies[0].id).transform.rotation =
-        Quat::from_rotation_y(state.sun_spin);
-
-    // Planet orbits the sun (change its local position)
-    state.scene.get_mut(state.bodies[1].id).transform.position =
-        Quat::from_rotation_y(state.planet_orbit) * Vec3::new(3.5, 0., 0.);
-
-    // Moon orbits the planet
-    state.scene.get_mut(state.bodies[2].id).transform.position =
-        Quat::from_rotation_y(state.moon_orbit) * Vec3::new(1.4, 0., 0.);
+        Quat::from_rotation_y(state.bodies[0].angle);
+    for i in 1..3 {
+        let r = state.bodies[i].orbit_radius;
+        state.scene.get_mut(state.bodies[i].id).transform.position =
+            Quat::from_rotation_y(state.bodies[i].angle) * Vec3::new(r, 0., 0.);
+    }
 
     state.scene.update();
 
-    // Upload per-body uniforms
     let cfg    = ctx.surface_config();
     let aspect = cfg.width as f32 / cfg.height as f32;
-    let camera = Camera::perspective(Vec3::new(0., 5., 12.), 45., 0.1, 100.);
-    let vp     = camera.view_proj(aspect);
+    let vp     = state.camera.view_proj(aspect);
 
     for body in &state.bodies {
         let model = state.scene.get(body.id).world_transform()
@@ -184,8 +174,6 @@ fn update(state: &mut State, ctx: &mut Context, _input: &nene::input::Input, tim
         });
     }
 }
-
-// ── render ────────────────────────────────────────────────────────────────────
 
 fn main() {
     Window::new(Config {
