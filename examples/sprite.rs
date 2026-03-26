@@ -6,7 +6,7 @@ use nene::{
     math::Vec2,
     renderer::{Context, RenderPass},
     sprite::{Sprite, SpriteBatch, UvRect},
-    texture::{FilterMode, Texture},
+    renderer::{FilterMode, Texture},
     window::{Config, Window},
 };
 

@@ -7,7 +7,7 @@ use nene::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
     text::TextRenderer,
-    texture::Texture,
+    renderer::Texture,
     uniform,
     window::{Config, Window},
 };

@@ -1,4 +1,4 @@
-use nene::shadow::{SHADOW_WGSL, ShadowMap};
+use nene::renderer::{SHADOW_WGSL, ShadowMap};
 
 #[test]
 fn shadow_wgsl_contains_shadow_factor() {

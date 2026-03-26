@@ -1,6 +1,6 @@
 use nene::{
     renderer::HeadlessContext,
-    texture::{FilterMode, Texture},
+    renderer::{FilterMode, Texture},
 };
 
 fn make_ctx() -> Option<HeadlessContext> {

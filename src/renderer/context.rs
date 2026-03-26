@@ -4,9 +4,9 @@ use winit::window::Window;
 
 use super::uniform;
 use super::{IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer};
-use crate::shadow::{self, ShadowMap};
+use super::shadow::{self, ShadowMap};
 use crate::text::TextRenderer;
-use crate::texture::{self, FilterMode, Texture};
+use super::texture::{self, FilterMode, Texture};
 
 fn create_instance() -> wgpu::Instance {
     wgpu::Instance::new(wgpu::InstanceDescriptor {
