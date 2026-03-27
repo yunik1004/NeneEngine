@@ -45,7 +45,7 @@ struct VOut {
     @location(1) color:  vec4<f32>,
 }
 
-@vertex fn vs(v: VIn) -> VOut {
+@vertex fn vs_main(v: VIn) -> VOut {
     // Each cube spins at a speed that varies by position so they're all different.
     let speed = 0.4 + 0.6 * fract(v.offset.x * 0.17 + v.offset.z * 0.13);
     let angle = scene.time.x * speed;
@@ -67,7 +67,7 @@ struct VOut {
     return out;
 }
 
-@fragment fn fs(in: VOut) -> @location(0) vec4<f32> {
+@fragment fn fs_main(in: VOut) -> @location(0) vec4<f32> {
     let diffuse  = max(dot(in.normal, -scene.light_dir.xyz), 0.0);
     let ambient  = 0.25;
     let lit      = in.color.rgb * (ambient + diffuse * 0.75);
