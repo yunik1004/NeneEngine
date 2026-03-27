@@ -254,13 +254,23 @@ impl GpuDevice {
             }
         }
 
+        let blend = if desc.additive_blend {
+            Some(wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::SrcAlpha,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent::OVER,
+            })
+        } else if desc.alpha_blend {
+            Some(wgpu::BlendState::ALPHA_BLENDING)
+        } else {
+            Some(wgpu::BlendState::REPLACE)
+        };
         let color_target = Some(wgpu::ColorTargetState {
             format: color_format,
-            blend: Some(if desc.alpha_blend {
-                wgpu::BlendState::ALPHA_BLENDING
-            } else {
-                wgpu::BlendState::REPLACE
-            }),
+            blend,
             write_mask: wgpu::ColorWrites::ALL,
         });
         let color_targets = if desc.depth_only {

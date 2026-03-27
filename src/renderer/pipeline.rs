@@ -11,6 +11,7 @@ pub struct PipelineDescriptor<'a> {
     /// Number of uniform buffer bind groups (each occupies one group slot).
     pub uniform_count: u32,
     pub alpha_blend: bool,
+    pub additive_blend: bool,
     pub depth_write: bool,
     pub use_shadow_map: bool,
     pub depth_only: bool,
@@ -35,6 +36,7 @@ impl<'a> PipelineDescriptor<'a> {
             use_texture: false,
             uniform_count: 0,
             alpha_blend: false,
+            additive_blend: false,
             depth_write: false,
             use_shadow_map: false,
             depth_only: false,
@@ -59,6 +61,7 @@ impl<'a> PipelineDescriptor<'a> {
             use_texture: false,
             uniform_count: 0,
             alpha_blend: false,
+            additive_blend: false,
             depth_write: false,
             use_shadow_map: false,
             depth_only: false,
@@ -87,6 +90,12 @@ impl<'a> PipelineDescriptor<'a> {
 
     pub fn with_alpha_blend(mut self) -> Self {
         self.alpha_blend = true;
+        self
+    }
+
+    /// Additive blending: `src * src_alpha + dst` — ideal for fire, sparks, glows.
+    pub fn with_additive_blend(mut self) -> Self {
+        self.additive_blend = true;
         self
     }
 

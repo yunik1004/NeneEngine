@@ -37,6 +37,13 @@ impl<'a> RenderPass<'a> {
         self.inner.draw(vertices, 0..1);
     }
 
+    /// Draw non-indexed geometry with `instance_count` instances.
+    ///
+    /// Call [`set_instance_buffer`](Self::set_instance_buffer) before this.
+    pub fn draw_instanced(&mut self, vertices: std::ops::Range<u32>, instance_count: u32) {
+        self.inner.draw(vertices, 0..instance_count);
+    }
+
     pub fn draw_indexed(&mut self, indices: &IndexBuffer) {
         // SAFETY: buffer outlives this render pass (stored in user state).
         let slice = unsafe {
