@@ -92,6 +92,7 @@ fn build_map() -> TileMap {
 
 struct State {
     tileset: TileSet,
+    map: TileMap,
     renderer: TileMapRenderer,
     camera: Camera,
     ortho_width: f32,
@@ -104,7 +105,7 @@ fn init(ctx: &mut Context) -> State {
     let texture = make_atlas(ctx);
     let tileset = TileSet::new(texture, ATLAS_W, ATLAS_H, TILE_PX, TILE_PX);
     let map = build_map();
-    let renderer = TileMapRenderer::new(ctx, &tileset, &map, TILE_WORLD);
+    let renderer = TileMapRenderer::new(ctx, TILE_WORLD);
 
     let ortho_width = 20.0_f32;
     let cx = COLS as f32 * TILE_WORLD * 0.5;
@@ -114,6 +115,7 @@ fn init(ctx: &mut Context) -> State {
 
     State {
         tileset,
+        map,
         renderer,
         camera,
         ortho_width,
@@ -132,7 +134,9 @@ fn main() {
         |state, ctx, input, time| {
             pan_zoom(&mut state.camera, &mut state.ortho_width, input, time.delta);
             let aspect = W as f32 / H as f32;
-            state.renderer.prepare(ctx, &state.camera, aspect);
+            state
+                .renderer
+                .prepare(ctx, &state.map, &state.tileset, &state.camera, aspect);
         },
         |_, _| {},
         |state, pass: &mut RenderPass| {
