@@ -98,3 +98,79 @@ fn step_dt_advances_simulation() {
 
     assert!(y_after < y_before);
 }
+
+// ── Raycasting ────────────────────────────────────────────────────────────────
+
+fn world_with_box() -> (nene::physics::d3::World, nene::physics::d3::ColliderHandle) {
+    use nene::physics::d3::{ColliderBuilder, RigidBodyBuilder, World};
+    let mut world = World::with_gravity([0.0, 0.0, 0.0]);
+    let body = world.add_body(RigidBodyBuilder::fixed());
+    let col = world.add_collider(ColliderBuilder::cuboid(1.0, 1.0, 1.0), body);
+    world.step();
+    (world, col)
+}
+
+#[test]
+fn cast_ray_3d_hits_box() {
+    let (world, col) = world_with_box();
+    let hit = world.cast_ray(
+        nene::math::Vec3::new(0.0, 5.0, 0.0),
+        nene::math::Vec3::new(0.0, -1.0, 0.0),
+        20.0,
+        true,
+    );
+    assert!(hit.is_some());
+    assert_eq!(hit.unwrap().collider, col);
+}
+
+#[test]
+fn cast_ray_3d_misses() {
+    let (world, _) = world_with_box();
+    let hit = world.cast_ray(
+        nene::math::Vec3::new(10.0, 5.0, 0.0),
+        nene::math::Vec3::new(0.0, -1.0, 0.0),
+        20.0,
+        true,
+    );
+    assert!(hit.is_none());
+}
+
+#[test]
+fn cast_ray_3d_normal_points_up() {
+    let (world, _) = world_with_box();
+    let hit = world
+        .cast_ray(
+            nene::math::Vec3::new(0.0, 5.0, 0.0),
+            nene::math::Vec3::new(0.0, -1.0, 0.0),
+            20.0,
+            true,
+        )
+        .unwrap();
+    assert!(hit.normal.y > 0.5, "normal should point up, got {:?}", hit.normal);
+}
+
+#[test]
+fn cast_ray_all_3d_returns_hit() {
+    let (world, _) = world_with_box();
+    let hits = world.cast_ray_all(
+        nene::math::Vec3::new(0.0, 5.0, 0.0),
+        nene::math::Vec3::new(0.0, -1.0, 0.0),
+        20.0,
+        true,
+    );
+    assert!(!hits.is_empty());
+}
+
+#[test]
+fn intersect_point_3d_inside() {
+    let (world, col) = world_with_box();
+    let hits = world.intersect_point(nene::math::Vec3::new(0.0, 0.0, 0.0));
+    assert!(hits.contains(&col));
+}
+
+#[test]
+fn intersect_point_3d_outside() {
+    let (world, _) = world_with_box();
+    let hits = world.intersect_point(nene::math::Vec3::new(10.0, 10.0, 10.0));
+    assert!(hits.is_empty());
+}

@@ -2,6 +2,21 @@ use rapier3d::prelude as r;
 
 use crate::math::Vec3;
 
+// ── RayHit ────────────────────────────────────────────────────────────────────
+
+/// Result of a successful ray cast in the 3D physics world.
+#[derive(Clone, Copy, Debug)]
+pub struct RayHit {
+    /// The collider that was hit.
+    pub collider: ColliderHandle,
+    /// The rigid body the collider is attached to, if any.
+    pub body: Option<RigidBodyHandle>,
+    /// Time of impact — distance along the ray if the direction is normalised.
+    pub toi: f32,
+    /// Surface normal at the hit point (points outward from the shape).
+    pub normal: Vec3,
+}
+
 // ── Handles ───────────────────────────────────────────────────────────────────
 
 /// Handle to a rigid body inside a [`World`].
@@ -242,5 +257,82 @@ impl World {
         if let Some(body) = self.bodies.get_mut(handle.0) {
             body.set_linvel(r::Vector::new(vel.x, vel.y, vel.z), true);
         }
+    }
+
+    // ── Spatial queries ───────────────────────────────────────────────────────
+
+    /// Cast a ray and return the **closest** hit, if any.
+    ///
+    /// - `origin` / `dir` — ray start and direction (need not be normalised).
+    /// - `max_toi` — maximum travel distance. Pass `f32::MAX` for infinite.
+    /// - `solid` — if `true` a ray starting inside a shape hits at `toi = 0`.
+    pub fn cast_ray(
+        &self,
+        origin: Vec3,
+        dir: Vec3,
+        max_toi: f32,
+        solid: bool,
+    ) -> Option<RayHit> {
+        let qp = self.query_pipeline();
+        let ray = r::Ray::new(
+            r::Vector::new(origin.x, origin.y, origin.z),
+            r::Vector::new(dir.x, dir.y, dir.z),
+        );
+        let (ch, hit) = qp.cast_ray_and_get_normal(&ray, max_toi, solid)?;
+        Some(self.make_ray_hit(
+            ch,
+            hit.time_of_impact,
+            Vec3::new(hit.normal.x, hit.normal.y, hit.normal.z),
+        ))
+    }
+
+    /// Cast a ray and return **all** colliders it passes through (unordered).
+    pub fn cast_ray_all(
+        &self,
+        origin: Vec3,
+        dir: Vec3,
+        max_toi: f32,
+        solid: bool,
+    ) -> Vec<RayHit> {
+        let qp = self.query_pipeline();
+        let ray = r::Ray::new(
+            r::Vector::new(origin.x, origin.y, origin.z),
+            r::Vector::new(dir.x, dir.y, dir.z),
+        );
+        qp.intersect_ray(ray, max_toi, solid)
+            .map(|(ch, _, hit)| {
+                self.make_ray_hit(
+                    ch,
+                    hit.time_of_impact,
+                    Vec3::new(hit.normal.x, hit.normal.y, hit.normal.z),
+                )
+            })
+            .collect()
+    }
+
+    /// Return all colliders whose shape **contains** `point`.
+    pub fn intersect_point(&self, point: Vec3) -> Vec<ColliderHandle> {
+        let qp = self.query_pipeline();
+        qp.intersect_point(r::Vector::new(point.x, point.y, point.z))
+            .map(|(ch, _)| ColliderHandle(ch))
+            .collect()
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    fn query_pipeline(&self) -> r::QueryPipeline<'_> {
+        self.broad_phase.as_query_pipeline(
+            self.narrow_phase.query_dispatcher(),
+            &self.bodies,
+            &self.colliders,
+            r::QueryFilter::default(),
+        )
+    }
+
+    fn make_ray_hit(&self, ch: r::ColliderHandle, toi: f32, normal: Vec3) -> RayHit {
+        let body = self.colliders.get(ch)
+            .and_then(|c| c.parent())
+            .map(RigidBodyHandle);
+        RayHit { collider: ColliderHandle(ch), body, toi, normal }
     }
 }
