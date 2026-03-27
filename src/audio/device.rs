@@ -2,7 +2,7 @@ use super::Sound;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU32, Ordering},
     mpsc::{self, Sender},
 };
 
@@ -43,6 +43,8 @@ impl Default for PlayOptions {
 /// explicitly if you need early termination.
 pub struct PlayHandle {
     stopped: Arc<AtomicBool>,
+    volume: Arc<AtomicU32>,
+    pan: Arc<AtomicU32>,
 }
 
 impl PlayHandle {
@@ -55,14 +57,26 @@ impl PlayHandle {
     pub fn is_finished(&self) -> bool {
         self.stopped.load(Ordering::Relaxed)
     }
+
+    /// Update the volume of this playback in real time. Clamped to `[0.0, 1.0]`.
+    pub fn set_volume(&self, volume: f32) {
+        self.volume
+            .store(volume.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+    }
+
+    /// Update the stereo pan of this playback in real time. Clamped to `[-1.0, 1.0]`.
+    pub fn set_pan(&self, pan: f32) {
+        self.pan
+            .store(pan.clamp(-1.0, 1.0).to_bits(), Ordering::Relaxed);
+    }
 }
 
 // ── Internal ──────────────────────────────────────────────────────────────────
 
 struct PlayRequest {
     sound: Arc<Sound>,
-    volume: f32,
-    pan: f32,
+    volume: Arc<AtomicU32>,
+    pan: Arc<AtomicU32>,
     looping: bool,
     stopped: Arc<AtomicBool>,
 }
@@ -71,8 +85,8 @@ struct Playback {
     sound: Arc<Sound>,
     /// Fractional frame position in the source audio.
     position: f64,
-    volume: f32,
-    pan: f32,
+    volume: Arc<AtomicU32>,
+    pan: Arc<AtomicU32>,
     looping: bool,
     stopped: Arc<AtomicBool>,
 }
@@ -147,11 +161,13 @@ impl AudioDevice {
                             }
 
                             let src_idx = pb.position as usize * src_ch;
+                            let vol = f32::from_bits(pb.volume.load(Ordering::Relaxed));
+                            let pan = f32::from_bits(pb.pan.load(Ordering::Relaxed));
                             mix_frame(
                                 frame,
                                 &pb.sound.samples[src_idx..src_idx + src_ch],
-                                pb.volume,
-                                pb.pan,
+                                vol,
+                                pan,
                             );
                             pb.position += ratio;
                         }
@@ -182,14 +198,18 @@ impl AudioDevice {
     /// Play `sound` with explicit [`PlayOptions`].
     pub fn play_with(&self, sound: &Arc<Sound>, options: PlayOptions) -> PlayHandle {
         let stopped = Arc::new(AtomicBool::new(false));
+        let volume = Arc::new(AtomicU32::new(options.volume.clamp(0.0, 1.0).to_bits()));
+        let pan = Arc::new(AtomicU32::new(options.pan.clamp(-1.0, 1.0).to_bits()));
         let handle = PlayHandle {
             stopped: Arc::clone(&stopped),
+            volume: Arc::clone(&volume),
+            pan: Arc::clone(&pan),
         };
         self.sender
             .send(PlayRequest {
                 sound: Arc::clone(sound),
-                volume: options.volume.clamp(0.0, 1.0),
-                pan: options.pan.clamp(-1.0, 1.0),
+                volume,
+                pan,
                 looping: options.looping,
                 stopped,
             })
