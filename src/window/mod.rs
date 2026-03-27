@@ -214,8 +214,9 @@ impl<S> ApplicationHandler for WindowRunner<S> {
                 self.input.on_mouse_button(button, state);
             }
             WindowEvent::CursorMoved { position, .. } => {
+                let scale = self.handle.as_ref().map_or(1.0, |w| w.scale_factor());
                 self.input
-                    .on_cursor_moved(position.x as f32, position.y as f32);
+                    .on_cursor_moved((position.x / scale) as f32, (position.y / scale) as f32);
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 self.input.on_scroll(delta);
@@ -334,8 +335,9 @@ impl<S> ApplicationHandler for WindowRunnerFixed<S> {
                 self.input.on_mouse_button(button, state);
             }
             WindowEvent::CursorMoved { position, .. } => {
+                let scale = self.handle.as_ref().map_or(1.0, |w| w.scale_factor());
                 self.input
-                    .on_cursor_moved(position.x as f32, position.y as f32);
+                    .on_cursor_moved((position.x / scale) as f32, (position.y / scale) as f32);
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 self.input.on_scroll(delta);

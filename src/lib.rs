@@ -9,6 +9,7 @@ pub mod light;
 pub mod math;
 pub mod mesh;
 pub mod particle;
+pub mod pathfinding;
 pub mod physics;
 pub mod profile;
 pub mod renderer;
