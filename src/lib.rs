@@ -4,6 +4,7 @@ pub mod audio;
 pub mod camera;
 pub mod culling;
 pub mod debug;
+pub mod event;
 pub mod input;
 pub mod light;
 pub mod math;
