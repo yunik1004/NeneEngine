@@ -1,0 +1,13 @@
+{
+  "menu": {
+    "start": "Start Game",
+    "quit":  "Quit"
+  },
+  "hud": {
+    "hp":    "HP: {hp}",
+    "score": "Score: {score}"
+  },
+  "dialog": {
+    "greet": "Hello, {name}!"
+  }
+}

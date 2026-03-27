@@ -1,0 +1,13 @@
+{
+  "menu": {
+    "start": "ゲーム開始",
+    "quit":  "終了"
+  },
+  "hud": {
+    "hp":    "HP: {hp}",
+    "score": "スコア: {score}"
+  },
+  "dialog": {
+    "greet": "こんにちは、{name}さん！"
+  }
+}

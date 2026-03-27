@@ -7,6 +7,7 @@ pub mod debug;
 pub mod event;
 pub mod input;
 pub mod light;
+pub mod locale;
 pub mod math;
 pub mod mesh;
 pub mod net;
