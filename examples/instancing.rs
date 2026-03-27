@@ -9,8 +9,8 @@
 use nene::{
     math::{Mat4, Vec3, Vec4},
     renderer::{
-        Context, IndexBuffer, InstanceBuffer, Pipeline, PipelineDescriptor,
-        RenderPass, UniformBuffer, VertexBuffer,
+        Context, IndexBuffer, InstanceBuffer, Pipeline, PipelineDescriptor, RenderPass,
+        UniformBuffer, VertexBuffer,
     },
     uniform, vertex,
     window::{Config, Window},
@@ -77,47 +77,59 @@ struct VOut {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-#[vertex] struct Vtx  { pos: [f32; 3], normal: [f32; 3] }
+#[vertex]
+struct Vtx {
+    pos: [f32; 3],
+    normal: [f32; 3],
+}
 
 /// Per-instance: world offset + RGBA color (locations shifted to 2, 3).
-#[vertex] struct Inst { offset: [f32; 3], color: [f32; 4] }
+#[vertex]
+struct Inst {
+    offset: [f32; 3],
+    color: [f32; 4],
+}
 
 #[uniform]
 struct Scene {
     view_proj: Mat4,
     light_dir: Vec4,
-    time:      Vec4,
+    time: Vec4,
 }
 
 // ── Cube geometry ─────────────────────────────────────────────────────────────
 
 fn cube() -> (Vec<Vtx>, Vec<u32>) {
     // 6 faces × 4 vertices, indexed with 2 triangles per face.
-    let faces: [([f32;3], [f32;3]); 6] = [
-        ([ 0.0,  0.0,  1.0], [0.0, 0.0, 1.0]),
-        ([ 0.0,  0.0, -1.0], [0.0, 0.0,-1.0]),
-        ([ 1.0,  0.0,  0.0], [1.0, 0.0, 0.0]),
-        ([-1.0,  0.0,  0.0], [-1.0,0.0, 0.0]),
-        ([ 0.0,  1.0,  0.0], [0.0, 1.0, 0.0]),
-        ([ 0.0, -1.0,  0.0], [0.0,-1.0, 0.0]),
+    let faces: [([f32; 3], [f32; 3]); 6] = [
+        ([0.0, 0.0, 1.0], [0.0, 0.0, 1.0]),
+        ([0.0, 0.0, -1.0], [0.0, 0.0, -1.0]),
+        ([1.0, 0.0, 0.0], [1.0, 0.0, 0.0]),
+        ([-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]),
+        ([0.0, 1.0, 0.0], [0.0, 1.0, 0.0]),
+        ([0.0, -1.0, 0.0], [0.0, -1.0, 0.0]),
     ];
 
-    let verts_per_face: [[f32;3]; 4] = [
+    let verts_per_face: [[f32; 3]; 4] = [
         [-1.0, -1.0, 0.0],
-        [ 1.0, -1.0, 0.0],
-        [ 1.0,  1.0, 0.0],
-        [-1.0,  1.0, 0.0],
+        [1.0, -1.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [-1.0, 1.0, 0.0],
     ];
 
     let mut verts: Vec<Vtx> = Vec::new();
-    let mut idx:   Vec<u32> = Vec::new();
+    let mut idx: Vec<u32> = Vec::new();
 
     for (face_normal, normal) in &faces {
         let n = *normal;
         // Build a local basis from the face normal so we can orient the quad.
-        let up = if n[1].abs() < 0.9 { [0.0_f32, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
+        let up = if n[1].abs() < 0.9 {
+            [0.0_f32, 1.0, 0.0]
+        } else {
+            [1.0, 0.0, 0.0]
+        };
         let right = cross(n, up);
-        let up2   = cross(right, n);
+        let up2 = cross(right, n);
 
         let base = verts.len() as u32;
         for lp in &verts_per_face {
@@ -128,27 +140,27 @@ fn cube() -> (Vec<Vtx>, Vec<u32>) {
             ];
             verts.push(Vtx { pos: p, normal: n });
         }
-        idx.extend_from_slice(&[base, base+1, base+2, base, base+2, base+3]);
+        idx.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
     }
 
     (verts, idx)
 }
 
-fn cross(a: [f32;3], b: [f32;3]) -> [f32;3] {
+fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [
-        a[1]*b[2] - a[2]*b[1],
-        a[2]*b[0] - a[0]*b[2],
-        a[0]*b[1] - a[1]*b[0],
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
     ]
 }
 
 // ── App state ─────────────────────────────────────────────────────────────────
 
 struct State {
-    pipeline:  Pipeline,
-    vbuf:      VertexBuffer,
-    ibuf:      IndexBuffer,
-    inst_buf:  InstanceBuffer,
+    pipeline: Pipeline,
+    vbuf: VertexBuffer,
+    ibuf: IndexBuffer,
+    inst_buf: InstanceBuffer,
     scene_buf: UniformBuffer,
     instances: Vec<Inst>,
 }
@@ -164,7 +176,7 @@ fn build_instances() -> Vec<Inst> {
             let color = hsv_to_rgb(hue, 0.75, 0.9);
             out.push(Inst {
                 offset: [x, 0.0, z],
-                color:  [color[0], color[1], color[2], 1.0],
+                color: [color[0], color[1], color[2], 1.0],
             });
         }
     }
@@ -175,10 +187,14 @@ fn build_instances() -> Vec<Inst> {
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> [f32; 3] {
     let i = (h * 6.0) as u32;
     let f = h * 6.0 - i as f32;
-    let (p, q, t) = (v*(1.0-s), v*(1.0-s*f), v*(1.0-s*(1.0-f)));
+    let (p, q, t) = (v * (1.0 - s), v * (1.0 - s * f), v * (1.0 - s * (1.0 - f)));
     match i % 6 {
-        0 => [v, t, p], 1 => [q, v, p], 2 => [p, v, t],
-        3 => [p, q, v], 4 => [t, p, v], _ => [v, p, q],
+        0 => [v, t, p],
+        1 => [q, v, p],
+        2 => [p, v, t],
+        3 => [p, q, v],
+        4 => [t, p, v],
+        _ => [v, p, q],
     }
 }
 
@@ -186,14 +202,14 @@ fn init(ctx: &mut Context) -> State {
     let (verts, indices) = cube();
     let instances = build_instances();
 
-    let vbuf     = ctx.create_vertex_buffer(&verts);
-    let ibuf     = ctx.create_index_buffer(&indices);
+    let vbuf = ctx.create_vertex_buffer(&verts);
+    let ibuf = ctx.create_index_buffer(&indices);
     let inst_buf = ctx.create_instance_buffer(&instances);
 
     let scene_buf = ctx.create_uniform_buffer(&Scene {
         view_proj: Mat4::IDENTITY,
         light_dir: Vec4::new(-0.4, -0.7, -0.5, 0.0).normalize(),
-        time:      Vec4::ZERO,
+        time: Vec4::ZERO,
     });
 
     let pipeline = ctx.create_pipeline(
@@ -203,7 +219,14 @@ fn init(ctx: &mut Context) -> State {
             .with_depth(),
     );
 
-    State { pipeline, vbuf, ibuf, inst_buf, scene_buf, instances }
+    State {
+        pipeline,
+        vbuf,
+        ibuf,
+        inst_buf,
+        scene_buf,
+        instances,
+    }
 }
 
 fn main() {
@@ -215,26 +238,24 @@ fn main() {
     .run_with_update(
         init,
         |state, ctx, _input, time| {
-            let cfg    = ctx.surface_config();
+            let cfg = ctx.surface_config();
             let aspect = cfg.width as f32 / cfg.height as f32;
-            let t      = time.elapsed as f32;
+            let t = time.elapsed as f32;
 
             // Slowly orbit camera.
-            let r       = GRID as f32 * SPACING * 0.65;
+            let r = GRID as f32 * SPACING * 0.65;
             let cam_pos = Vec3::new(r * (t * 0.12).cos(), r * 0.45, r * (t * 0.12).sin());
-            let view_proj = Mat4::perspective_rh(
-                45_f32.to_radians(), aspect, 0.5, r * 3.0,
-            ) * Mat4::look_at_rh(
-                cam_pos,
-                Vec3::ZERO,
-                Vec3::Y,
-            );
+            let view_proj = Mat4::perspective_rh(45_f32.to_radians(), aspect, 0.5, r * 3.0)
+                * Mat4::look_at_rh(cam_pos, Vec3::ZERO, Vec3::Y);
 
-            ctx.update_uniform_buffer(&state.scene_buf, &Scene {
-                view_proj,
-                light_dir: Vec4::new(-0.4, -0.7, -0.5, 0.0).normalize(),
-                time:      Vec4::new(t, 0.0, 0.0, 0.0),
-            });
+            ctx.update_uniform_buffer(
+                &state.scene_buf,
+                &Scene {
+                    view_proj,
+                    light_dir: Vec4::new(-0.4, -0.7, -0.5, 0.0).normalize(),
+                    time: Vec4::new(t, 0.0, 0.0, 0.0),
+                },
+            );
         },
         |_, _| {},
         |state, pass: &mut RenderPass| {

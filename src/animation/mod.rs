@@ -2,6 +2,9 @@
 pub use crate::mesh::{
     AnimChannel, Channel, Clip, Joint, JointPose, Skeleton, SkinnedMesh, SkinnedVertex,
 };
+pub use state_machine::{AnimState, StateMachine};
+
+mod state_machine;
 
 use encase::ShaderType;
 

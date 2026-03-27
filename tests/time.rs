@@ -70,7 +70,11 @@ fn large_delta_clamped_scenario() {
 // ── FixedTime ──────────────────────────────────────────────────────────────────
 
 fn make_fixed(hz: f32, step: u32, tick: u64) -> FixedTime {
-    FixedTime { delta: 1.0 / hz, step, tick }
+    FixedTime {
+        delta: 1.0 / hz,
+        step,
+        tick,
+    }
 }
 
 #[test]
@@ -109,7 +113,7 @@ fn fixed_time_is_copy() {
 fn accumulator_fires_correct_tick_count() {
     // At 20 Hz fixed, a 100 ms frame should fire exactly 2 ticks.
     let fixed_step = 1.0_f32 / 20.0; // 50 ms
-    let frame_dt = 0.100_f32;        // 100 ms
+    let frame_dt = 0.100_f32; // 100 ms
 
     let mut acc = 0.0_f32;
     acc += frame_dt;
@@ -132,12 +136,17 @@ fn accumulator_capped_by_max_fixed_steps() {
     let max_acc = fixed_step * MAX_FIXED_STEPS as f32;
     let mut acc = 0.0_f32;
     acc += frame_dt;
-    if acc > max_acc { acc = max_acc; }
+    if acc > max_acc {
+        acc = max_acc;
+    }
 
     let mut ticks = 0u32;
     while acc >= fixed_step {
         acc -= fixed_step;
         ticks += 1;
     }
-    assert!(ticks <= MAX_FIXED_STEPS, "ticks={ticks} exceeds MAX_FIXED_STEPS={MAX_FIXED_STEPS}");
+    assert!(
+        ticks <= MAX_FIXED_STEPS,
+        "ticks={ticks} exceeds MAX_FIXED_STEPS={MAX_FIXED_STEPS}"
+    );
 }

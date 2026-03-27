@@ -1,9 +1,9 @@
 use nene::animation::{
-    AnimChannel, Animator, Channel, Clip, Joint, JointPose, Skeleton, SkinnedVertex,
-    skinning_wgsl,
+    AnimChannel, AnimState, Animator, Channel, Clip, Joint, JointPose, Skeleton, SkinnedVertex,
+    StateMachine, skinning_wgsl,
 };
-use nene::mesh::Model;
 use nene::math::{Mat4, Vec3};
+use nene::mesh::Model;
 
 fn approx_eq(a: f32, b: f32) -> bool {
     (a - b).abs() < 1e-4
@@ -246,6 +246,224 @@ fn skinning_wgsl_contains_joint_matrices() {
     let wgsl = skinning_wgsl(64);
     assert!(wgsl.contains("JointMatrices"));
     assert!(wgsl.contains("array<mat4x4<f32>, 64>"));
+}
+
+// ── JointPose::lerp ───────────────────────────────────────────────────────────
+
+#[test]
+fn joint_pose_lerp_midpoint_translation() {
+    let a = JointPose {
+        translation: Vec3::ZERO,
+        ..JointPose::IDENTITY
+    };
+    let b = JointPose {
+        translation: Vec3::new(2.0, 0.0, 0.0),
+        ..JointPose::IDENTITY
+    };
+    let mid = a.lerp(b, 0.5);
+    assert!(vec3_approx(mid.translation, Vec3::new(1.0, 0.0, 0.0)));
+}
+
+#[test]
+fn joint_pose_lerp_t0_equals_self() {
+    let a = JointPose {
+        translation: Vec3::new(1.0, 2.0, 3.0),
+        ..JointPose::IDENTITY
+    };
+    let b = JointPose {
+        translation: Vec3::new(9.0, 9.0, 9.0),
+        ..JointPose::IDENTITY
+    };
+    let r = a.lerp(b, 0.0);
+    assert!(vec3_approx(r.translation, a.translation));
+}
+
+#[test]
+fn joint_pose_lerp_t1_equals_other() {
+    let a = JointPose {
+        translation: Vec3::new(1.0, 2.0, 3.0),
+        ..JointPose::IDENTITY
+    };
+    let b = JointPose {
+        translation: Vec3::new(9.0, 9.0, 9.0),
+        ..JointPose::IDENTITY
+    };
+    let r = a.lerp(b, 1.0);
+    assert!(vec3_approx(r.translation, b.translation));
+}
+
+// ── StateMachine ──────────────────────────────────────────────────────────────
+
+fn make_clip(name: &str, duration: f32) -> Clip {
+    Clip {
+        name: name.into(),
+        duration,
+        channels: vec![],
+    }
+}
+
+fn make_sm() -> (StateMachine, Vec<Clip>) {
+    let clips = vec![
+        make_clip("idle", 1.0),
+        make_clip("walk", 2.0),
+        make_clip("jump", 0.5),
+    ];
+    let mut sm = StateMachine::new();
+    sm.add_state(AnimState {
+        name: "idle".into(),
+        clip_index: 0,
+        looping: true,
+        speed: 1.0,
+    });
+    sm.add_state(AnimState {
+        name: "walk".into(),
+        clip_index: 1,
+        looping: true,
+        speed: 1.0,
+    });
+    sm.add_state(AnimState {
+        name: "jump".into(),
+        clip_index: 2,
+        looping: false,
+        speed: 1.0,
+    });
+    (sm, clips)
+}
+
+#[test]
+fn state_machine_starts_at_state_zero() {
+    let (sm, _) = make_sm();
+    assert_eq!(sm.current, 0);
+    assert!(approx_eq(sm.time, 0.0));
+}
+
+#[test]
+fn state_machine_advances_time() {
+    let (mut sm, clips) = make_sm();
+    sm.update(0.3, &clips);
+    assert!(approx_eq(sm.time, 0.3));
+}
+
+#[test]
+fn state_machine_loops_current_state() {
+    let (mut sm, clips) = make_sm();
+    sm.update(1.7, &clips); // duration = 1.0, should wrap to 0.7
+    assert!(approx_eq(sm.time, 0.7));
+}
+
+#[test]
+fn state_machine_immediate_trigger() {
+    let (mut sm, clips) = make_sm();
+    sm.update(0.5, &clips);
+    sm.trigger("walk", 0.0);
+    assert_eq!(sm.current, 1);
+    assert!(approx_eq(sm.time, 0.0));
+}
+
+#[test]
+fn state_machine_trigger_unknown_name_is_noop() {
+    let (mut sm, _clips) = make_sm();
+    sm.trigger("run", 0.0);
+    assert_eq!(sm.current, 0);
+}
+
+#[test]
+fn state_machine_trigger_same_state_is_noop() {
+    let (mut sm, clips) = make_sm();
+    sm.update(0.5, &clips);
+    sm.trigger("idle", 0.3);
+    // No blend should have started.
+    assert_eq!(sm.current, 0);
+    assert!(approx_eq(sm.time, 0.5));
+}
+
+#[test]
+fn state_machine_blend_transition_completes() {
+    let (mut sm, clips) = make_sm();
+    sm.trigger("walk", 0.2);
+    // Drive time past blend duration.
+    sm.update(0.21, &clips);
+    assert_eq!(sm.current, 1);
+}
+
+#[test]
+fn state_machine_blend_in_progress_stays_on_old_state() {
+    let (mut sm, clips) = make_sm();
+    sm.trigger("walk", 0.5);
+    sm.update(0.1, &clips); // still blending
+    assert_eq!(sm.current, 0);
+}
+
+#[test]
+fn state_machine_joint_matrices_shape() {
+    let skeleton = Skeleton {
+        joints: vec![
+            Joint {
+                name: "root".into(),
+                parent: None,
+                inverse_bind: Mat4::IDENTITY,
+            },
+            Joint {
+                name: "child".into(),
+                parent: Some(0),
+                inverse_bind: Mat4::IDENTITY,
+            },
+        ],
+    };
+    let (mut sm, clips) = make_sm();
+    sm.update(0.1, &clips);
+    let mats = sm.joint_matrices(&clips, &skeleton);
+    assert_eq!(mats.len(), 2);
+}
+
+#[test]
+fn state_machine_blend_produces_intermediate_matrix() {
+    // One clip translates joint 0 by (2, 0, 0); the other by (0, 0, 0).
+    // At 50% blend we expect roughly (1, 0, 0).
+    let clips = vec![
+        Clip {
+            name: "a".into(),
+            duration: 1.0,
+            channels: vec![AnimChannel::Translation(Channel {
+                joint: 0,
+                times: vec![0.0],
+                values: vec![Vec3::new(2.0, 0.0, 0.0)],
+            })],
+        },
+        Clip {
+            name: "b".into(),
+            duration: 1.0,
+            channels: vec![],
+        },
+    ];
+    let skeleton = Skeleton {
+        joints: vec![Joint {
+            name: "root".into(),
+            parent: None,
+            inverse_bind: Mat4::IDENTITY,
+        }],
+    };
+    let mut sm = StateMachine::new();
+    sm.add_state(AnimState {
+        name: "a".into(),
+        clip_index: 0,
+        looping: true,
+        speed: 1.0,
+    });
+    sm.add_state(AnimState {
+        name: "b".into(),
+        clip_index: 1,
+        looping: true,
+        speed: 1.0,
+    });
+
+    sm.trigger("b", 1.0); // blend over 1 second
+    sm.update(0.5, &clips); // 50 % through blend
+
+    let mats = sm.joint_matrices(&clips, &skeleton);
+    // At 50 % blend, translation should be ~1.0 on x.
+    let p = mats[0].transform_point3(Vec3::ZERO);
+    assert!((p.x - 1.0).abs() < 0.01, "expected x≈1.0, got {}", p.x);
 }
 
 // ── Model::load (glTF, no skin) ───────────────────────────────────────────────

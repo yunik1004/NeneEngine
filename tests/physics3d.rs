@@ -146,7 +146,11 @@ fn cast_ray_3d_normal_points_up() {
             true,
         )
         .unwrap();
-    assert!(hit.normal.y > 0.5, "normal should point up, got {:?}", hit.normal);
+    assert!(
+        hit.normal.y > 0.5,
+        "normal should point up, got {:?}",
+        hit.normal
+    );
 }
 
 #[test]

@@ -9,7 +9,11 @@ use winit::{
     window::{Window as WinitWindow, WindowId},
 };
 
-use crate::{input::Input, renderer::Context, time::{FixedTime, Time}};
+use crate::{
+    input::Input,
+    renderer::Context,
+    time::{FixedTime, Time},
+};
 
 pub struct Config {
     pub title: String,
@@ -80,7 +84,11 @@ impl Window {
             handle: None,
             renderer: None,
             input: Input::new(),
-            time: Time { delta: 0.0, elapsed: 0.0, frame: 0 },
+            time: Time {
+                delta: 0.0,
+                elapsed: 0.0,
+                frame: 0,
+            },
             last_frame: now,
             start: now,
             fixed_step,

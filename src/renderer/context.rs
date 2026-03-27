@@ -5,7 +5,10 @@ use winit::window::Window;
 use super::shadow::{self, ShadowMap};
 use super::texture::{self, FilterMode, RenderTarget, Texture};
 use super::uniform;
-use super::{IndexBuffer, InstanceBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer};
+use super::{
+    IndexBuffer, InstanceBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer,
+    VertexBuffer,
+};
 use crate::text::TextRenderer;
 
 fn create_instance() -> wgpu::Instance {
@@ -49,7 +52,10 @@ impl GpuDevice {
                 contents: bytemuck::cast_slice(data),
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             });
-        InstanceBuffer { inner, count: data.len() as u32 }
+        InstanceBuffer {
+            inner,
+            count: data.len() as u32,
+        }
     }
 
     pub fn update_instance_buffer<T: bytemuck::Pod>(&self, buf: &InstanceBuffer, data: &[T]) {

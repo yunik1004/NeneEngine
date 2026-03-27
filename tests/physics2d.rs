@@ -148,7 +148,11 @@ fn cast_ray_normal_points_up_for_top_surface() {
         )
         .unwrap();
     // Normal should point upward (away from box top surface).
-    assert!(hit.normal.y > 0.5, "normal should point upward, got {:?}", hit.normal);
+    assert!(
+        hit.normal.y > 0.5,
+        "normal should point upward, got {:?}",
+        hit.normal
+    );
 }
 
 #[test]
@@ -174,19 +178,28 @@ fn cast_ray_all_returns_hit() {
         20.0,
         true,
     );
-    assert!(!hits.is_empty(), "cast_ray_all should return at least one hit");
+    assert!(
+        !hits.is_empty(),
+        "cast_ray_all should return at least one hit"
+    );
 }
 
 #[test]
 fn intersect_point_inside_box() {
     let (world, col) = world_with_box();
     let hits = world.intersect_point(nene::math::Vec2::new(0.0, 0.0));
-    assert!(hits.contains(&col), "point at origin should be inside the box");
+    assert!(
+        hits.contains(&col),
+        "point at origin should be inside the box"
+    );
 }
 
 #[test]
 fn intersect_point_outside_box() {
     let (world, _) = world_with_box();
     let hits = world.intersect_point(nene::math::Vec2::new(10.0, 10.0));
-    assert!(hits.is_empty(), "point far away should not intersect anything");
+    assert!(
+        hits.is_empty(),
+        "point far away should not intersect anything"
+    );
 }

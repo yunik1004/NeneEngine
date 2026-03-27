@@ -133,7 +133,13 @@ fn play_with_volume_does_not_panic() {
     let path = write_temp_wav("nene_test_volume.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
     let sound = Arc::new(Sound::load(&path));
-    device.play_with(&sound, PlayOptions { volume: 0.5, ..Default::default() });
+    device.play_with(
+        &sound,
+        PlayOptions {
+            volume: 0.5,
+            ..Default::default()
+        },
+    );
 }
 
 #[test]
@@ -142,7 +148,13 @@ fn play_with_pan_left_does_not_panic() {
     let path = write_temp_wav("nene_test_pan_l.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
     let sound = Arc::new(Sound::load(&path));
-    device.play_with(&sound, PlayOptions { pan: -1.0, ..Default::default() });
+    device.play_with(
+        &sound,
+        PlayOptions {
+            pan: -1.0,
+            ..Default::default()
+        },
+    );
 }
 
 #[test]
@@ -151,7 +163,13 @@ fn play_with_pan_right_does_not_panic() {
     let path = write_temp_wav("nene_test_pan_r.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
     let sound = Arc::new(Sound::load(&path));
-    device.play_with(&sound, PlayOptions { pan: 1.0, ..Default::default() });
+    device.play_with(
+        &sound,
+        PlayOptions {
+            pan: 1.0,
+            ..Default::default()
+        },
+    );
 }
 
 #[test]
@@ -160,7 +178,13 @@ fn play_with_looping_does_not_panic() {
     let path = write_temp_wav("nene_test_loop.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
     let sound = Arc::new(Sound::load(&path));
-    let handle = device.play_with(&sound, PlayOptions { looping: true, ..Default::default() });
+    let handle = device.play_with(
+        &sound,
+        PlayOptions {
+            looping: true,
+            ..Default::default()
+        },
+    );
     // Give it a moment, then stop explicitly to avoid playing forever in tests.
     std::thread::sleep(std::time::Duration::from_millis(20));
     handle.stop();
@@ -173,7 +197,10 @@ fn play_handle_stop_signals_finished() {
     let device = AudioDevice::new();
     let sound = Arc::new(Sound::load(&path));
     let handle = device.play(&sound);
-    assert!(!handle.is_finished(), "should not be finished immediately after starting");
+    assert!(
+        !handle.is_finished(),
+        "should not be finished immediately after starting"
+    );
     handle.stop();
     assert!(handle.is_finished(), "should be finished after stop()");
 }
@@ -196,7 +223,13 @@ fn volume_out_of_range_is_clamped() {
     let path = write_temp_wav("nene_test_vol_clamp.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
     let sound = Arc::new(Sound::load(&path));
-    device.play_with(&sound, PlayOptions { volume: 2.0, ..Default::default() });
+    device.play_with(
+        &sound,
+        PlayOptions {
+            volume: 2.0,
+            ..Default::default()
+        },
+    );
 }
 
 #[test]
@@ -205,7 +238,13 @@ fn pan_out_of_range_is_clamped() {
     let path = write_temp_wav("nene_test_pan_clamp.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
     let sound = Arc::new(Sound::load(&path));
-    device.play_with(&sound, PlayOptions { pan: 99.0, ..Default::default() });
+    device.play_with(
+        &sound,
+        PlayOptions {
+            pan: 99.0,
+            ..Default::default()
+        },
+    );
 }
 
 #[test]

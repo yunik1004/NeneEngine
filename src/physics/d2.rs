@@ -269,32 +269,24 @@ impl World {
     ///   Pass `f32::MAX` to cast indefinitely.
     /// - `solid` — if `true` a ray that starts *inside* a shape reports a hit
     ///   at `toi = 0`; if `false` it exits the shape and hits the far side.
-    pub fn cast_ray(
-        &self,
-        origin: Vec2,
-        dir: Vec2,
-        max_toi: f32,
-        solid: bool,
-    ) -> Option<RayHit> {
+    pub fn cast_ray(&self, origin: Vec2, dir: Vec2, max_toi: f32, solid: bool) -> Option<RayHit> {
         let qp = self.query_pipeline();
         let ray = r::Ray::new(
             r::Vector::new(origin.x, origin.y),
             r::Vector::new(dir.x, dir.y),
         );
         let (ch, hit) = qp.cast_ray_and_get_normal(&ray, max_toi, solid)?;
-        Some(self.make_ray_hit(ch, hit.time_of_impact, Vec2::new(hit.normal.x, hit.normal.y)))
+        Some(self.make_ray_hit(
+            ch,
+            hit.time_of_impact,
+            Vec2::new(hit.normal.x, hit.normal.y),
+        ))
     }
 
     /// Cast a ray and return **all** colliders it passes through (unordered).
     ///
     /// Same parameters as [`cast_ray`](Self::cast_ray).
-    pub fn cast_ray_all(
-        &self,
-        origin: Vec2,
-        dir: Vec2,
-        max_toi: f32,
-        solid: bool,
-    ) -> Vec<RayHit> {
+    pub fn cast_ray_all(&self, origin: Vec2, dir: Vec2, max_toi: f32, solid: bool) -> Vec<RayHit> {
         let qp = self.query_pipeline();
         let ray = r::Ray::new(
             r::Vector::new(origin.x, origin.y),
@@ -302,7 +294,11 @@ impl World {
         );
         qp.intersect_ray(ray, max_toi, solid)
             .map(|(ch, _, hit)| {
-                self.make_ray_hit(ch, hit.time_of_impact, Vec2::new(hit.normal.x, hit.normal.y))
+                self.make_ray_hit(
+                    ch,
+                    hit.time_of_impact,
+                    Vec2::new(hit.normal.x, hit.normal.y),
+                )
             })
             .collect()
     }
@@ -327,9 +323,16 @@ impl World {
     }
 
     fn make_ray_hit(&self, ch: r::ColliderHandle, toi: f32, normal: Vec2) -> RayHit {
-        let body = self.colliders.get(ch)
+        let body = self
+            .colliders
+            .get(ch)
             .and_then(|c| c.parent())
             .map(RigidBodyHandle);
-        RayHit { collider: ColliderHandle(ch), body, toi, normal }
+        RayHit {
+            collider: ColliderHandle(ch),
+            body,
+            toi,
+            normal,
+        }
     }
 }

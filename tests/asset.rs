@@ -44,7 +44,10 @@ fn model_cached_after_first_load() {
     let mut assets = Assets::new();
     let h1 = assets.model(&path);
     let h2 = assets.model(&path);
-    assert!(h1 == h2, "second load should return the same Arc allocation");
+    assert!(
+        h1 == h2,
+        "second load should return the same Arc allocation"
+    );
 }
 
 #[test]
@@ -90,7 +93,10 @@ fn evict_then_reload_gives_new_handle() {
     assets.evict_model(&path);
     let h2 = assets.model(&path);
 
-    assert!(h1 != h2, "eviction + reload should produce a new allocation");
+    assert!(
+        h1 != h2,
+        "eviction + reload should produce a new allocation"
+    );
 }
 
 // ── Handle survival ───────────────────────────────────────────────────────────

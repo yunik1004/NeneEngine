@@ -266,13 +266,7 @@ impl World {
     /// - `origin` / `dir` — ray start and direction (need not be normalised).
     /// - `max_toi` — maximum travel distance. Pass `f32::MAX` for infinite.
     /// - `solid` — if `true` a ray starting inside a shape hits at `toi = 0`.
-    pub fn cast_ray(
-        &self,
-        origin: Vec3,
-        dir: Vec3,
-        max_toi: f32,
-        solid: bool,
-    ) -> Option<RayHit> {
+    pub fn cast_ray(&self, origin: Vec3, dir: Vec3, max_toi: f32, solid: bool) -> Option<RayHit> {
         let qp = self.query_pipeline();
         let ray = r::Ray::new(
             r::Vector::new(origin.x, origin.y, origin.z),
@@ -287,13 +281,7 @@ impl World {
     }
 
     /// Cast a ray and return **all** colliders it passes through (unordered).
-    pub fn cast_ray_all(
-        &self,
-        origin: Vec3,
-        dir: Vec3,
-        max_toi: f32,
-        solid: bool,
-    ) -> Vec<RayHit> {
+    pub fn cast_ray_all(&self, origin: Vec3, dir: Vec3, max_toi: f32, solid: bool) -> Vec<RayHit> {
         let qp = self.query_pipeline();
         let ray = r::Ray::new(
             r::Vector::new(origin.x, origin.y, origin.z),
@@ -330,9 +318,16 @@ impl World {
     }
 
     fn make_ray_hit(&self, ch: r::ColliderHandle, toi: f32, normal: Vec3) -> RayHit {
-        let body = self.colliders.get(ch)
+        let body = self
+            .colliders
+            .get(ch)
             .and_then(|c| c.parent())
             .map(RigidBodyHandle);
-        RayHit { collider: ColliderHandle(ch), body, toi, normal }
+        RayHit {
+            collider: ColliderHandle(ch),
+            body,
+            toi,
+            normal,
+        }
     }
 }

@@ -119,9 +119,7 @@ impl Assets {
             return h.clone();
         }
         let img = image::open(path.as_ref())
-            .unwrap_or_else(|e| {
-                panic!("failed to load texture '{}': {e}", path.as_ref().display())
-            })
+            .unwrap_or_else(|e| panic!("failed to load texture '{}': {e}", path.as_ref().display()))
             .into_rgba8();
         let texture = ctx.create_texture_with(img.width(), img.height(), &img, filter);
         let handle = Handle::new(texture);

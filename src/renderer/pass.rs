@@ -1,4 +1,6 @@
-use super::{IndexBuffer, InstanceBuffer, Pipeline, ShadowMap, Texture, UniformBuffer, VertexBuffer};
+use super::{
+    IndexBuffer, InstanceBuffer, Pipeline, ShadowMap, Texture, UniformBuffer, VertexBuffer,
+};
 
 pub struct RenderPass<'a> {
     pub(crate) inner: wgpu::RenderPass<'a>,
@@ -80,7 +82,8 @@ impl<'a> RenderPass<'a> {
         };
         self.inner
             .set_index_buffer(slice, wgpu::IndexFormat::Uint32);
-        self.inner.draw_indexed(0..indices.count, 0, 0..instance_count);
+        self.inner
+            .draw_indexed(0..indices.count, 0, 0..instance_count);
     }
 
     pub fn set_shadow_map(&mut self, group: u32, shadow_map: &ShadowMap) {

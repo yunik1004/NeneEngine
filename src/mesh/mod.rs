@@ -189,6 +189,15 @@ impl JointPose {
     pub fn to_mat4(self) -> Mat4 {
         Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation)
     }
+
+    /// Linearly interpolate translation and scale; spherically interpolate rotation.
+    pub fn lerp(self, other: Self, t: f32) -> Self {
+        Self {
+            translation: self.translation.lerp(other.translation, t),
+            rotation: self.rotation.slerp(other.rotation, t),
+            scale: self.scale.lerp(other.scale, t),
+        }
+    }
 }
 
 impl Default for JointPose {
@@ -431,7 +440,13 @@ fn load_gltf(path: &Path) -> Model {
         let mut skinned_meshes = Vec::new();
         for scene in document.scenes() {
             for node in scene.nodes() {
-                collect_skinned_node(&node, Mat4::IDENTITY, &buffers, &images, &mut skinned_meshes);
+                collect_skinned_node(
+                    &node,
+                    Mat4::IDENTITY,
+                    &buffers,
+                    &images,
+                    &mut skinned_meshes,
+                );
             }
         }
 
@@ -602,11 +617,7 @@ fn collect_skinned_node(
                 .material()
                 .pbr_metallic_roughness()
                 .base_color_texture()
-                .and_then(|info| {
-                    images
-                        .get(info.texture().source().index())
-                        .map(to_rgba8)
-                });
+                .and_then(|info| images.get(info.texture().source().index()).map(to_rgba8));
 
             out.push(SkinnedMesh {
                 vertices,

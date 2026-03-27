@@ -28,7 +28,11 @@ pub struct PlayOptions {
 
 impl Default for PlayOptions {
     fn default() -> Self {
-        Self { volume: 1.0, pan: 0.0, looping: false }
+        Self {
+            volume: 1.0,
+            pan: 0.0,
+            looping: false,
+        }
     }
 }
 
@@ -56,21 +60,21 @@ impl PlayHandle {
 // ── Internal ──────────────────────────────────────────────────────────────────
 
 struct PlayRequest {
-    sound:   Arc<Sound>,
-    volume:  f32,
-    pan:     f32,
+    sound: Arc<Sound>,
+    volume: f32,
+    pan: f32,
     looping: bool,
     stopped: Arc<AtomicBool>,
 }
 
 struct Playback {
-    sound:    Arc<Sound>,
+    sound: Arc<Sound>,
     /// Fractional frame position in the source audio.
     position: f64,
-    volume:   f32,
-    pan:      f32,
-    looping:  bool,
-    stopped:  Arc<AtomicBool>,
+    volume: f32,
+    pan: f32,
+    looping: bool,
+    stopped: Arc<AtomicBool>,
 }
 
 // ── AudioDevice ───────────────────────────────────────────────────────────────
@@ -82,13 +86,15 @@ struct Playback {
 /// are mixed in real-time on a background thread.
 pub struct AudioDevice {
     _stream: cpal::Stream,
-    sender:  Sender<PlayRequest>,
+    sender: Sender<PlayRequest>,
 }
 
 impl AudioDevice {
     pub fn new() -> Self {
-        let host   = cpal::default_host();
-        let device = host.default_output_device().expect("No output device found");
+        let host = cpal::default_host();
+        let device = host
+            .default_output_device()
+            .expect("No output device found");
         let config = device.default_output_config().expect("No output config");
 
         let sample_rate = config.sample_rate();
@@ -104,12 +110,12 @@ impl AudioDevice {
                     // Receive new sounds.
                     while let Ok(req) = receiver.try_recv() {
                         playbacks.push(Playback {
-                            sound:    req.sound,
+                            sound: req.sound,
                             position: 0.0,
-                            volume:   req.volume,
-                            pan:      req.pan,
-                            looping:  req.looping,
-                            stopped:  req.stopped,
+                            volume: req.volume,
+                            pan: req.pan,
+                            looping: req.looping,
+                            stopped: req.stopped,
                         });
                     }
 
@@ -122,8 +128,8 @@ impl AudioDevice {
                             return false;
                         }
 
-                        let ratio       = pb.sound.sample_rate as f64 / sample_rate as f64;
-                        let src_ch      = pb.sound.channels;
+                        let ratio = pb.sound.sample_rate as f64 / sample_rate as f64;
+                        let src_ch = pb.sound.channels;
                         let total_frames = pb.sound.samples.len() / src_ch;
 
                         for frame in data.chunks_mut(out_channels) {
@@ -131,7 +137,9 @@ impl AudioDevice {
                             if pb.position as usize >= total_frames {
                                 if pb.looping {
                                     pb.position -= total_frames as f64;
-                                    if pb.position < 0.0 { pb.position = 0.0; }
+                                    if pb.position < 0.0 {
+                                        pb.position = 0.0;
+                                    }
                                 } else {
                                     pb.stopped.store(true, Ordering::Relaxed);
                                     return false;
@@ -139,8 +147,12 @@ impl AudioDevice {
                             }
 
                             let src_idx = pb.position as usize * src_ch;
-                            mix_frame(frame, &pb.sound.samples[src_idx..src_idx + src_ch],
-                                      pb.volume, pb.pan);
+                            mix_frame(
+                                frame,
+                                &pb.sound.samples[src_idx..src_idx + src_ch],
+                                pb.volume,
+                                pb.pan,
+                            );
                             pb.position += ratio;
                         }
                         true
@@ -153,7 +165,10 @@ impl AudioDevice {
 
         stream.play().expect("Failed to start audio stream");
 
-        Self { _stream: stream, sender }
+        Self {
+            _stream: stream,
+            sender,
+        }
     }
 
     /// Play `sound` at full volume, centred, without looping.
@@ -167,14 +182,18 @@ impl AudioDevice {
     /// Play `sound` with explicit [`PlayOptions`].
     pub fn play_with(&self, sound: &Arc<Sound>, options: PlayOptions) -> PlayHandle {
         let stopped = Arc::new(AtomicBool::new(false));
-        let handle  = PlayHandle { stopped: Arc::clone(&stopped) };
-        self.sender.send(PlayRequest {
-            sound:   Arc::clone(sound),
-            volume:  options.volume.clamp(0.0, 1.0),
-            pan:     options.pan.clamp(-1.0, 1.0),
-            looping: options.looping,
-            stopped,
-        }).ok();
+        let handle = PlayHandle {
+            stopped: Arc::clone(&stopped),
+        };
+        self.sender
+            .send(PlayRequest {
+                sound: Arc::clone(sound),
+                volume: options.volume.clamp(0.0, 1.0),
+                pan: options.pan.clamp(-1.0, 1.0),
+                looping: options.looping,
+                stopped,
+            })
+            .ok();
         handle
     }
 }
@@ -199,7 +218,7 @@ fn mix_frame(out: &mut [f32], src: &[f32], volume: f32, pan: f32) {
             out[0] += sample * volume;
         }
         2 => {
-            let left_gain  = (1.0 - pan) * 0.5 * volume;
+            let left_gain = (1.0 - pan) * 0.5 * volume;
             let right_gain = (1.0 + pan) * 0.5 * volume;
             let l = src[0];
             let r = if src_ch >= 2 { src[1] } else { src[0] };
