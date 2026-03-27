@@ -528,6 +528,8 @@ impl HeadlessContext {
 pub trait RenderContext {
     fn create_scene_target(&self, width: u32, height: u32) -> RenderTarget;
     fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline;
+    fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer;
+    fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]);
     fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         data: &T,
@@ -538,6 +540,7 @@ pub trait RenderContext {
         data: &T,
     );
     fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(&mut self, target: &RenderTarget, draw: F);
+    fn create_text_renderer(&self) -> TextRenderer;
 }
 
 impl RenderContext for Context {
@@ -546,6 +549,12 @@ impl RenderContext for Context {
     }
     fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
         self.create_pipeline(desc)
+    }
+    fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
+        self.create_vertex_buffer(data)
+    }
+    fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
+        self.update_vertex_buffer(buf, data)
     }
     fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
@@ -562,6 +571,13 @@ impl RenderContext for Context {
     }
     fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(&mut self, target: &RenderTarget, draw: F) {
         self.render_to_target(target, draw)
+    }
+    fn create_text_renderer(&self) -> TextRenderer {
+        TextRenderer::new_raw(
+            &self.gpu.device,
+            &self.gpu.queue,
+            self.surface_config.format,
+        )
     }
 }
 
@@ -572,6 +588,12 @@ impl RenderContext for HeadlessContext {
     fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
         self.create_pipeline(desc)
     }
+    fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
+        self.create_vertex_buffer(data)
+    }
+    fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
+        self.update_vertex_buffer(buf, data)
+    }
     fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         data: &T,
@@ -587,6 +609,9 @@ impl RenderContext for HeadlessContext {
     }
     fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(&mut self, target: &RenderTarget, draw: F) {
         self.render_to_target(target, draw)
+    }
+    fn create_text_renderer(&self) -> TextRenderer {
+        self.create_text_renderer()
     }
 }
 

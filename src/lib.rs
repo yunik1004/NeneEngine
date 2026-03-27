@@ -15,6 +15,7 @@ pub mod sprite;
 pub mod text;
 pub mod time;
 pub mod tween;
+pub mod ui;
 pub mod window;
 
 pub use nene_derive::uniform;
