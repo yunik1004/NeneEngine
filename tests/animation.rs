@@ -489,7 +489,7 @@ fn load_non_skinned_gltf_is_not_skinned() {
     }"#;
     let path = std::env::temp_dir().join("nene_test_no_skin.gltf");
     std::fs::write(&path, json).unwrap();
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     assert!(!model.is_skinned());
     assert!(!model.is_animated());
 }

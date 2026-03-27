@@ -192,7 +192,7 @@ impl Default for DebugBuffer {
 // ── GPU internals ─────────────────────────────────────────────────────────────
 
 /// Maximum number of line endpoints (vertices) per frame.
-const MAX_VERTS: usize = 65536;
+pub const MAX_DEBUG_VERTS: usize = 65536;
 
 const SHADER: &str = r#"
 struct Uniform { view_proj: mat4x4<f32> }
@@ -264,7 +264,7 @@ impl DebugDraw {
                 pos: [0.0; 3],
                 col: [0.0; 3]
             };
-            MAX_VERTS
+            MAX_DEBUG_VERTS
         ];
         let vbuf = ctx.create_vertex_buffer(&placeholder);
         let uniform_buf = ctx.create_uniform_buffer(&DebugUniform {
@@ -317,7 +317,7 @@ impl DebugDraw {
     /// Call once per frame in `update` after adding all primitives.
     pub fn flush(&mut self, ctx: &Context, view_proj: Mat4) {
         ctx.update_uniform_buffer(&self.uniform_buf, &DebugUniform { view_proj });
-        let count = self.buf.verts.len().min(MAX_VERTS);
+        let count = self.buf.verts.len().min(MAX_DEBUG_VERTS);
         if count > 0 {
             ctx.update_vertex_buffer(&self.vbuf, &self.buf.verts[..count]);
         }

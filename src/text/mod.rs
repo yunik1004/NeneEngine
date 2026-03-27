@@ -1,69 +1,14 @@
+mod atlas;
+
+pub use atlas::ATLAS_SIZE;
+
 use std::collections::HashMap;
 
 use cosmic_text::{Attrs, Buffer, CacheKey, FontSystem, Metrics, Shaping, SwashCache};
 use wgpu::util::DeviceExt;
 
+use atlas::{CachedGlyph, RowPacker, TextEntry, TextVertex};
 use crate::renderer::{Context, RenderPass, Texture};
-
-const ATLAS_SIZE: u32 = 1024;
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct TextVertex {
-    pos: [f32; 2],
-    uv: [f32; 2],
-    color: [f32; 4],
-}
-
-struct CachedGlyph {
-    atlas_x: u32,
-    atlas_y: u32,
-    width: u32,
-    height: u32,
-    offset_x: i32,
-    offset_y: i32,
-}
-
-struct RowPacker {
-    cursor_x: u32,
-    cursor_y: u32,
-    row_height: u32,
-}
-
-impl RowPacker {
-    fn new() -> Self {
-        Self {
-            cursor_x: 0,
-            cursor_y: 0,
-            row_height: 0,
-        }
-    }
-
-    fn alloc(&mut self, w: u32, h: u32) -> Option<(u32, u32)> {
-        if self.cursor_x + w > ATLAS_SIZE {
-            self.cursor_y += self.row_height + 1;
-            self.cursor_x = 0;
-            self.row_height = 0;
-        }
-        if self.cursor_y + h > ATLAS_SIZE {
-            return None;
-        }
-        let pos = (self.cursor_x, self.cursor_y);
-        self.cursor_x += w + 1;
-        if h > self.row_height {
-            self.row_height = h;
-        }
-        Some(pos)
-    }
-}
-
-struct TextEntry {
-    text: String,
-    x: f32,
-    y: f32,
-    size: f32,
-    color: [f32; 4],
-}
 
 /// Renders text using cosmic-text for shaping and a GPU glyph atlas.
 pub struct TextRenderer {
@@ -235,7 +180,6 @@ impl TextRenderer {
             };
 
         // Surface pipeline: declare depth format but always pass (no write, no test).
-        // This matches the main render pass which always has a Depth32Float attachment.
         let depth_disabled = Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth32Float,
             depth_write_enabled: Some(false),
@@ -244,7 +188,6 @@ impl TextRenderer {
             bias: wgpu::DepthBiasState::default(),
         });
         let pipeline = make_pipeline(format, depth_disabled);
-        // Texture pipeline: off-screen pass has no depth attachment.
         let texture_pipeline = make_pipeline(wgpu::TextureFormat::Rgba8UnormSrgb, None);
 
         Self {
@@ -297,7 +240,6 @@ impl TextRenderer {
         let width = cfg.width as f32;
         let height = cfg.height as f32;
 
-        // Update uniform
         queue.write_buffer(
             &self.uniform_buffer,
             0,
@@ -305,7 +247,6 @@ impl TextRenderer {
         );
 
         let mut vertices: Vec<TextVertex> = Vec::new();
-
         let entries: Vec<TextEntry> = std::mem::take(&mut self.pending);
 
         for entry in &entries {
@@ -325,9 +266,7 @@ impl TextRenderer {
                 for glyph in run.glyphs.iter() {
                     let physical = glyph.physical((entry.x, entry.y + run.line_y), 1.0);
                     let cached = self.ensure_glyph(physical.cache_key);
-                    let Some(g) = cached else {
-                        continue;
-                    };
+                    let Some(g) = cached else { continue };
                     if g.width == 0 || g.height == 0 {
                         continue;
                     }
@@ -336,35 +275,16 @@ impl TextRenderer {
                     let gy = (physical.y - g.offset_y) as f32;
                     let gw = g.width as f32;
                     let gh = g.height as f32;
-
                     let u0 = g.atlas_x as f32 / ATLAS_SIZE as f32;
                     let v0 = g.atlas_y as f32 / ATLAS_SIZE as f32;
                     let u1 = (g.atlas_x + g.width) as f32 / ATLAS_SIZE as f32;
                     let v1 = (g.atlas_y + g.height) as f32 / ATLAS_SIZE as f32;
 
                     let c = entry.color;
-                    let tl = TextVertex {
-                        pos: [gx, gy],
-                        uv: [u0, v0],
-                        color: c,
-                    };
-                    let tr = TextVertex {
-                        pos: [gx + gw, gy],
-                        uv: [u1, v0],
-                        color: c,
-                    };
-                    let bl = TextVertex {
-                        pos: [gx, gy + gh],
-                        uv: [u0, v1],
-                        color: c,
-                    };
-                    let br = TextVertex {
-                        pos: [gx + gw, gy + gh],
-                        uv: [u1, v1],
-                        color: c,
-                    };
-
-                    // two triangles
+                    let tl = TextVertex { pos: [gx, gy], uv: [u0, v0], color: c };
+                    let tr = TextVertex { pos: [gx + gw, gy], uv: [u1, v0], color: c };
+                    let bl = TextVertex { pos: [gx, gy + gh], uv: [u0, v1], color: c };
+                    let br = TextVertex { pos: [gx + gw, gy + gh], uv: [u1, v1], color: c };
                     vertices.extend_from_slice(&[tl, tr, bl, tr, br, bl]);
                 }
             }
@@ -407,8 +327,6 @@ impl TextRenderer {
         }
     }
 
-    /// Rasterize a glyph and place it in the atlas if not already cached.
-    /// Returns a reference into `glyph_cache`.
     fn ensure_glyph(&mut self, key: CacheKey) -> Option<&CachedGlyph> {
         if !self.glyph_cache.contains_key(&key) {
             let image = self
@@ -433,7 +351,6 @@ impl TextRenderer {
 
                 let (ax, ay) = self.packer.alloc(w, h)?;
 
-                // Blit glyph pixels into CPU atlas
                 for row in 0..h {
                     for col in 0..w {
                         let src_i = (row * w + col) as usize;
@@ -468,7 +385,6 @@ impl TextRenderer {
         let device = ctx.device();
         let queue = ctx.queue();
 
-        // Per-texture uniform (screen size = texture size)
         let uniform_data = [width as f32, height as f32];
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("text_texture_uniform"),
@@ -497,7 +413,6 @@ impl TextRenderer {
             }],
         });
 
-        // Build vertices
         let entries: Vec<TextEntry> = std::mem::take(&mut self.pending);
         let mut vertices: Vec<TextVertex> = Vec::new();
 
@@ -532,32 +447,15 @@ impl TextRenderer {
                     let u1 = (g.atlas_x + g.width) as f32 / ATLAS_SIZE as f32;
                     let v1 = (g.atlas_y + g.height) as f32 / ATLAS_SIZE as f32;
                     let c = entry.color;
-                    let tl = TextVertex {
-                        pos: [gx, gy],
-                        uv: [u0, v0],
-                        color: c,
-                    };
-                    let tr = TextVertex {
-                        pos: [gx + gw, gy],
-                        uv: [u1, v0],
-                        color: c,
-                    };
-                    let bl = TextVertex {
-                        pos: [gx, gy + gh],
-                        uv: [u0, v1],
-                        color: c,
-                    };
-                    let br = TextVertex {
-                        pos: [gx + gw, gy + gh],
-                        uv: [u1, v1],
-                        color: c,
-                    };
+                    let tl = TextVertex { pos: [gx, gy], uv: [u0, v0], color: c };
+                    let tr = TextVertex { pos: [gx + gw, gy], uv: [u1, v0], color: c };
+                    let bl = TextVertex { pos: [gx, gy + gh], uv: [u0, v1], color: c };
+                    let br = TextVertex { pos: [gx + gw, gy + gh], uv: [u1, v1], color: c };
                     vertices.extend_from_slice(&[tl, tr, bl, tr, br, bl]);
                 }
             }
         }
 
-        // Upload atlas if dirty
         if self.atlas_dirty {
             queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
@@ -581,8 +479,6 @@ impl TextRenderer {
             self.atlas_dirty = false;
         }
 
-        // Create render target
-        // Use Rgba8UnormSrgb to match the format the text pipeline was compiled for.
         let target = crate::renderer::texture::create_render_target(
             device,
             width,
@@ -590,15 +486,13 @@ impl TextRenderer {
             wgpu::TextureFormat::Rgba8UnormSrgb,
             false,
         );
-        let target_view = &target.color_view;
 
-        // Render pass
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("text_to_texture"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: target_view,
+                    view: &target.color_view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {

@@ -30,7 +30,7 @@ use std::time::Instant;
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /// Number of past frames kept for rolling statistics.
-const HISTORY: usize = 128;
+pub const PROFILE_HISTORY: usize = 128;
 
 // ── ScopeGuard ────────────────────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ impl Profiler {
         Self {
             frame_start: None,
             current_scopes: Vec::new(),
-            history: VecDeque::with_capacity(HISTORY),
+            history: VecDeque::with_capacity(PROFILE_HISTORY),
             fps: 0.0,
             frame_ms: 0.0,
             min_ms: 0.0,
@@ -129,7 +129,7 @@ impl Profiler {
             scopes: self.current_scopes.clone(),
         };
 
-        if self.history.len() == HISTORY {
+        if self.history.len() == PROFILE_HISTORY {
             self.history.pop_front();
         }
         self.history.push_back(record);

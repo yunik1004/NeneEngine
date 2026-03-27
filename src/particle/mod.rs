@@ -340,7 +340,7 @@ struct ParticleUniform {
     cam_up: Vec3,
 }
 
-const MAX_PARTICLES: usize = 4096;
+pub const MAX_PARTICLES: usize = 4096;
 
 // ── ParticleSystem (GPU) ──────────────────────────────────────────────────────
 

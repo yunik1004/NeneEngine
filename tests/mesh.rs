@@ -177,7 +177,7 @@ fn mesh_vertex_size() {
 #[test]
 fn load_obj_triangle() {
     let path = write_temp_obj("nene_test_triangle.obj", TRIANGLE_OBJ);
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     assert_eq!(model.meshes.len(), 1);
     let mesh = &model.meshes[0];
     assert_eq!(mesh.vertices.len(), 3);
@@ -187,7 +187,7 @@ fn load_obj_triangle() {
 #[test]
 fn load_obj_quad() {
     let path = write_temp_obj("nene_test_quad.obj", QUAD_OBJ);
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     assert_eq!(model.meshes.len(), 1);
     let mesh = &model.meshes[0];
     assert_eq!(mesh.indices.len(), 6); // 2 triangles
@@ -196,7 +196,7 @@ fn load_obj_quad() {
 #[test]
 fn load_obj_positions_correct() {
     let path = write_temp_obj("nene_test_tri_pos.obj", TRIANGLE_OBJ);
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
 
     let positions: Vec<[f32; 3]> = mesh.vertices.iter().map(|v| v.position).collect();
@@ -210,7 +210,7 @@ fn load_obj_normals_fallback() {
     // OBJ without normals — should default to [0, 1, 0]
     let obj = "v 0.0 0.5 0.0\nv -0.5 -0.5 0.0\nv 0.5 -0.5 0.0\nf 1 2 3\n";
     let path = write_temp_obj("nene_test_no_normals.obj", obj);
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
     for v in &mesh.vertices {
         assert_eq!(v.normal, [0.0, 1.0, 0.0]);
@@ -222,7 +222,7 @@ fn load_obj_uv_fallback() {
     // OBJ without UVs — should default to [0, 0]
     let obj = "v 0.0 0.5 0.0\nv -0.5 -0.5 0.0\nv 0.5 -0.5 0.0\nf 1 2 3\n";
     let path = write_temp_obj("nene_test_no_uvs.obj", obj);
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
     for v in &mesh.vertices {
         assert_eq!(v.uv, [0.0, 0.0]);
@@ -244,14 +244,14 @@ v  0.5 -0.5 1.0
 f 4 5 6
 ";
     let path = write_temp_obj("nene_test_multi_mesh.obj", obj);
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     assert_eq!(model.meshes.len(), 2);
 }
 
 #[test]
 fn load_gltf_triangle() {
     let path = write_triangle_gltf("nene_test_triangle.gltf");
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     assert_eq!(model.meshes.len(), 1);
     let mesh = &model.meshes[0];
     assert_eq!(mesh.vertices.len(), 3);
@@ -261,7 +261,7 @@ fn load_gltf_triangle() {
 #[test]
 fn load_gltf_positions_correct() {
     let path = write_triangle_gltf("nene_test_tri_pos.gltf");
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
     let positions: Vec<[f32; 3]> = mesh.vertices.iter().map(|v| v.position).collect();
     assert!(positions.contains(&[-0.5, -0.5, 0.0]));
@@ -272,7 +272,7 @@ fn load_gltf_positions_correct() {
 #[test]
 fn load_gltf_normals_correct() {
     let path = write_triangle_gltf("nene_test_tri_normals.gltf");
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
     for v in &mesh.vertices {
         assert_eq!(v.normal, [0.0, 0.0, 1.0]);
@@ -283,7 +283,7 @@ fn load_gltf_normals_correct() {
 fn load_gltf_uv_fallback() {
     // Our test glTF has no UVs — should default to [0, 0]
     let path = write_triangle_gltf("nene_test_tri_uv.gltf");
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
     for v in &mesh.vertices {
         assert_eq!(v.uv, [0.0, 0.0]);
@@ -293,7 +293,7 @@ fn load_gltf_uv_fallback() {
 #[test]
 fn load_gltf_indices_correct() {
     let path = write_triangle_gltf("nene_test_tri_idx.gltf");
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
     assert_eq!(mesh.indices, vec![0, 1, 2]);
 }
@@ -301,28 +301,28 @@ fn load_gltf_indices_correct() {
 #[test]
 fn load_obj_transform_is_identity() {
     let path = write_temp_obj("nene_test_obj_transform.obj", TRIANGLE_OBJ);
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     assert_eq!(model.meshes[0].transform, Mat4::IDENTITY);
 }
 
 #[test]
 fn load_obj_no_base_color() {
     let path = write_temp_obj("nene_test_obj_color.obj", TRIANGLE_OBJ);
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     assert!(model.meshes[0].base_color.is_none());
 }
 
 #[test]
 fn load_gltf_transform_is_identity() {
     let path = write_triangle_gltf("nene_test_gltf_identity.gltf");
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     assert_eq!(model.meshes[0].transform, Mat4::IDENTITY);
 }
 
 #[test]
 fn load_gltf_transform_node_translation() {
     let path = write_translated_gltf("nene_test_gltf_translated.gltf");
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     let t = model.meshes[0].transform;
     // translation column should be (1, 2, 3, 1)
     assert_eq!(t.w_axis.x, 1.0);
@@ -333,7 +333,7 @@ fn load_gltf_transform_node_translation() {
 #[test]
 fn load_gltf_no_base_color() {
     let path = write_triangle_gltf("nene_test_gltf_no_tex.gltf");
-    let model = Model::load(&path);
+    let model = Model::load(&path).unwrap();
     assert!(model.meshes[0].base_color.is_none());
 }
 

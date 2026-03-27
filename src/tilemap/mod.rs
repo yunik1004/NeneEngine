@@ -304,7 +304,7 @@ impl TileMap {
 
 /// Maximum number of tiles rendered per layer per frame.
 /// Pre-allocates this many quads worth of vertex/index data.
-const MAX_VISIBLE_TILES: usize = 4096;
+pub const MAX_VISIBLE_TILES: usize = 4096;
 
 /// GPU renderer for a [`TileMap`] with per-frame view culling.
 ///

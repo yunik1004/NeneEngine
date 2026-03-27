@@ -30,13 +30,7 @@ pub struct ColliderHandle(r::ColliderHandle);
 
 // ── BodyType ──────────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum RigidBodyType {
-    Dynamic,
-    Fixed,
-    KinematicPositionBased,
-    KinematicVelocityBased,
-}
+pub use super::common::RigidBodyType;
 
 impl From<r::RigidBodyType> for RigidBodyType {
     fn from(t: r::RigidBodyType) -> Self {

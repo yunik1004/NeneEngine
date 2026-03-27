@@ -206,7 +206,7 @@ fn init_3d(ctx: &mut Context) -> State3D {
 
     let path = std::env::temp_dir().join("nene_physics_cube.obj");
     std::fs::write(&path, CUBE_OBJ).unwrap();
-    let model = Model::load(&path);
+    let model = Model::load(&path).expect("failed to load model");
     let mesh = &model.meshes[0];
 
     let cfg = ctx.surface_config();

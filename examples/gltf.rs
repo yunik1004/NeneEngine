@@ -147,7 +147,7 @@ fn white_texture(ctx: &mut Context) -> Texture {
 }
 
 fn init(ctx: &mut Context, path: &str) -> State {
-    let model = Model::load(path);
+    let model = Model::load(path).expect("failed to load model");
 
     let ambient = AmbientLight::new(Vec3::ONE, 0.15);
     let directional =

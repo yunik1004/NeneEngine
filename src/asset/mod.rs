@@ -147,7 +147,7 @@ impl Assets {
         if let Some(h) = self.models.get(&key) {
             return h.clone();
         }
-        let model = Model::load(&key);
+        let model = Model::load(&key).expect("failed to load model");
         let handle = Handle::new(model);
         self.models.insert(key, handle.clone());
         handle

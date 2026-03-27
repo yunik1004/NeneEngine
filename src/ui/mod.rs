@@ -172,8 +172,8 @@ struct TextCmd {
 
 // ── Max quads ─────────────────────────────────────────────────────────────────
 
-const MAX_QUADS: usize = 4096;
-const MAX_VERTS: usize = MAX_QUADS * 6;
+pub const MAX_UI_QUADS: usize = 4096;
+const MAX_VERTS: usize = MAX_UI_QUADS * 6;
 
 // ── Ui ────────────────────────────────────────────────────────────────────────
 
