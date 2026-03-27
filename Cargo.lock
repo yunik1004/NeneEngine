@@ -1828,6 +1828,8 @@ dependencies = [
  "pollster",
  "rapier2d",
  "rapier3d",
+ "serde",
+ "serde_json",
  "symphonia",
  "tobj",
  "wgpu",
