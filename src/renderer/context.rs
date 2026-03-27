@@ -5,7 +5,7 @@ use winit::window::Window;
 use super::shadow::{self, ShadowMap};
 use super::texture::{self, FilterMode, RenderTarget, Texture};
 use super::uniform;
-use super::{IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer};
+use super::{IndexBuffer, InstanceBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer};
 use crate::text::TextRenderer;
 
 fn create_instance() -> wgpu::Instance {
@@ -37,6 +37,22 @@ impl GpuDevice {
     }
 
     pub fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
+        self.queue
+            .write_buffer(&buf.inner, 0, bytemuck::cast_slice(data));
+    }
+
+    pub fn create_instance_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> InstanceBuffer {
+        let inner = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None,
+                contents: bytemuck::cast_slice(data),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            });
+        InstanceBuffer { inner, count: data.len() as u32 }
+    }
+
+    pub fn update_instance_buffer<T: bytemuck::Pod>(&self, buf: &InstanceBuffer, data: &[T]) {
         self.queue
             .write_buffer(&buf.inner, 0, bytemuck::cast_slice(data));
     }
@@ -187,7 +203,7 @@ impl GpuDevice {
                 immediate_size: 0,
             });
 
-        let attributes: Vec<wgpu::VertexAttribute> = desc
+        let vert_attrs: Vec<wgpu::VertexAttribute> = desc
             .vertex_layout
             .attributes
             .into_iter()
@@ -198,11 +214,39 @@ impl GpuDevice {
             })
             .collect();
 
-        let vertex_buffer_layout = wgpu::VertexBufferLayout {
+        // Per-instance attributes (empty when no instance layout is specified).
+        let inst_attrs: Vec<wgpu::VertexAttribute> = desc
+            .instance_layout
+            .as_ref()
+            .map(|il| {
+                il.attributes
+                    .iter()
+                    .map(|a| wgpu::VertexAttribute {
+                        offset: a.offset,
+                        shader_location: a.location,
+                        format: a.format.into(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let vert_buf_layout = wgpu::VertexBufferLayout {
             array_stride: desc.vertex_layout.stride,
             step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &attributes,
+            attributes: &vert_attrs,
         };
+
+        let mut vb_layouts: Vec<wgpu::VertexBufferLayout> = vec![];
+        if !desc.fullscreen {
+            vb_layouts.push(vert_buf_layout);
+            if let Some(ref il) = desc.instance_layout {
+                vb_layouts.push(wgpu::VertexBufferLayout {
+                    array_stride: il.stride,
+                    step_mode: wgpu::VertexStepMode::Instance,
+                    attributes: &inst_attrs,
+                });
+            }
+        }
 
         let color_target = Some(wgpu::ColorTargetState {
             format: color_format,
@@ -259,11 +303,7 @@ impl GpuDevice {
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some(desc.vertex_entry),
-                    buffers: if desc.fullscreen {
-                        &[]
-                    } else {
-                        std::slice::from_ref(&vertex_buffer_layout)
-                    },
+                    buffers: &vb_layouts,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: if desc.depth_only {
@@ -316,6 +356,14 @@ impl HeadlessContext {
 
     pub fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
         self.gpu.update_vertex_buffer(buf, data)
+    }
+
+    pub fn create_instance_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> InstanceBuffer {
+        self.gpu.create_instance_buffer(data)
+    }
+
+    pub fn update_instance_buffer<T: bytemuck::Pod>(&self, buf: &InstanceBuffer, data: &[T]) {
+        self.gpu.update_instance_buffer(buf, data)
     }
 
     pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
@@ -602,6 +650,14 @@ impl Context {
 
     pub fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
         self.gpu.update_vertex_buffer(buf, data)
+    }
+
+    pub fn create_instance_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> InstanceBuffer {
+        self.gpu.create_instance_buffer(data)
+    }
+
+    pub fn update_instance_buffer<T: bytemuck::Pod>(&self, buf: &InstanceBuffer, data: &[T]) {
+        self.gpu.update_instance_buffer(buf, data)
     }
 
     pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {

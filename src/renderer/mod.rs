@@ -7,7 +7,7 @@ pub mod shadow;
 pub mod texture;
 mod uniform;
 
-pub use buffer::{IndexBuffer, VertexBuffer};
+pub use buffer::{IndexBuffer, InstanceBuffer, VertexBuffer};
 pub use context::{Context, HeadlessContext, RenderContext};
 pub use pass::RenderPass;
 pub use pipeline::{Pipeline, PipelineDescriptor, VertexAttribute, VertexFormat, VertexLayout};

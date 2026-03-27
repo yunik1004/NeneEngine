@@ -1,4 +1,4 @@
-use super::{IndexBuffer, Pipeline, ShadowMap, Texture, UniformBuffer, VertexBuffer};
+use super::{IndexBuffer, InstanceBuffer, Pipeline, ShadowMap, Texture, UniformBuffer, VertexBuffer};
 
 pub struct RenderPass<'a> {
     pub(crate) inner: wgpu::RenderPass<'a>,
@@ -57,6 +57,30 @@ impl<'a> RenderPass<'a> {
         self.inner
             .set_index_buffer(slice, wgpu::IndexFormat::Uint32);
         self.inner.draw_indexed(0..count, 0, 0..1);
+    }
+
+    /// Bind a per-instance vertex buffer at `slot` (typically slot 1).
+    pub fn set_instance_buffer(&mut self, slot: u32, buffer: &InstanceBuffer) {
+        let slice = unsafe {
+            std::mem::transmute::<wgpu::BufferSlice<'_>, wgpu::BufferSlice<'a>>(
+                buffer.inner.slice(..),
+            )
+        };
+        self.inner.set_vertex_buffer(slot, slice);
+    }
+
+    /// Draw indexed geometry with `instance_count` instances.
+    ///
+    /// Call [`set_instance_buffer`](Self::set_instance_buffer) before this.
+    pub fn draw_indexed_instanced(&mut self, indices: &IndexBuffer, instance_count: u32) {
+        let slice = unsafe {
+            std::mem::transmute::<wgpu::BufferSlice<'_>, wgpu::BufferSlice<'a>>(
+                indices.inner.slice(..),
+            )
+        };
+        self.inner
+            .set_index_buffer(slice, wgpu::IndexFormat::Uint32);
+        self.inner.draw_indexed(0..indices.count, 0, 0..instance_count);
     }
 
     pub fn set_shadow_map(&mut self, group: u32, shadow_map: &ShadowMap) {

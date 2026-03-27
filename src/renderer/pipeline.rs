@@ -16,6 +16,11 @@ pub struct PipelineDescriptor<'a> {
     pub depth_only: bool,
     /// Fullscreen-triangle pass: no vertex buffers, no depth stencil.
     pub fullscreen: bool,
+    /// Optional per-instance vertex buffer layout (slot 1).
+    ///
+    /// Use [`VertexLayout::at_locations`] to shift instance attribute
+    /// locations past the per-vertex attributes.
+    pub instance_layout: Option<VertexLayout>,
 }
 
 impl<'a> PipelineDescriptor<'a> {
@@ -32,6 +37,7 @@ impl<'a> PipelineDescriptor<'a> {
             use_shadow_map: false,
             depth_only: false,
             fullscreen: false,
+            instance_layout: None,
         }
     }
 
@@ -54,7 +60,25 @@ impl<'a> PipelineDescriptor<'a> {
             use_shadow_map: false,
             depth_only: false,
             fullscreen: true,
+            instance_layout: None,
         }
+    }
+
+    /// Add a per-instance vertex buffer at slot 1.
+    ///
+    /// Use [`VertexLayout::at_locations`] to shift instance attribute
+    /// locations past the per-vertex attributes before passing the layout:
+    ///
+    /// ```no_run
+    /// # use nene::renderer::{PipelineDescriptor, VertexLayout};
+    /// # fn demo(vl: VertexLayout, il: VertexLayout) -> PipelineDescriptor<'static> {
+    /// PipelineDescriptor::new("/* shader */", vl)
+    ///     .with_instance_layout(il.at_locations(2))
+    /// # }
+    /// ```
+    pub fn with_instance_layout(mut self, layout: VertexLayout) -> Self {
+        self.instance_layout = Some(layout);
+        self
     }
 
     pub fn with_alpha_blend(mut self) -> Self {
@@ -97,6 +121,24 @@ impl<'a> PipelineDescriptor<'a> {
 pub struct VertexLayout {
     pub stride: u64,
     pub attributes: Vec<VertexAttribute>,
+}
+
+impl VertexLayout {
+    /// Shift all attribute shader locations by `base`.
+    ///
+    /// Use this when binding an instance buffer whose attributes must start
+    /// at a higher location than the per-vertex attributes:
+    ///
+    /// ```no_run
+    /// // Per-vertex uses locations 0, 1.  Instance data starts at 2.
+    /// // InstanceData::layout().at_locations(2)
+    /// ```
+    pub fn at_locations(mut self, base: u32) -> Self {
+        for attr in &mut self.attributes {
+            attr.location += base;
+        }
+        self
+    }
 }
 
 pub struct VertexAttribute {
