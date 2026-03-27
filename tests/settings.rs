@@ -1,5 +1,5 @@
 use nene::settings::Settings;
-use serde::{Deserialize, Serialize};
+use nene::{Deserialize, Serialize};
 
 fn tmp(name: &str) -> Settings {
     let path = std::env::temp_dir().join(format!("nene_settings_{name}.json"));

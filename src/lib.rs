@@ -9,6 +9,7 @@ pub mod input;
 pub mod light;
 pub mod math;
 pub mod mesh;
+pub mod net;
 pub mod particle;
 pub mod pathfinding;
 pub mod physics;
@@ -25,8 +26,11 @@ pub mod tween;
 pub mod ui;
 pub mod window;
 
+pub use nene_derive::net_message;
 pub use nene_derive::uniform;
 pub use nene_derive::vertex;
+pub use serde;
+pub use serde::{Deserialize, Serialize};
 
 #[doc(hidden)]
 pub use encase as __encase;

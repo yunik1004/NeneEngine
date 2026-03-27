@@ -1,5 +1,5 @@
 use nene::save::SaveStore;
-use serde::{Deserialize, Serialize};
+use nene::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

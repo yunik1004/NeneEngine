@@ -9,6 +9,7 @@
 //!
 //! Save files are written to "./saves/" relative to the working directory.
 
+use nene::{Deserialize, Serialize};
 use nene::{
     input::{Input, Key},
     renderer::{Context, RenderPass},
@@ -16,7 +17,6 @@ use nene::{
     ui::Ui,
     window::{Config, Window},
 };
-use serde::{Deserialize, Serialize};
 
 const W: u32 = 600;
 const H: u32 = 400;
