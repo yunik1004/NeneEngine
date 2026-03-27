@@ -16,6 +16,8 @@ pub struct PipelineDescriptor<'a> {
     pub depth_only: bool,
     /// Fullscreen-triangle pass: no vertex buffers, no depth stencil.
     pub fullscreen: bool,
+    /// Render lines instead of triangles (`LineList` topology).
+    pub line_topology: bool,
     /// Optional per-instance vertex buffer layout (slot 1).
     ///
     /// Use [`VertexLayout::at_locations`] to shift instance attribute
@@ -37,6 +39,7 @@ impl<'a> PipelineDescriptor<'a> {
             use_shadow_map: false,
             depth_only: false,
             fullscreen: false,
+            line_topology: false,
             instance_layout: None,
         }
     }
@@ -60,6 +63,7 @@ impl<'a> PipelineDescriptor<'a> {
             use_shadow_map: false,
             depth_only: false,
             fullscreen: true,
+            line_topology: false,
             instance_layout: None,
         }
     }
@@ -103,6 +107,12 @@ impl<'a> PipelineDescriptor<'a> {
     /// uniform bindings (e.g. scene + joint matrices).
     pub fn with_uniform(mut self) -> Self {
         self.uniform_count += 1;
+        self
+    }
+
+    /// Use `LineList` topology — draw lines instead of triangles.
+    pub fn with_lines(mut self) -> Self {
+        self.line_topology = true;
         self
     }
 

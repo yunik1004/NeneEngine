@@ -2,6 +2,7 @@ pub mod animation;
 pub mod asset;
 pub mod audio;
 pub mod camera;
+pub mod debug;
 pub mod input;
 pub mod light;
 pub mod math;

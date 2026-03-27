@@ -322,7 +322,14 @@ impl GpuDevice {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     })
                 },
-                primitive: wgpu::PrimitiveState::default(),
+                primitive: wgpu::PrimitiveState {
+                    topology: if desc.line_topology {
+                        wgpu::PrimitiveTopology::LineList
+                    } else {
+                        wgpu::PrimitiveTopology::TriangleList
+                    },
+                    ..Default::default()
+                },
                 depth_stencil,
                 multisample: wgpu::MultisampleState::default(),
                 multiview_mask: None,
