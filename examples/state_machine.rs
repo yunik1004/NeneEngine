@@ -1,6 +1,6 @@
 //! Animation state machine demo — three clips, crossfade on Space.
 //!
-//! Procedural 7-joint serpent (same mesh as `animation`).
+//! Procedural 7-joint serpent with skeletal animation.
 //!
 //! States
 //! ──────
