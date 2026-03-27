@@ -1,4 +1,4 @@
-use nene::pathfinding::{find_path, tile_to_world, world_to_tile};
+use nene::pathfinding::{TileMapGraph, find_path, tile_to_world, world_to_tile};
 use nene::tilemap::TileMap;
 
 fn empty(cols: u32, rows: u32) -> TileMap {
@@ -14,19 +14,27 @@ fn walled(cols: u32, rows: u32) -> TileMap {
     map
 }
 
+fn path4(map: &TileMap, start: (u32, u32), goal: (u32, u32)) -> Option<Vec<(u32, u32)>> {
+    find_path(&TileMapGraph::new(map, false), start, goal)
+}
+
+fn path8(map: &TileMap, start: (u32, u32), goal: (u32, u32)) -> Option<Vec<(u32, u32)>> {
+    find_path(&TileMapGraph::new(map, true), start, goal)
+}
+
 // ── Basic ─────────────────────────────────────────────────────────────────────
 
 #[test]
 fn same_start_goal() {
     let map = empty(10, 10);
-    let path = find_path(&map, (2, 2), (2, 2), false).unwrap();
+    let path = path4(&map, (2, 2), (2, 2)).unwrap();
     assert_eq!(path, vec![(2, 2)]);
 }
 
 #[test]
 fn adjacent_step() {
     let map = empty(10, 10);
-    let path = find_path(&map, (0, 0), (1, 0), false).unwrap();
+    let path = path4(&map, (0, 0), (1, 0)).unwrap();
     assert_eq!(path.len(), 2);
     assert_eq!(path[0], (0, 0));
     assert_eq!(path[path.len() - 1], (1, 0));
@@ -35,8 +43,8 @@ fn adjacent_step() {
 #[test]
 fn straight_line_4dir() {
     let map = empty(10, 10);
-    let path = find_path(&map, (0, 0), (5, 0), false).unwrap();
-    assert_eq!(path.len(), 6); // 0..5 inclusive
+    let path = path4(&map, (0, 0), (5, 0)).unwrap();
+    assert_eq!(path.len(), 6);
     assert_eq!(path[0], (0, 0));
     assert_eq!(path[5], (5, 0));
 }
@@ -44,25 +52,24 @@ fn straight_line_4dir() {
 #[test]
 fn no_path_blocked() {
     let mut map = TileMap::new(6, 1);
-    // Full vertical barrier
     for r in 0..1u32 {
         map.set_solid(3, r, true);
     }
-    assert!(find_path(&map, (0, 0), (5, 0), false).is_none());
+    assert!(path4(&map, (0, 0), (5, 0)).is_none());
 }
 
 #[test]
 fn blocked_start_returns_none() {
     let mut map = empty(10, 10);
     map.set_solid(0, 0, true);
-    assert!(find_path(&map, (0, 0), (5, 5), false).is_none());
+    assert!(path4(&map, (0, 0), (5, 5)).is_none());
 }
 
 #[test]
 fn blocked_goal_returns_none() {
     let mut map = empty(10, 10);
     map.set_solid(5, 5, true);
-    assert!(find_path(&map, (0, 0), (5, 5), false).is_none());
+    assert!(path4(&map, (0, 0), (5, 5)).is_none());
 }
 
 // ── Wall avoidance ────────────────────────────────────────────────────────────
@@ -70,12 +77,10 @@ fn blocked_goal_returns_none() {
 #[test]
 fn goes_around_wall_4dir() {
     let map = walled(10, 10);
-    let path = find_path(&map, (0, 0), (5, 0), false).unwrap();
+    let path = path4(&map, (0, 0), (5, 0)).unwrap();
     assert_eq!(path[0], (0, 0));
     assert_eq!(path[path.len() - 1], (5, 0));
-    // Path must go through the gap at row 5
     assert!(path.iter().any(|&(_, r)| r >= 5));
-    // No step should be on a solid tile
     for &(c, r) in &path {
         assert!(!map.is_solid(c, r), "solid tile in path: ({c},{r})");
     }
@@ -84,7 +89,7 @@ fn goes_around_wall_4dir() {
 #[test]
 fn path_avoids_solid_tiles() {
     let map = walled(10, 10);
-    let path = find_path(&map, (1, 2), (6, 2), false).unwrap();
+    let path = path4(&map, (1, 2), (6, 2)).unwrap();
     for &(c, r) in &path {
         assert!(!map.is_solid(c, r));
     }
@@ -95,21 +100,17 @@ fn path_avoids_solid_tiles() {
 #[test]
 fn diagonal_shorter_than_4dir() {
     let map = empty(10, 10);
-    let p4 = find_path(&map, (0, 0), (4, 4), false).unwrap();
-    let p8 = find_path(&map, (0, 0), (4, 4), true).unwrap();
-    // 4-dir needs 8 steps; 8-dir needs 5 (diagonal straight line)
+    let p4 = path4(&map, (0, 0), (4, 4)).unwrap();
+    let p8 = path8(&map, (0, 0), (4, 4)).unwrap();
     assert!(p8.len() < p4.len());
 }
 
 #[test]
 fn diagonal_no_corner_cutting() {
     let mut map = TileMap::new(5, 5);
-    // Block (1,0) and (0,1) to force corner cutting check from (0,0) to (1,1)
     map.set_solid(1, 0, true);
     map.set_solid(0, 1, true);
-    // (0,0) -> (1,1) diagonal should be blocked since both cardinal neighbors are solid
-    let result = find_path(&map, (0, 0), (1, 1), true);
-    // Either no path, or path goes around (longer than 2 steps)
+    let result = path8(&map, (0, 0), (1, 1));
     if let Some(p) = result {
         assert!(p.len() > 2);
     }
@@ -118,7 +119,7 @@ fn diagonal_no_corner_cutting() {
 #[test]
 fn diagonal_path_valid_tiles() {
     let map = empty(10, 10);
-    let path = find_path(&map, (0, 0), (5, 5), true).unwrap();
+    let path = path8(&map, (0, 0), (5, 5)).unwrap();
     for &(c, r) in &path {
         assert!(!map.is_solid(c, r));
     }
@@ -129,8 +130,33 @@ fn diagonal_path_valid_tiles() {
 #[test]
 fn out_of_bounds_start_returns_none() {
     let map = empty(5, 5);
-    // (10, 10) is out of bounds — is_solid returns true for OOB
-    assert!(find_path(&map, (10, 10), (0, 0), false).is_none());
+    assert!(path4(&map, (10, 10), (0, 0)).is_none());
+}
+
+// ── Custom graph ──────────────────────────────────────────────────────────────
+
+use nene::pathfinding::PathGraph;
+
+struct Chain(u32); // nodes 0..n, each connects to next
+impl PathGraph for Chain {
+    type Node = u32;
+    fn neighbors(&self, &n: &u32) -> Vec<u32> {
+        if n + 1 < self.0 { vec![n + 1] } else { vec![] }
+    }
+    fn heuristic(&self, &a: &u32, &b: &u32) -> u32 {
+        b.saturating_sub(a)
+    }
+}
+
+#[test]
+fn custom_graph_finds_path() {
+    let path = find_path(&Chain(10), 0u32, 5).unwrap();
+    assert_eq!(path, vec![0, 1, 2, 3, 4, 5]);
+}
+
+#[test]
+fn custom_graph_no_path() {
+    assert!(find_path(&Chain(10), 5u32, 0).is_none()); // one-directional chain
 }
 
 // ── Coordinate conversion ─────────────────────────────────────────────────────
@@ -145,15 +171,15 @@ fn tile_to_world_center() {
 #[test]
 fn world_to_tile_basic() {
     let map = empty(10, 10);
-    let t = world_to_tile(1.5, -1.5, 1.0, &map).unwrap();
+    let t = world_to_tile(1.5, -1.5, 1.0, map.cols, map.rows).unwrap();
     assert_eq!(t, (1, 1));
 }
 
 #[test]
 fn world_to_tile_out_of_bounds() {
     let map = empty(5, 5);
-    assert!(world_to_tile(-1.0, 0.0, 1.0, &map).is_none());
-    assert!(world_to_tile(0.0, 1.0, 1.0, &map).is_none()); // positive y = above row 0
+    assert!(world_to_tile(-1.0, 0.0, 1.0, map.cols, map.rows).is_none());
+    assert!(world_to_tile(0.0, 1.0, 1.0, map.cols, map.rows).is_none());
 }
 
 #[test]
@@ -163,7 +189,7 @@ fn roundtrip_tile_world() {
     for col in 0..5u32 {
         for row in 0..5u32 {
             let (wx, wy) = tile_to_world(col, row, tile_size);
-            let back = world_to_tile(wx, wy, tile_size, &map).unwrap();
+            let back = world_to_tile(wx, wy, tile_size, map.cols, map.rows).unwrap();
             assert_eq!(back, (col, row));
         }
     }

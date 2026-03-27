@@ -12,7 +12,7 @@
 
 use nene::{
     input::{Input, Key, MouseButton},
-    pathfinding::find_path,
+    pathfinding::{TileMapGraph, find_path},
     renderer::{Context, FilterMode, RenderPass, Texture},
     tilemap::{TileMap, TileMapRenderer, TileSet},
     ui::Ui,
@@ -160,7 +160,7 @@ fn init(ctx: &mut Context) -> State {
     let start = (1, 1);
     let goal = (COLS - 2, ROWS - 2);
 
-    let path = find_path(&map, start, goal, false);
+    let path = find_path(&TileMapGraph::new(&map, false), start, goal);
 
     let mut state = State {
         map,
@@ -276,7 +276,11 @@ fn handle_input(state: &mut State, input: &Input) {
     }
 
     if changed {
-        state.path = find_path(&state.map, state.start, state.goal, state.diagonal);
+        state.path = find_path(
+            &TileMapGraph::new(&state.map, state.diagonal),
+            state.start,
+            state.goal,
+        );
         rebuild_overlay(state);
     }
 }

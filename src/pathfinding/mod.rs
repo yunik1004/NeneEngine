@@ -1,169 +1,128 @@
-//! A* pathfinding on tile maps.
+//! A* pathfinding on any graph that implements [`PathGraph`].
 //!
 //! # Quick start
+//!
+//! ## Tile map
 //! ```no_run
-//! use nene::pathfinding::find_path;
+//! use nene::pathfinding::{find_path, TileMapGraph};
 //! use nene::tilemap::TileMap;
 //!
 //! let mut map = TileMap::new(10, 10);
 //! map.set_solid(3, 0, true);
-//! map.set_solid(3, 1, true);
-//! map.set_solid(3, 2, true);
 //!
-//! // 4-directional path from (0,0) to (5,0)
-//! let path = find_path(&map, (0, 0), (5, 0), false);
+//! // 4-directional
+//! let path = find_path(&TileMapGraph::new(&map, false), (0u32, 0u32), (5, 0));
 //!
-//! // 8-directional (diagonal movement allowed)
-//! let path_diag = find_path(&map, (0, 0), (5, 5), true);
+//! // 8-directional
+//! let path = find_path(&TileMapGraph::new(&map, true), (0u32, 0u32), (5, 5));
+//! ```
+//!
+//! ## Custom graph (any node type)
+//! ```no_run
+//! use nene::pathfinding::{PathGraph, find_path};
+//!
+//! struct RoomGraph;
+//! impl PathGraph for RoomGraph {
+//!     type Node = &'static str;
+//!     fn neighbors(&self, node: &Self::Node) -> Vec<Self::Node> {
+//!         match *node {
+//!             "hall"    => vec!["kitchen", "bedroom"],
+//!             "kitchen" => vec!["hall"],
+//!             "bedroom" => vec!["hall"],
+//!             _         => vec![],
+//!         }
+//!     }
+//!     fn heuristic(&self, _: &Self::Node, _: &Self::Node) -> u32 { 0 }
+//! }
+//!
+//! let path = find_path(&RoomGraph, "hall", "bedroom");
 //! ```
 
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
+use std::hash::Hash;
 
 use crate::tilemap::TileMap;
 
-// ── Node ──────────────────────────────────────────────────────────────────────
+// ── PathGraph ─────────────────────────────────────────────────────────────────
 
-#[derive(Eq, PartialEq)]
-struct Node {
-    /// f = g + h
-    f: u32,
-    g: u32,
-    pos: (u32, u32),
+/// A graph that A* can search.
+///
+/// `Node` can be anything hashable — `(u32, u32)` tile coords,
+/// `(i32, i32, i32)` voxel coords, a waypoint index, a string label, etc.
+pub trait PathGraph {
+    type Node: Eq + Hash + Clone;
+
+    /// All nodes reachable from `node` in one step.
+    fn neighbors(&self, node: &Self::Node) -> Vec<Self::Node>;
+
+    /// Admissible lower-bound cost estimate from `from` to `to`.
+    /// Return `0` for Dijkstra-style behaviour.
+    fn heuristic(&self, from: &Self::Node, to: &Self::Node) -> u32;
 }
 
-// Min-heap: smaller f = higher priority.
-impl Ord for Node {
+// ── Internal heap entry ───────────────────────────────────────────────────────
+
+struct HeapNode<N> {
+    f: u32,
+    g: u32,
+    pos: N,
+}
+
+impl<N: Eq> Eq for HeapNode<N> {}
+impl<N: Eq> PartialEq for HeapNode<N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.f == other.f && self.g == other.g
+    }
+}
+impl<N: Eq> Ord for HeapNode<N> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         other.f.cmp(&self.f).then_with(|| other.g.cmp(&self.g))
     }
 }
-impl PartialOrd for Node {
+impl<N: Eq> PartialOrd for HeapNode<N> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-// ── Heuristic ─────────────────────────────────────────────────────────────────
-
-fn heuristic(a: (u32, u32), b: (u32, u32), diagonal: bool) -> u32 {
-    let dx = a.0.abs_diff(b.0);
-    let dy = a.1.abs_diff(b.1);
-    if diagonal {
-        // Chebyshev distance (each step costs 1, diagonal = 1 too).
-        dx.max(dy)
-    } else {
-        // Manhattan distance.
-        dx + dy
-    }
-}
-
-// ── Neighbors ─────────────────────────────────────────────────────────────────
-
-fn neighbors(pos: (u32, u32), map: &TileMap, diagonal: bool) -> impl Iterator<Item = (u32, u32)> {
-    let (col, row) = pos;
-    let cols = map.cols;
-    let rows = map.rows;
-
-    // Cardinal + optionally diagonal offsets.
-    let offsets: &[(i32, i32)] = if diagonal {
-        &[
-            (-1, 0),
-            (1, 0),
-            (0, -1),
-            (0, 1),
-            (-1, -1),
-            (1, -1),
-            (-1, 1),
-            (1, 1),
-        ]
-    } else {
-        &[(-1, 0), (1, 0), (0, -1), (0, 1)]
-    };
-
-    offsets
-        .iter()
-        .filter_map(move |&(dc, dr)| {
-            let nc = col as i32 + dc;
-            let nr = row as i32 + dr;
-            if nc < 0 || nr < 0 || nc >= cols as i32 || nr >= rows as i32 {
-                return None;
-            }
-            let nc = nc as u32;
-            let nr = nr as u32;
-            if map.is_solid(nc, nr) {
-                return None;
-            }
-            // For diagonals, block if both cardinal neighbors are solid (corner cutting).
-            if dc != 0 && dr != 0 {
-                let horiz_solid = map.is_solid((col as i32 + dc) as u32, row);
-                let vert_solid = map.is_solid(col, (row as i32 + dr) as u32);
-                if horiz_solid || vert_solid {
-                    return None;
-                }
-            }
-            Some((nc, nr))
-        })
-        .collect::<Vec<_>>()
-        .into_iter()
-}
-
 // ── A* ────────────────────────────────────────────────────────────────────────
 
-/// Find the shortest path between two tile coordinates using A*.
+/// Find the shortest path on any [`PathGraph`].
 ///
-/// - `start` / `goal` — `(col, row)` tile coordinates.
-/// - `diagonal` — when `true`, 8-directional movement is allowed;
-///   when `false`, only 4-directional (cardinal) movement is used.
-///
-/// Returns the path as a `Vec<(col, row)>` **including both endpoints**, or
-/// `None` if no path exists (blocked, out-of-bounds, or start == goal with no
-/// solid tiles in the way — which returns `Some(vec![start])`).
-///
-/// Out-of-bounds cells and solid cells are treated as impassable.
-pub fn find_path(
-    map: &TileMap,
-    start: (u32, u32),
-    goal: (u32, u32),
-    diagonal: bool,
-) -> Option<Vec<(u32, u32)>> {
-    if map.is_solid(start.0, start.1) || map.is_solid(goal.0, goal.1) {
-        return None;
-    }
+/// Returns `Vec<Node>` including both endpoints, or `None` if unreachable.
+/// Returns `Some(vec![start])` when `start == goal`.
+pub fn find_path<G: PathGraph>(graph: &G, start: G::Node, goal: G::Node) -> Option<Vec<G::Node>> {
     if start == goal {
         return Some(vec![start]);
     }
 
-    let mut open = BinaryHeap::new();
-    // g_score: best known cost to reach each node.
-    let mut g_score: HashMap<(u32, u32), u32> = HashMap::new();
-    // came_from: for path reconstruction.
-    let mut came_from: HashMap<(u32, u32), (u32, u32)> = HashMap::new();
+    let mut open: BinaryHeap<HeapNode<G::Node>> = BinaryHeap::new();
+    let mut g_score: HashMap<G::Node, u32> = HashMap::new();
+    let mut came_from: HashMap<G::Node, G::Node> = HashMap::new();
 
-    g_score.insert(start, 0);
-    open.push(Node {
-        f: heuristic(start, goal, diagonal),
+    g_score.insert(start.clone(), 0);
+    open.push(HeapNode {
+        f: graph.heuristic(&start, &goal),
         g: 0,
         pos: start,
     });
 
-    while let Some(Node { g, pos, .. }) = open.pop() {
+    while let Some(HeapNode { g, pos, .. }) = open.pop() {
         if pos == goal {
             return Some(reconstruct(came_from, pos));
         }
-
-        // Skip if we've already found a better path.
         if g > *g_score.get(&pos).unwrap_or(&u32::MAX) {
             continue;
         }
-
-        for nb in neighbors(pos, map, diagonal) {
+        for nb in graph.neighbors(&pos) {
             let tentative_g = g + 1;
             if tentative_g < *g_score.get(&nb).unwrap_or(&u32::MAX) {
-                g_score.insert(nb, tentative_g);
-                came_from.insert(nb, pos);
-                open.push(Node {
-                    f: tentative_g + heuristic(nb, goal, diagonal),
+                let h = graph.heuristic(&nb, &goal);
+                came_from.insert(nb.clone(), pos.clone());
+                g_score.insert(nb.clone(), tentative_g);
+                open.push(HeapNode {
+                    f: tentative_g + h,
                     g: tentative_g,
                     pos: nb,
                 });
@@ -171,42 +130,107 @@ pub fn find_path(
         }
     }
 
-    None // no path found
+    None
 }
 
-fn reconstruct(
-    came_from: HashMap<(u32, u32), (u32, u32)>,
-    mut current: (u32, u32),
-) -> Vec<(u32, u32)> {
-    let mut path = vec![current];
-    while let Some(&prev) = came_from.get(&current) {
-        path.push(prev);
-        current = prev;
+fn reconstruct<N: Eq + Hash + Clone>(came_from: HashMap<N, N>, mut current: N) -> Vec<N> {
+    let mut path = vec![current.clone()];
+    while let Some(prev) = came_from.get(&current) {
+        path.push(prev.clone());
+        current = prev.clone();
     }
     path.reverse();
     path
+}
+
+// ── TileMapGraph ──────────────────────────────────────────────────────────────
+
+/// [`PathGraph`] adapter for [`TileMap`].
+///
+/// Wraps a `TileMap` reference and exposes it as a graph with `(u32, u32)` nodes.
+/// Pass this to [`find_path`].
+pub struct TileMapGraph<'a> {
+    map: &'a TileMap,
+    diagonal: bool,
+}
+
+impl<'a> TileMapGraph<'a> {
+    /// Create a graph over `map`.
+    ///
+    /// - `diagonal` — `true` for 8-directional movement (corner-cutting blocked).
+    pub fn new(map: &'a TileMap, diagonal: bool) -> Self {
+        Self { map, diagonal }
+    }
+}
+
+impl<'a> PathGraph for TileMapGraph<'a> {
+    type Node = (u32, u32);
+
+    fn neighbors(&self, &(col, row): &(u32, u32)) -> Vec<(u32, u32)> {
+        if self.map.is_solid(col, row) {
+            return vec![];
+        }
+        let offsets: &[(i32, i32)] = if self.diagonal {
+            &[
+                (-1, 0),
+                (1, 0),
+                (0, -1),
+                (0, 1),
+                (-1, -1),
+                (1, -1),
+                (-1, 1),
+                (1, 1),
+            ]
+        } else {
+            &[(-1, 0), (1, 0), (0, -1), (0, 1)]
+        };
+        offsets
+            .iter()
+            .filter_map(|&(dc, dr)| {
+                let nc = col as i32 + dc;
+                let nr = row as i32 + dr;
+                if nc < 0 || nr < 0 || nc >= self.map.cols as i32 || nr >= self.map.rows as i32 {
+                    return None;
+                }
+                let (nc, nr) = (nc as u32, nr as u32);
+                if self.map.is_solid(nc, nr) {
+                    return None;
+                }
+                if dc != 0
+                    && dr != 0
+                    && (self.map.is_solid((col as i32 + dc) as u32, row)
+                        || self.map.is_solid(col, (row as i32 + dr) as u32))
+                {
+                    return None;
+                }
+                Some((nc, nr))
+            })
+            .collect()
+    }
+
+    fn heuristic(&self, &(ac, ar): &(u32, u32), &(bc, br): &(u32, u32)) -> u32 {
+        let dx = ac.abs_diff(bc);
+        let dy = ar.abs_diff(br);
+        if self.diagonal { dx.max(dy) } else { dx + dy }
+    }
 }
 
 // ── World-space helpers ────────────────────────────────────────────────────────
 
 /// Convert a world-space position to a tile coordinate.
 ///
-/// Uses the same Y convention as [`TileMap`]: tile row 0 is at world y = 0
-/// and row increases downward (world y decreases).
-///
-/// Returns `None` if the position is outside the map.
-pub fn world_to_tile(wx: f32, wy: f32, tile_size: f32, map: &TileMap) -> Option<(u32, u32)> {
+/// Uses the same Y convention as [`TileMap`]: row 0 is at world y = 0,
+/// row increases downward (world y decreases).
+pub fn world_to_tile(wx: f32, wy: f32, tile_size: f32, cols: u32, rows: u32) -> Option<(u32, u32)> {
     let col = (wx / tile_size).floor() as i32;
     let row = ((-wy) / tile_size).floor() as i32;
-    if col < 0 || row < 0 || col >= map.cols as i32 || row >= map.rows as i32 {
+    if col < 0 || row < 0 || col >= cols as i32 || row >= rows as i32 {
         return None;
     }
     Some((col as u32, row as u32))
 }
 
 /// Convert a tile coordinate to its world-space center position.
-///
-/// Uses the same Y convention as [`TileMap`]: y decreases as row increases.
 pub fn tile_to_world(col: u32, row: u32, tile_size: f32) -> (f32, f32) {
     let wx = col as f32 * tile_size + tile_size * 0.5;
     let wy = -(row as f32 * tile_size + tile_size * 0.5);
