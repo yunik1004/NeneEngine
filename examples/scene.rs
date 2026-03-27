@@ -1,10 +1,17 @@
-/// Scene-graph demo: sun → planet → moon hierarchy.
+/// Scene-graph demo: sun → planet → moon hierarchy with debug overlays.
 ///
 /// The sun rotates in place; the planet orbits the sun; the moon orbits the planet.
 /// Each body's world transform is read from the scene graph and uploaded to its
 /// own uniform buffer in the update phase.
+///
+/// Debug overlays (DebugDraw)
+/// --------------------------
+///   • World-origin axes (X=red, Y=green, Z=blue)
+///   • Planet orbit ring (centred at origin)
+///   • Moon orbit ring (follows the planet's world position)
 use nene::{
     camera::Camera,
+    debug::{DebugDraw, color},
     math::{Mat4, Quat, Vec3, Vec4},
     mesh::MeshVertex,
     renderer::{
@@ -115,6 +122,8 @@ struct State {
     scene: Scene,
     bodies: [Body; 3],
     camera: Camera,
+    debug: DebugDraw,
+    vp: Mat4,
 }
 
 fn init(ctx: &mut Context) -> State {
@@ -183,6 +192,8 @@ fn init(ctx: &mut Context) -> State {
         scene,
         bodies,
         camera: Camera::perspective(Vec3::new(0., 5., 12.), 45., 0.1, 100.),
+        debug: DebugDraw::new(ctx),
+        vp: Mat4::IDENTITY,
     }
 }
 
@@ -212,6 +223,7 @@ fn update(
     let cfg = ctx.surface_config();
     let aspect = cfg.width as f32 / cfg.height as f32;
     let vp = state.camera.view_proj(aspect);
+    state.vp = vp;
 
     for body in &state.bodies {
         let model =
@@ -225,6 +237,33 @@ fn update(
             },
         );
     }
+
+    // ── Debug overlays ────────────────────────────────────────────────────────
+    state.debug.axes(Vec3::ZERO, 2.0);
+
+    // Planet orbit (centred at origin).
+    state.debug.circle(
+        Vec3::ZERO,
+        Vec3::Y,
+        state.bodies[1].orbit_radius,
+        color::GRAY,
+    );
+
+    // Moon orbit (follows planet world position).
+    let planet_pos = state
+        .scene
+        .get(state.bodies[1].id)
+        .world_transform()
+        .w_axis
+        .truncate();
+    state.debug.circle(
+        planet_pos,
+        Vec3::Y,
+        state.bodies[2].orbit_radius,
+        color::GRAY,
+    );
+
+    state.debug.flush(ctx, vp);
 }
 
 fn main() {
@@ -243,6 +282,7 @@ fn main() {
                 pass.set_uniform(0, &body.ubuf);
                 pass.draw_indexed(&state.ibuf);
             }
+            state.debug.draw(pass);
         },
     );
 }

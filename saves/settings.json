@@ -1,1 +1,6 @@
-{}
+{
+  "sim.speed": 3.5,
+  "sim.intensity": 0.699999988079071,
+  "display.show_fps": true,
+  "sim.brightness": 1.0
+}

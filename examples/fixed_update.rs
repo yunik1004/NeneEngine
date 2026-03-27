@@ -1,7 +1,8 @@
-//! Fixed-timestep demo — bouncing balls.
+//! Fixed-timestep + profiler demo — bouncing balls.
 //!
 //! Physics runs at a fixed 20 Hz (`fixed_update`).
 //! Rendering runs at the display's full refresh rate.
+//! A profiler panel shows frame time, FPS, and per-scope timings.
 //!
 //! Set `FIXED_HZ` to 60 to make movement silky-smooth, or keep it at 20 to
 //! see that physics ticks fire in bursts while rendering stays fluid.
@@ -10,15 +11,17 @@ use std::f32::consts::TAU;
 
 use nene::{
     math::{Mat4, Vec3, Vec4},
+    profile::Profiler,
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
     time::{FixedTime, Time},
+    ui::Ui,
     uniform, vertex,
     window::{Config, Window},
 };
 
-const FIXED_HZ: f32 = 20.0;
+const FIXED_HZ: f32 = 60.0;
 const HALF: f32 = 0.88; // NDC half-extent of the bounding box
 const SIDES: usize = 32;
 
@@ -28,10 +31,10 @@ const SHADER: &str = r#"
 @group(0) @binding(0) var<uniform> mvp:   mat4x4<f32>;
 @group(1) @binding(0) var<uniform> color: vec4<f32>;
 
-@vertex  fn vs(@location(0) pos: vec2<f32>) -> @builtin(position) vec4<f32> {
+@vertex  fn vs_main(@location(0) pos: vec2<f32>) -> @builtin(position) vec4<f32> {
     return mvp * vec4<f32>(pos, 0.0, 1.0);
 }
-@fragment fn fs() -> @location(0) vec4<f32> { return color; }
+@fragment fn fs_main() -> @location(0) vec4<f32> { return color; }
 "#;
 
 // ── Vertex / Uniform types ────────────────────────────────────────────────────
@@ -99,6 +102,8 @@ struct State {
     idx_count: u32,
     balls: Vec<Ball>,
     gpu: Vec<BallGpu>,
+    profiler: Profiler,
+    ui: Ui,
 }
 
 fn init(ctx: &mut Context) -> State {
@@ -138,6 +143,8 @@ fn init(ctx: &mut Context) -> State {
         idx_count,
         balls,
         gpu,
+        profiler: Profiler::new(),
+        ui: Ui::new(ctx),
     }
 }
 
@@ -149,6 +156,7 @@ fn fixed_update(
     _input: &nene::input::Input,
     ft: &FixedTime,
 ) {
+    let _s = state.profiler.scope("fixed_update");
     let dt = ft.delta;
     for b in &mut state.balls {
         b.pos[0] += b.vel[0] * dt;
@@ -173,13 +181,25 @@ fn fixed_update(
     }
 }
 
-fn update(state: &mut State, ctx: &mut Context, _input: &nene::input::Input, _time: &Time) {
+fn update(state: &mut State, ctx: &mut Context, input: &nene::input::Input, _time: &Time) {
+    state.profiler.begin_frame();
+    let _s = state.profiler.scope("update");
     for (ball, gpu) in state.balls.iter().zip(state.gpu.iter()) {
         let t = Mat4::from_translation(Vec3::new(ball.pos[0], ball.pos[1], 0.0));
         let s = Mat4::from_scale(Vec3::new(ball.radius, ball.radius, 1.0));
         ctx.update_uniform_buffer(&gpu.mvp_buf, &Mvp { mat: t * s });
         ctx.update_uniform_buffer(&gpu.color_buf, &Color { rgba: ball.color });
     }
+    drop(_s);
+
+    let cfg = ctx.surface_config();
+    state
+        .ui
+        .begin_frame(input, cfg.width as f32, cfg.height as f32);
+    state.profiler.draw_overlay(&mut state.ui, 16.0, 16.0);
+    state.ui.end_frame(ctx);
+
+    state.profiler.end_frame();
 }
 
 fn render(state: &mut State, pass: &mut RenderPass) {
@@ -190,6 +210,7 @@ fn render(state: &mut State, pass: &mut RenderPass) {
         pass.set_uniform(1, &gpu.color_buf);
         pass.draw_indexed_count(&state.ibuf, state.idx_count);
     }
+    state.ui.render(pass);
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────

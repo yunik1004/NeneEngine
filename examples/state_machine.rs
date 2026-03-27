@@ -1,15 +1,17 @@
 //! Animation state machine demo — three clips, crossfade on Space.
 //!
 //! Procedural 7-joint serpent with skeletal animation.
+//! State transitions use a [`Tween`] to drive the crossfade blend weight,
+//! making the easing curve selectable at runtime.
 //!
-//! States
-//! ──────
-//!   idle   — barely-breathing sway  (low amplitude, slow)
-//!   wave   — travelling sine ripple (medium amplitude)
-//!   thrash — frantic thrash         (high amplitude, fast)
+//! Controls
+//! ──────────
+//!   Space  — advance to next animation state
+//!   Q / E  — cycle through easing functions for the next crossfade
 //!
-//! Press Space to advance to the next state with a 0.4 s crossfade.
-//! The title bar shows the active state and blend progress.
+//! The panel shows the active ease, a live blend-progress bar, and the
+//! current state name so you can feel the difference between e.g.
+//! `Linear` and `ElasticOut` on the same transition.
 
 use std::f32::consts::{PI, TAU};
 
@@ -26,6 +28,8 @@ use nene::{
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },
+    tween::{Ease, Tween},
+    ui::Ui,
     uniform,
     window::{Config, Window},
 };
@@ -37,9 +41,18 @@ const MAX_JOINTS: usize = 8;
 const SIDES: usize = 14;
 const RINGS: usize = (NUM_JOINTS - 1) * 2 + 1; // 13
 
-// State names (also the cycle order).
 const STATES: &[&str] = &["idle", "wave", "thrash"];
-const BLEND_DURATION: f32 = 0.4;
+const BLEND_DURATION: f32 = 0.6;
+
+// Easing options the user can cycle through for the crossfade.
+const EASES: &[(Ease, &str)] = &[
+    (Ease::Linear, "Linear"),
+    (Ease::SineInOut, "SineInOut"),
+    (Ease::CubicOut, "CubicOut"),
+    (Ease::BackOut, "BackOut"),
+    (Ease::ElasticOut, "ElasticOut"),
+    (Ease::BounceOut, "BounceOut"),
+];
 
 // ── Shader ────────────────────────────────────────────────────────────────────
 
@@ -92,7 +105,6 @@ fn vs_main(in: VIn) -> VOut {{
 
 @fragment
 fn fs_main(in: VOut) -> @location(0) vec4<f32> {{
-    // Body colour gradient: coral → lime → sky
     let t = clamp(in.uv.y, 0.0, 1.0);
     let c0 = vec3<f32>(1.0,  0.28, 0.0);
     let c1 = vec3<f32>(0.18, 1.0,  0.3);
@@ -138,7 +150,6 @@ fn build_skeleton() -> Skeleton {
     Skeleton { joints }
 }
 
-/// Build a sinusoidal clip with the given amplitude and speed.
 fn build_clip(name: &str, amplitude: f32, speed: f32) -> Clip {
     const FRAMES: usize = 40;
     const DURATION: f32 = 2.0;
@@ -149,7 +160,6 @@ fn build_clip(name: &str, amplitude: f32, speed: f32) -> Clip {
         .collect();
 
     let mut channels: Vec<AnimChannel> = Vec::new();
-
     for j in 0..NUM_JOINTS {
         let amp = amplitude * (1.0 - 0.08 * j as f32).max(0.1);
         let values = times
@@ -165,7 +175,6 @@ fn build_clip(name: &str, amplitude: f32, speed: f32) -> Clip {
             values,
         }));
     }
-
     for j in 1..NUM_JOINTS {
         channels.push(AnimChannel::Translation(Channel {
             joint: j,
@@ -173,24 +182,10 @@ fn build_clip(name: &str, amplitude: f32, speed: f32) -> Clip {
             values: vec![Vec3::new(0.0, 1.0, 0.0)],
         }));
     }
-
     Clip {
         name: name.into(),
         duration: DURATION,
         channels,
-    }
-}
-
-fn build_model() -> Model {
-    Model {
-        meshes: vec![],
-        skinned_meshes: vec![build_mesh()],
-        skeleton: build_skeleton(),
-        clips: vec![
-            build_clip("idle", 0.08, 0.5),   // barely breathing
-            build_clip("wave", 0.35, 1.0),   // medium ripple
-            build_clip("thrash", 0.62, 2.0), // frantic thrash
-        ],
     }
 }
 
@@ -220,7 +215,7 @@ fn build_mesh() -> SkinnedMesh {
         }
     }
 
-    let base_cap_idx = vertices.len() as u32;
+    let base_cap = vertices.len() as u32;
     vertices.push(SkinnedVertex {
         position: [0.0, -0.1, 0.0],
         normal: [0.0, -1.0, 0.0],
@@ -228,7 +223,7 @@ fn build_mesh() -> SkinnedMesh {
         joints: [0, 0, 0, 0],
         weights: [1.0, 0.0, 0.0, 0.0],
     });
-    let tip_cap_idx = vertices.len() as u32;
+    let tip_cap = vertices.len() as u32;
     let tip_y = (NUM_JOINTS - 1) as f32 + 0.35;
     vertices.push(SkinnedVertex {
         position: [0.0, tip_y, 0.0],
@@ -255,12 +250,12 @@ fn build_mesh() -> SkinnedMesh {
     }
     for i in 0..SIDES as u32 {
         let next = (i + 1) % SIDES as u32;
-        indices.extend_from_slice(&[base_cap_idx, next, i]);
+        indices.extend_from_slice(&[base_cap, next, i]);
     }
     let last_ring = ((RINGS - 1) * SIDES) as u32;
     for i in 0..SIDES as u32 {
         let next = (i + 1) % SIDES as u32;
-        indices.extend_from_slice(&[tip_cap_idx, last_ring + i, last_ring + next]);
+        indices.extend_from_slice(&[tip_cap, last_ring + i, last_ring + next]);
     }
 
     SkinnedMesh {
@@ -268,6 +263,19 @@ fn build_mesh() -> SkinnedMesh {
         indices,
         transform: Mat4::IDENTITY,
         base_color: None,
+    }
+}
+
+fn build_model() -> Model {
+    Model {
+        meshes: vec![],
+        skinned_meshes: vec![build_mesh()],
+        skeleton: build_skeleton(),
+        clips: vec![
+            build_clip("idle", 0.08, 0.5),
+            build_clip("wave", 0.35, 1.0),
+            build_clip("thrash", 0.62, 2.0),
+        ],
     }
 }
 
@@ -284,13 +292,17 @@ struct State {
     camera_angle: f32,
     ambient: AmbientLight,
     directional: DirectionalLight,
-    /// Index into STATES for the next trigger.
     next_state: usize,
+
+    // Tween drives the crossfade blend weight with a selectable easing curve.
+    blend_tween: Option<Tween<f32>>,
+    ease_idx: usize,
+
+    ui: Ui,
 }
 
 fn init(ctx: &mut Context) -> State {
     let model = build_model();
-
     let ambient = AmbientLight::new(Vec3::new(0.7, 0.75, 1.0), 0.18);
     let directional = DirectionalLight::new(
         Vec3::new(-1.0, -1.5, -0.8).normalize(),
@@ -308,26 +320,22 @@ fn init(ctx: &mut Context) -> State {
             speed: 1.0,
         });
     }
-    // Start in "idle".
     sm.current = 0;
 
     let joint_mats: JointMatrices<MAX_JOINTS> = sm.joint_buffer(&model.clips, &model.skeleton);
-
-    let cfg = ctx.surface_config();
-    let aspect = cfg.width as f32 / cfg.height as f32;
     let cam_pos = Vec3::new(9.0, 3.0, 0.0);
     let mut camera = Camera::perspective(cam_pos, 44.0, 0.1, 100.0);
     camera.target = Vec3::new(0.0, 3.0, 0.0);
 
-    let scene_uniform = SceneUniform {
+    let cfg = ctx.surface_config();
+    let aspect = cfg.width as f32 / cfg.height as f32;
+    let scene_buf = ctx.create_uniform_buffer(&SceneUniform {
         view_proj: camera.view_proj(aspect),
         model: Mat4::IDENTITY,
         camera_pos: cam_pos.extend(1.0),
         ambient,
         directional,
-    };
-
-    let scene_buf = ctx.create_uniform_buffer(&scene_uniform);
+    });
     let joint_buf = ctx.create_uniform_buffer(&joint_mats);
 
     let mesh = &model.skinned_meshes[0];
@@ -353,33 +361,61 @@ fn init(ctx: &mut Context) -> State {
         camera_angle: 0.0,
         ambient,
         directional,
-        next_state: 1, // Space will trigger "wave" first
+        next_state: 1,
+        blend_tween: None,
+        ease_idx: 0,
+        ui: Ui::new(ctx),
     }
 }
 
 fn main() {
     Window::new(Config {
-        title: "State Machine — idle | wave | thrash   [Space: next state]".to_string(),
+        title: "State Machine — idle | wave | thrash   [Space: next  Q/E: ease]".to_string(),
         ..Config::default()
     })
     .run_with_update(
         init,
         |state, ctx, input, time| {
-            // Trigger next state on Space press.
+            // ── Cycle easing function ─────────────────────────────────────────
+            let n_eases = EASES.len();
+            if input.key_pressed(Key::KeyE) {
+                state.ease_idx = (state.ease_idx + 1) % n_eases;
+            }
+            if input.key_pressed(Key::KeyQ) {
+                state.ease_idx = (state.ease_idx + n_eases - 1) % n_eases;
+            }
+
+            // ── Trigger next state ────────────────────────────────────────────
             if input.key_pressed(Key::Space) {
                 let name = STATES[state.next_state];
                 state.sm.trigger(name, BLEND_DURATION);
                 state.next_state = (state.next_state + 1) % STATES.len();
+                // Start a tween with the selected ease to track blend progress.
+                state.blend_tween = Some(
+                    Tween::new(0.0f32, 1.0, BLEND_DURATION).with_ease(EASES[state.ease_idx].0),
+                );
             }
 
-            state.sm.update(time.delta, &state.model.clips);
+            // ── Advance tween ─────────────────────────────────────────────────
+            let blend_progress = if let Some(ref mut t) = state.blend_tween {
+                t.update(time.delta);
+                let v = t.value();
+                if t.is_done() {
+                    state.blend_tween = None;
+                }
+                v
+            } else {
+                1.0
+            };
 
+            // ── Animation update ──────────────────────────────────────────────
+            state.sm.update(time.delta, &state.model.clips);
             let joint_mats: JointMatrices<MAX_JOINTS> = state
                 .sm
                 .joint_buffer(&state.model.clips, &state.model.skeleton);
             ctx.update_uniform_buffer(&state.joint_buf, &joint_mats);
 
-            // Orbit camera.
+            // ── Camera orbit ──────────────────────────────────────────────────
             state.camera_angle += time.delta * 0.4;
             let r = 9.0;
             let cam_pos = Vec3::new(
@@ -402,6 +438,25 @@ fn main() {
                     directional: state.directional,
                 },
             );
+
+            // ── UI: state + blend tween progress ─────────────────────────────
+            let cur_name = STATES[(state.next_state + STATES.len() - 1) % STATES.len()];
+            let ease_name = EASES[state.ease_idx].1;
+            let bar = tween_bar(blend_progress);
+
+            state
+                .ui
+                .begin_frame(input, cfg.width as f32, cfg.height as f32);
+            state.ui.begin_panel("Animation", 16.0, 16.0, 200.0);
+            state.ui.label(cur_name);
+            state.ui.separator();
+            state.ui.label_dim(&format!("ease: {ease_name}"));
+            state.ui.label_dim(&bar);
+            state.ui.separator();
+            state.ui.label_dim("Space  next state");
+            state.ui.label_dim("Q / E  cycle ease");
+            state.ui.end_panel();
+            state.ui.end_frame(ctx);
         },
         |_, _| {},
         |state, pass: &mut RenderPass| {
@@ -413,6 +468,16 @@ fn main() {
                 &state.ibuf,
                 state.model.skinned_meshes[0].indices.len() as u32,
             );
+            state.ui.render(pass);
         },
     );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Render blend progress as a text bar driven by the tween value.
+fn tween_bar(t: f32) -> String {
+    let filled = (t.clamp(0.0, 1.0) * 12.0) as usize;
+    let empty = 12 - filled;
+    format!("[{}{}]", "█".repeat(filled), "░".repeat(empty))
 }

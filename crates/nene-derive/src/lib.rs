@@ -68,19 +68,18 @@ pub fn uniform(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 /// Adds `Serialize`, `Deserialize`, and `Clone` derives to a struct or enum.
 ///
-/// Use this on types you want to send over the network with
-/// [`send_json`](nene::net::Client::send_json) /
-/// [`into_json`](nene::net::ClientEvent::into_json).
+/// Use this on any data type that needs to cross a boundary — network packets,
+/// save slots, settings values, etc.
 ///
 /// # Example
 /// ```no_run
-/// use nene::net_message;
+/// use nene::data;
 ///
-/// #[net_message]
+/// #[data]
 /// struct PlayerState { x: f32, y: f32 }
 /// ```
 #[proc_macro_attribute]
-pub fn net_message(_args: TokenStream, input: TokenStream) -> TokenStream {
+pub fn data(_args: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let expanded = quote! {

@@ -92,10 +92,10 @@ impl Default for Theme {
             text_dim: [0.58, 0.58, 0.65, 1.0],
             accent: [0.28, 0.58, 1.00, 1.0],
             slider_track: [0.15, 0.15, 0.20, 1.0],
-            font_size: 14.0,
-            item_height: 24.0,
-            item_padding: 4.0,
-            panel_padding: 8.0,
+            font_size: 18.0,
+            item_height: 30.0,
+            item_padding: 6.0,
+            panel_padding: 10.0,
         }
     }
 }
@@ -284,9 +284,9 @@ impl Ui {
 
     /// Call once per frame, before any widget calls.
     pub fn begin_frame(&mut self, input: &Input, screen_w: f32, screen_h: f32) {
+        // input.mouse_pos() is already in logical coords (window divided by DPI scale)
         let mp = input.mouse_pos();
-        // Convert physical mouse coords → logical (using scale from previous frame)
-        self.mouse_pos = [mp.x / self.scale_x, mp.y / self.scale_y];
+        self.mouse_pos = [mp.x, mp.y];
         self.mouse_pressed = input.mouse_pressed(MouseButton::Left);
         self.mouse_down = input.mouse_down(MouseButton::Left);
         self.mouse_released = input.mouse_released(MouseButton::Left);

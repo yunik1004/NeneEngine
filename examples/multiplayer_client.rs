@@ -36,7 +36,7 @@ const COLORS: &[Vec3] = &[
     Vec3::new(0.3, 1.0, 1.0), // cyan
 ];
 
-#[nene::net_message]
+#[nene::data]
 #[derive(Debug)]
 struct PlayerState {
     id: u32,

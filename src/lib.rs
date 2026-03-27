@@ -27,7 +27,7 @@ pub mod tween;
 pub mod ui;
 pub mod window;
 
-pub use nene_derive::net_message;
+pub use nene_derive::data;
 pub use nene_derive::uniform;
 pub use nene_derive::vertex;
 pub use serde;

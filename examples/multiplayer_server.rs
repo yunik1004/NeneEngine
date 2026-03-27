@@ -10,7 +10,7 @@ use nene::net::{Server, ServerEvent};
 use std::collections::HashMap;
 use std::time::Duration;
 
-#[nene::net_message]
+#[nene::data]
 #[derive(Debug)]
 struct PlayerState {
     id: u32,
