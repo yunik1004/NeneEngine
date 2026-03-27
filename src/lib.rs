@@ -10,6 +10,7 @@ pub mod math;
 pub mod mesh;
 pub mod particle;
 pub mod physics;
+pub mod profile;
 pub mod renderer;
 pub mod save;
 pub mod scene;
