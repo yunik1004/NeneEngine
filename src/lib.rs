@@ -13,6 +13,7 @@ pub mod renderer;
 pub mod scene;
 pub mod sprite;
 pub mod text;
+pub mod tilemap;
 pub mod time;
 pub mod tween;
 pub mod ui;
