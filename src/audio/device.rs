@@ -2,41 +2,114 @@ use super::Sound;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{
     Arc,
+    atomic::{AtomicBool, Ordering},
     mpsc::{self, Sender},
 };
 
-pub struct AudioDevice {
-    _stream: cpal::Stream,
-    sender: Sender<Arc<Sound>>,
+// ── Public types ──────────────────────────────────────────────────────────────
+
+/// Options for a single playback instance.
+///
+/// Build with `PlayOptions::default()` and modify fields as needed:
+/// ```
+/// use nene::audio::PlayOptions;
+/// let opts = PlayOptions { volume: 0.5, pan: -0.8, looping: true };
+/// ```
+#[derive(Debug, Clone, Copy)]
+pub struct PlayOptions {
+    /// Amplitude multiplier. `1.0` = full volume, `0.0` = silent. Clamped to `[0.0, 1.0]`.
+    pub volume: f32,
+    /// Stereo position. `-1.0` = hard left, `0.0` = centre, `1.0` = hard right.
+    /// Has no effect on mono output devices. Clamped to `[-1.0, 1.0]`.
+    pub pan: f32,
+    /// Whether the sound restarts when it reaches the end.
+    pub looping: bool,
+}
+
+impl Default for PlayOptions {
+    fn default() -> Self {
+        Self { volume: 1.0, pan: 0.0, looping: false }
+    }
+}
+
+/// A handle to an in-progress playback returned by [`AudioDevice::play`] /
+/// [`AudioDevice::play_with`].
+///
+/// Dropping the handle does **not** stop playback — call [`stop`](Self::stop)
+/// explicitly if you need early termination.
+pub struct PlayHandle {
+    stopped: Arc<AtomicBool>,
+}
+
+impl PlayHandle {
+    /// Stop this playback on the next audio callback. Idempotent.
+    pub fn stop(&self) {
+        self.stopped.store(true, Ordering::Relaxed);
+    }
+
+    /// `true` once the sound has finished playing (or [`stop`](Self::stop) was called).
+    pub fn is_finished(&self) -> bool {
+        self.stopped.load(Ordering::Relaxed)
+    }
+}
+
+// ── Internal ──────────────────────────────────────────────────────────────────
+
+struct PlayRequest {
+    sound:   Arc<Sound>,
+    volume:  f32,
+    pan:     f32,
+    looping: bool,
+    stopped: Arc<AtomicBool>,
 }
 
 struct Playback {
-    sound: Arc<Sound>,
+    sound:    Arc<Sound>,
+    /// Fractional frame position in the source audio.
     position: f64,
+    volume:   f32,
+    pan:      f32,
+    looping:  bool,
+    stopped:  Arc<AtomicBool>,
+}
+
+// ── AudioDevice ───────────────────────────────────────────────────────────────
+
+/// The audio output device and mixer.
+///
+/// Create once at startup and keep alive for the duration of the application.
+/// Sounds submitted via [`play`](Self::play) or [`play_with`](Self::play_with)
+/// are mixed in real-time on a background thread.
+pub struct AudioDevice {
+    _stream: cpal::Stream,
+    sender:  Sender<PlayRequest>,
 }
 
 impl AudioDevice {
     pub fn new() -> Self {
-        let host = cpal::default_host();
-        let device = host
-            .default_output_device()
-            .expect("No output device found");
+        let host   = cpal::default_host();
+        let device = host.default_output_device().expect("No output device found");
         let config = device.default_output_config().expect("No output config");
 
         let sample_rate = config.sample_rate();
-        let channels = config.channels() as usize;
+        let out_channels = config.channels() as usize;
 
-        let (sender, receiver) = mpsc::channel::<Arc<Sound>>();
+        let (sender, receiver) = mpsc::channel::<PlayRequest>();
         let mut playbacks: Vec<Playback> = Vec::new();
 
         let stream = device
             .build_output_stream(
                 &config.into(),
                 move |data: &mut [f32], _| {
-                    while let Ok(sound) = receiver.try_recv() {
+                    // Receive new sounds.
+                    while let Ok(req) = receiver.try_recv() {
                         playbacks.push(Playback {
-                            sound,
+                            sound:    req.sound,
                             position: 0.0,
+                            volume:   req.volume,
+                            pan:      req.pan,
+                            looping:  req.looping,
+                            stopped:  req.stopped,
                         });
                     }
 
@@ -45,22 +118,29 @@ impl AudioDevice {
                     }
 
                     playbacks.retain_mut(|pb| {
-                        let ratio = pb.sound.sample_rate as f64 / sample_rate as f64;
-                        let src_channels = pb.sound.channels;
+                        if pb.stopped.load(Ordering::Relaxed) {
+                            return false;
+                        }
 
-                        for frame in data.chunks_mut(channels) {
-                            let src_frame = pb.position as usize;
-                            let src_idx = src_frame * src_channels;
+                        let ratio       = pb.sound.sample_rate as f64 / sample_rate as f64;
+                        let src_ch      = pb.sound.channels;
+                        let total_frames = pb.sound.samples.len() / src_ch;
 
-                            if src_idx + src_channels > pb.sound.samples.len() {
-                                return false;
+                        for frame in data.chunks_mut(out_channels) {
+                            // Advance past the end: loop or stop.
+                            if pb.position as usize >= total_frames {
+                                if pb.looping {
+                                    pb.position -= total_frames as f64;
+                                    if pb.position < 0.0 { pb.position = 0.0; }
+                                } else {
+                                    pb.stopped.store(true, Ordering::Relaxed);
+                                    return false;
+                                }
                             }
 
-                            for (ch, out) in frame.iter_mut().enumerate() {
-                                let src_ch = ch.min(src_channels - 1);
-                                *out += pb.sound.samples[src_idx + src_ch];
-                            }
-
+                            let src_idx = pb.position as usize * src_ch;
+                            mix_frame(frame, &pb.sound.samples[src_idx..src_idx + src_ch],
+                                      pb.volume, pb.pan);
                             pb.position += ratio;
                         }
                         true
@@ -73,19 +153,65 @@ impl AudioDevice {
 
         stream.play().expect("Failed to start audio stream");
 
-        Self {
-            _stream: stream,
-            sender,
-        }
+        Self { _stream: stream, sender }
     }
 
-    pub fn play(&self, sound: &Arc<Sound>) {
-        self.sender.send(Arc::clone(sound)).ok();
+    /// Play `sound` at full volume, centred, without looping.
+    ///
+    /// Returns a [`PlayHandle`] that can be used to stop playback early or
+    /// check when it finishes. Dropping the handle does **not** stop the sound.
+    pub fn play(&self, sound: &Arc<Sound>) -> PlayHandle {
+        self.play_with(sound, PlayOptions::default())
+    }
+
+    /// Play `sound` with explicit [`PlayOptions`].
+    pub fn play_with(&self, sound: &Arc<Sound>, options: PlayOptions) -> PlayHandle {
+        let stopped = Arc::new(AtomicBool::new(false));
+        let handle  = PlayHandle { stopped: Arc::clone(&stopped) };
+        self.sender.send(PlayRequest {
+            sound:   Arc::clone(sound),
+            volume:  options.volume.clamp(0.0, 1.0),
+            pan:     options.pan.clamp(-1.0, 1.0),
+            looping: options.looping,
+            stopped,
+        }).ok();
+        handle
     }
 }
 
 impl Default for AudioDevice {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ── Mixing helper ─────────────────────────────────────────────────────────────
+
+/// Mix one audio frame from `src` into `out`, applying `volume` and `pan`.
+///
+/// Linear pan law: `left_gain  = (1 − pan) / 2 × volume`
+///                 `right_gain = (1 + pan) / 2 × volume`
+fn mix_frame(out: &mut [f32], src: &[f32], volume: f32, pan: f32) {
+    let src_ch = src.len();
+    match out.len() {
+        1 => {
+            let sample = src.iter().sum::<f32>() / src_ch as f32;
+            out[0] += sample * volume;
+        }
+        2 => {
+            let left_gain  = (1.0 - pan) * 0.5 * volume;
+            let right_gain = (1.0 + pan) * 0.5 * volume;
+            let l = src[0];
+            let r = if src_ch >= 2 { src[1] } else { src[0] };
+            out[0] += l * left_gain;
+            out[1] += r * right_gain;
+        }
+        n => {
+            for (ch, o) in out.iter_mut().enumerate() {
+                let src_ch_idx = ch.min(src_ch - 1);
+                *o += src[src_ch_idx] * volume;
+            }
+            let _ = n;
+        }
     }
 }
