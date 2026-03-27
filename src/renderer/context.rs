@@ -640,6 +640,7 @@ pub struct Context {
     surface: wgpu::Surface<'static>,
     surface_config: wgpu::SurfaceConfiguration,
     depth_view: wgpu::TextureView,
+    window: Arc<Window>,
 }
 
 impl Context {
@@ -689,7 +690,18 @@ impl Context {
             surface,
             surface_config,
             depth_view,
+            window,
         }
+    }
+
+    /// Toggle fullscreen. Pass `true` for borderless fullscreen, `false` for windowed.
+    pub fn set_fullscreen(&self, fullscreen: bool) {
+        use winit::window::Fullscreen;
+        self.window.set_fullscreen(if fullscreen {
+            Some(Fullscreen::Borderless(None))
+        } else {
+            None
+        });
     }
 
     pub fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {

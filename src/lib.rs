@@ -14,6 +14,7 @@ pub mod profile;
 pub mod renderer;
 pub mod save;
 pub mod scene;
+pub mod settings;
 pub mod sprite;
 pub mod text;
 pub mod tilemap;
