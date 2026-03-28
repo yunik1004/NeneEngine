@@ -53,7 +53,7 @@ pub struct Input {
     scroll_delta: Vec2,
 
     // Gamepad (multi-pad support via GamepadId)
-    gilrs: Gilrs,
+    gilrs: Option<Gilrs>,
     pad_held: HashSet<(GamepadId, GamepadButton)>,
     pad_pressed: HashSet<(GamepadId, GamepadButton)>,
     pad_released: HashSet<(GamepadId, GamepadButton)>,
@@ -72,7 +72,7 @@ impl Input {
             mouse_pos: Vec2::ZERO,
             mouse_delta: Vec2::ZERO,
             scroll_delta: Vec2::ZERO,
-            gilrs: Gilrs::new().expect("gilrs init failed"),
+            gilrs: Gilrs::new().ok(),
             pad_held: HashSet::new(),
             pad_pressed: HashSet::new(),
             pad_released: HashSet::new(),
@@ -123,7 +123,8 @@ impl Input {
 
     /// Drain gilrs events and update gamepad state.
     pub(crate) fn process_gilrs(&mut self) {
-        while let Some(gilrs::Event { id, event, .. }) = self.gilrs.next_event() {
+        let Some(gilrs) = &mut self.gilrs else { return };
+        while let Some(gilrs::Event { id, event, .. }) = gilrs.next_event() {
             match event {
                 EventType::ButtonPressed(btn, _) => {
                     self.pad_held.insert((id, btn));
@@ -267,8 +268,11 @@ impl Input {
     }
 
     /// Iterator over all currently connected gamepads.
-    pub fn gamepads(&self) -> impl Iterator<Item = (GamepadId, gilrs::Gamepad<'_>)> {
-        self.gilrs.gamepads()
+    pub fn gamepads(&self) -> Box<dyn Iterator<Item = (GamepadId, gilrs::Gamepad<'_>)> + '_> {
+        match &self.gilrs {
+            Some(g) => Box::new(g.gamepads()),
+            None => Box::new(std::iter::empty()),
+        }
     }
 }
 

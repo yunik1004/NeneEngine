@@ -115,8 +115,7 @@ impl StateMachine {
             false
         };
 
-        if blend_done {
-            let b = self.blend.take().unwrap();
+        if blend_done && let Some(b) = self.blend.take() {
             self.current = b.target;
             self.time = b.target_time;
         }

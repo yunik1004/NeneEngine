@@ -372,7 +372,9 @@ impl TextRenderer {
                         let src_i = (row * w + col) as usize;
                         let dst_i = ((ay + row) * ATLAS_SIZE + (ax + col)) as usize;
                         let alpha = img.data.get(src_i).copied().unwrap_or(0);
-                        self.atlas_data[dst_i] = alpha;
+                        if let Some(byte) = self.atlas_data.get_mut(dst_i) {
+                            *byte = alpha;
+                        }
                     }
                 }
                 self.atlas_dirty = true;

@@ -241,7 +241,8 @@ impl<'w, T: Component> QueryBuilderMut<'w, T> {
         let Some(mut storage_t) = self.world.storages.remove(&type_t) else {
             return results.into_iter();
         };
-        let set_t = downcast_mut::<T>(storage_t.as_mut()).unwrap();
+        let set_t = downcast_mut::<T>(storage_t.as_mut())
+            .expect("ECS invariant violated: type ID mismatch in query_mut");
         let (ids, values) = set_t.iter_parts_mut();
 
         // Bail early if any `with` type has no storage (no entity can match).

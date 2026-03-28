@@ -41,14 +41,20 @@ impl App for SceneDemo {
     fn new() -> Self {
         let mut scene = Scene::new();
         let sun = scene.add_node(Node::named("sun"));
-        let planet = scene.add_child(
-            sun,
-            Node::named("planet").with_transform(Transform::from_position(Vec3::new(3.5, 0., 0.))),
-        );
-        let moon = scene.add_child(
-            planet,
-            Node::named("moon").with_transform(Transform::from_position(Vec3::new(1.4, 0., 0.))),
-        );
+        let planet = scene
+            .add_child(
+                sun,
+                Node::named("planet")
+                    .with_transform(Transform::from_position(Vec3::new(3.5, 0., 0.))),
+            )
+            .expect("sun is a valid node");
+        let moon = scene
+            .add_child(
+                planet,
+                Node::named("moon")
+                    .with_transform(Transform::from_position(Vec3::new(1.4, 0., 0.))),
+            )
+            .expect("planet is a valid node");
         scene.update();
 
         SceneDemo {
@@ -110,12 +116,15 @@ impl App for SceneDemo {
         for body in &mut self.bodies {
             body.angle += dt * body.speed;
         }
-        self.scene.get_mut(self.bodies[0].id).transform.rotation =
-            Quat::from_rotation_y(self.bodies[0].angle);
+        if let Some(n) = self.scene.get_mut(self.bodies[0].id) {
+            n.transform.rotation = Quat::from_rotation_y(self.bodies[0].angle);
+        }
         for i in 1..3 {
             let r = self.bodies[i].orbit_radius;
-            self.scene.get_mut(self.bodies[i].id).transform.position =
-                Quat::from_rotation_y(self.bodies[i].angle) * Vec3::new(r, 0., 0.);
+            if let Some(n) = self.scene.get_mut(self.bodies[i].id) {
+                n.transform.position =
+                    Quat::from_rotation_y(self.bodies[i].angle) * Vec3::new(r, 0., 0.);
+            }
         }
         self.scene.update();
 
@@ -130,9 +139,8 @@ impl App for SceneDemo {
         let planet_pos = self
             .scene
             .get(self.bodies[1].id)
-            .world_transform()
-            .w_axis
-            .truncate();
+            .map(|n| n.world_transform().w_axis.truncate())
+            .unwrap_or(Vec3::ZERO);
         debug.circle(
             planet_pos,
             Vec3::Y,
@@ -146,7 +154,11 @@ impl App for SceneDemo {
         let vp = self.camera.view_proj(cfg.width as f32 / cfg.height as f32);
 
         for body in &mut self.bodies {
-            let model = self.scene.get(body.id).world_transform()
+            let model = self
+                .scene
+                .get(body.id)
+                .map(|n| n.world_transform())
+                .unwrap_or(Mat4::IDENTITY)
                 * Mat4::from_scale(Vec3::splat(body.scale));
             body.mat.uniform.view_proj = vp;
             body.mat.uniform.model = model;

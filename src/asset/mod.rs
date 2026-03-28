@@ -253,13 +253,24 @@ impl Assets {
 
             let mut reloaded = Vec::new();
             for path in changed {
-                if let Some(filter) = self.texture_filters.get(&path).copied() {
-                    self.textures.remove(&(path.clone(), filter_key(filter)));
-                    match self.load_texture(ctx, &path, filter) {
-                        Ok(_) => reloaded.push(path),
-                        Err(e) => {
-                            eprintln!("[nene] hot reload failed for '{}': {e}", path.display())
+                if self.texture_filters.contains_key(&path) {
+                    // Reload every filter variant that is currently cached.
+                    let mut any_ok = false;
+                    for &filter in &[FilterMode::Linear, FilterMode::Nearest] {
+                        let key = (path.clone(), filter_key(filter));
+                        if !self.textures.contains_key(&key) {
+                            continue;
                         }
+                        self.textures.remove(&key);
+                        match self.load_texture(ctx, &path, filter) {
+                            Ok(_) => any_ok = true,
+                            Err(e) => {
+                                eprintln!("[nene] hot reload failed for '{}': {e}", path.display())
+                            }
+                        }
+                    }
+                    if any_ok {
+                        reloaded.push(path);
                     }
                 } else if self.models.contains_key(&path) {
                     self.models.remove(&path);
@@ -527,8 +538,7 @@ impl Assets {
     /// know (or don't care about) the filter mode used at load time.
     pub fn evict_texture_all(&mut self, path: impl AsRef<Path>) {
         let path = path.as_ref();
-        self.textures
-            .retain(|(p, _), _| p != path);
+        self.textures.retain(|(p, _), _| p != path);
         #[cfg(debug_assertions)]
         self.texture_filters.remove(path);
     }

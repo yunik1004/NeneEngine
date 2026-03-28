@@ -31,15 +31,15 @@ fn add_child_increments_len() {
 fn node_named() {
     let mut scene = Scene::new();
     let id = scene.add_node(Node::named("sun"));
-    assert_eq!(scene.get(id).name.as_deref(), Some("sun"));
+    assert_eq!(scene.get(id).unwrap().name.as_deref(), Some("sun"));
 }
 
 #[test]
 fn add_child_sets_parent() {
     let mut scene = Scene::new();
     let root = scene.add_node(Node::new());
-    let child = scene.add_child(root, Node::new());
-    assert_eq!(scene.get(child).parent(), Some(root));
+    let child = scene.add_child(root, Node::new()).unwrap();
+    assert_eq!(scene.get(child).unwrap().parent(), Some(root));
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn root_nodes_list() {
 fn child_not_in_roots() {
     let mut scene = Scene::new();
     let root = scene.add_node(Node::new());
-    let child = scene.add_child(root, Node::new());
+    let child = scene.add_child(root, Node::new()).unwrap();
     assert!(!scene.roots().contains(&child));
 }
 
@@ -66,7 +66,10 @@ fn world_transform_default_is_identity() {
     let mut scene = Scene::new();
     let id = scene.add_node(Node::new());
     scene.update();
-    assert_eq!(scene.get(id).world_transform(), nene::math::Mat4::IDENTITY);
+    assert_eq!(
+        scene.get(id).unwrap().world_transform(),
+        nene::math::Mat4::IDENTITY
+    );
 }
 
 #[test]
@@ -75,7 +78,7 @@ fn world_transform_root_translation() {
     let id = scene
         .add_node(Node::new().with_transform(Transform::from_position(Vec3::new(1.0, 2.0, 3.0))));
     scene.update();
-    let col = scene.get(id).world_transform().w_axis;
+    let col = scene.get(id).unwrap().world_transform().w_axis;
     assert!((col.x - 1.0).abs() < 1e-5);
     assert!((col.y - 2.0).abs() < 1e-5);
     assert!((col.z - 3.0).abs() < 1e-5);
@@ -86,12 +89,14 @@ fn world_transform_inherits_parent_translation() {
     let mut scene = Scene::new();
     let parent = scene
         .add_node(Node::new().with_transform(Transform::from_position(Vec3::new(5.0, 0.0, 0.0))));
-    let child = scene.add_child(
-        parent,
-        Node::new().with_transform(Transform::from_position(Vec3::new(1.0, 0.0, 0.0))),
-    );
+    let child = scene
+        .add_child(
+            parent,
+            Node::new().with_transform(Transform::from_position(Vec3::new(1.0, 0.0, 0.0))),
+        )
+        .unwrap();
     scene.update();
-    let col = scene.get(child).world_transform().w_axis;
+    let col = scene.get(child).unwrap().world_transform().w_axis;
     assert!((col.x - 6.0).abs() < 1e-5);
 }
 
@@ -100,16 +105,20 @@ fn world_transform_three_levels() {
     let mut scene = Scene::new();
     let root = scene
         .add_node(Node::new().with_transform(Transform::from_position(Vec3::new(1.0, 0.0, 0.0))));
-    let mid = scene.add_child(
-        root,
-        Node::new().with_transform(Transform::from_position(Vec3::new(2.0, 0.0, 0.0))),
-    );
-    let leaf = scene.add_child(
-        mid,
-        Node::new().with_transform(Transform::from_position(Vec3::new(3.0, 0.0, 0.0))),
-    );
+    let mid = scene
+        .add_child(
+            root,
+            Node::new().with_transform(Transform::from_position(Vec3::new(2.0, 0.0, 0.0))),
+        )
+        .unwrap();
+    let leaf = scene
+        .add_child(
+            mid,
+            Node::new().with_transform(Transform::from_position(Vec3::new(3.0, 0.0, 0.0))),
+        )
+        .unwrap();
     scene.update();
-    let x = scene.get(leaf).world_transform().w_axis.x;
+    let x = scene.get(leaf).unwrap().world_transform().w_axis.x;
     assert!((x - 6.0).abs() < 1e-5);
 }
 
@@ -121,7 +130,7 @@ fn world_transform_rotation_applied() {
     )));
     scene.update();
     // In a right-handed system a +90° Y rotation maps X → -Z
-    let x_axis = scene.get(id).world_transform().x_axis;
+    let x_axis = scene.get(id).unwrap().world_transform().x_axis;
     assert!(x_axis.x.abs() < 1e-5);
     assert!((x_axis.z + 1.0).abs() < 1e-5);
 }
@@ -133,7 +142,7 @@ fn update_called_twice_is_stable() {
         .add_node(Node::new().with_transform(Transform::from_position(Vec3::new(3.0, 0.0, 0.0))));
     scene.update();
     scene.update();
-    let x = scene.get(id).world_transform().w_axis.x;
+    let x = scene.get(id).unwrap().world_transform().w_axis.x;
     assert!((x - 3.0).abs() < 1e-5);
 }
 
@@ -163,10 +172,10 @@ fn remove_node_also_removes_children() {
 fn remove_child_keeps_parent() {
     let mut scene = Scene::new();
     let root = scene.add_node(Node::new());
-    let child = scene.add_child(root, Node::new());
+    let child = scene.add_child(root, Node::new()).unwrap();
     scene.remove_node(child);
     assert_eq!(scene.len(), 1);
-    assert!(scene.get(root).children().is_empty());
+    assert!(scene.get(root).unwrap().children().is_empty());
 }
 
 // ── walk ──────────────────────────────────────────────────────────────────────

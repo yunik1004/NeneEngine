@@ -280,7 +280,8 @@ impl World {
         let Some(mut storage_a) = self.storages.remove(&type_a) else {
             return;
         };
-        let set_a = downcast_mut::<A>(storage_a.as_mut()).unwrap();
+        let set_a = downcast_mut::<A>(storage_a.as_mut())
+            .expect("ECS invariant violated: type ID mismatch in view_mut");
         let (ids, values) = set_a.iter_parts_mut();
 
         if let Some(storage_b) = self.storages.get(&type_b)
@@ -322,7 +323,8 @@ impl World {
         let Some(mut storage_a) = self.storages.remove(&type_a) else {
             return;
         };
-        let set_a = downcast_mut::<A>(storage_a.as_mut()).unwrap();
+        let set_a = downcast_mut::<A>(storage_a.as_mut())
+            .expect("ECS invariant violated: type ID mismatch in view_mut3");
         let (ids, values) = set_a.iter_parts_mut();
 
         let sb = self.storages.get(&type_b);
@@ -359,7 +361,7 @@ impl World {
             .entry(TypeId::of::<T>())
             .or_insert_with(|| Box::new(SparseSet::<T>::new()));
         downcast_mut::<T>(storage.as_mut())
-            .unwrap()
+            .expect("ECS invariant violated: type ID mismatch in insert_raw")
             .insert(idx, value);
     }
 

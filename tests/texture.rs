@@ -73,7 +73,9 @@ fn texture_load_from_memory() {
         image::ImageFormat::Png,
     )
     .unwrap();
-    let _: Texture = ctx.load_texture_from_memory(&bytes);
+    let _ = ctx
+        .load_texture_from_memory(&bytes)
+        .expect("failed to load texture from memory");
 }
 
 #[test]

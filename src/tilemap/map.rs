@@ -53,10 +53,10 @@ impl TileSet {
         }
         let aw = self.atlas_w as f32;
         let ah = self.atlas_h as f32;
-        let u0 = col as f32 * self.tile_w as f32 / aw;
-        let v0 = row as f32 * self.tile_h as f32 / ah;
-        let uw = self.tile_w as f32 / aw;
-        let vw = self.tile_h as f32 / ah;
+        let u0 = (col as f32 * self.tile_w as f32 / aw).min(1.0);
+        let v0 = (row as f32 * self.tile_h as f32 / ah).min(1.0);
+        let uw = (self.tile_w as f32 / aw).min(1.0 - u0);
+        let vw = (self.tile_h as f32 / ah).min(1.0 - v0);
         Some([u0, v0, uw, vw])
     }
 

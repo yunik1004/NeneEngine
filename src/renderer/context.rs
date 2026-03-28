@@ -107,7 +107,7 @@ impl GpuDevice {
         self.queue.write_buffer(&buf.inner, 0, data);
     }
 
-    pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {
+    pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Option<Texture> {
         self.load_texture_with(path, FilterMode::Linear)
     }
 
@@ -115,22 +115,38 @@ impl GpuDevice {
         &self,
         path: impl AsRef<std::path::Path>,
         filter: FilterMode,
-    ) -> Texture {
-        let rgba = image::open(path).expect("Failed to open image").to_rgba8();
+    ) -> Option<Texture> {
+        let rgba = image::open(path).ok()?.to_rgba8();
         let (w, h) = rgba.dimensions();
-        texture::create(&self.device, &self.queue, w, h, &rgba, filter)
+        Some(texture::create(
+            &self.device,
+            &self.queue,
+            w,
+            h,
+            &rgba,
+            filter,
+        ))
     }
 
-    pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Texture {
+    pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Option<Texture> {
         self.load_texture_from_memory_with(bytes, FilterMode::Linear)
     }
 
-    pub fn load_texture_from_memory_with(&self, bytes: &[u8], filter: FilterMode) -> Texture {
-        let rgba = image::load_from_memory(bytes)
-            .expect("Failed to decode image")
-            .to_rgba8();
+    pub fn load_texture_from_memory_with(
+        &self,
+        bytes: &[u8],
+        filter: FilterMode,
+    ) -> Option<Texture> {
+        let rgba = image::load_from_memory(bytes).ok()?.to_rgba8();
         let (w, h) = rgba.dimensions();
-        texture::create(&self.device, &self.queue, w, h, &rgba, filter)
+        Some(texture::create(
+            &self.device,
+            &self.queue,
+            w,
+            h,
+            &rgba,
+            filter,
+        ))
     }
 
     pub fn create_texture(&self, width: u32, height: u32, rgba: &[u8]) -> Texture {
@@ -409,7 +425,7 @@ impl HeadlessContext {
         self.gpu.update_uniform_buffer(buf, data)
     }
 
-    pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {
+    pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Option<Texture> {
         self.gpu.load_texture(path)
     }
 
@@ -417,15 +433,19 @@ impl HeadlessContext {
         &self,
         path: impl AsRef<std::path::Path>,
         filter: FilterMode,
-    ) -> Texture {
+    ) -> Option<Texture> {
         self.gpu.load_texture_with(path, filter)
     }
 
-    pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Texture {
+    pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Option<Texture> {
         self.gpu.load_texture_from_memory(bytes)
     }
 
-    pub fn load_texture_from_memory_with(&self, bytes: &[u8], filter: FilterMode) -> Texture {
+    pub fn load_texture_from_memory_with(
+        &self,
+        bytes: &[u8],
+        filter: FilterMode,
+    ) -> Option<Texture> {
         self.gpu.load_texture_from_memory_with(bytes, filter)
     }
 
@@ -646,7 +666,14 @@ impl Context {
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
         }))
-        .expect("Failed to find adapter");
+        .or_else(|_| {
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::None,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: true,
+            }))
+        })
+        .expect("No GPU adapter found — update your graphics drivers");
 
         let (device, queue) =
             pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
@@ -755,7 +782,7 @@ impl Context {
             .create_pipeline(pipeline.descriptor(), self.surface_config.format)
     }
 
-    pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {
+    pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Option<Texture> {
         self.gpu.load_texture(path)
     }
 
@@ -763,15 +790,19 @@ impl Context {
         &self,
         path: impl AsRef<std::path::Path>,
         filter: FilterMode,
-    ) -> Texture {
+    ) -> Option<Texture> {
         self.gpu.load_texture_with(path, filter)
     }
 
-    pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Texture {
+    pub fn load_texture_from_memory(&self, bytes: &[u8]) -> Option<Texture> {
         self.gpu.load_texture_from_memory(bytes)
     }
 
-    pub fn load_texture_from_memory_with(&self, bytes: &[u8], filter: FilterMode) -> Texture {
+    pub fn load_texture_from_memory_with(
+        &self,
+        bytes: &[u8],
+        filter: FilterMode,
+    ) -> Option<Texture> {
         self.gpu.load_texture_from_memory_with(bytes, filter)
     }
 

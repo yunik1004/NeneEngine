@@ -209,7 +209,7 @@ impl TileMapRenderer {
                 }
             }
 
-            stream.draw_count = (verts.len() / 4 * 6) as u32;
+            stream.draw_count = ((verts.len() / 4 * 6) as u64).min(u32::MAX as u64) as u32;
             if !verts.is_empty() {
                 ctx.update_vertex_buffer(&stream.vbuf, &verts);
             }

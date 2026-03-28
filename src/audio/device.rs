@@ -78,12 +78,14 @@ pub struct AudioDevice {
 }
 
 impl AudioDevice {
-    pub fn new() -> Self {
+    /// Create the audio output device and mixer.
+    ///
+    /// Returns `None` if no output device is available (headless servers, WSL,
+    /// some CI environments). Game logic should check for `None` and skip audio.
+    pub fn new() -> Option<Self> {
         let host = cpal::default_host();
-        let device = host
-            .default_output_device()
-            .expect("No output device found");
-        let config = device.default_output_config().expect("No output config");
+        let device = host.default_output_device()?;
+        let config = device.default_output_config().ok()?;
 
         let sample_rate = config.sample_rate();
         let out_channels = config.channels() as usize;
@@ -144,13 +146,13 @@ impl AudioDevice {
                 |err| eprintln!("Audio stream error: {err}"),
                 None,
             )
-            .expect("Failed to build output stream");
+            .ok()?;
 
-        stream.play().expect("Failed to start audio stream");
-        Self {
+        stream.play().ok()?;
+        Some(Self {
             _stream: stream,
             sender,
-        }
+        })
     }
 
     /// Play at full volume, centred, without looping.
@@ -177,12 +179,6 @@ impl AudioDevice {
             })
             .ok();
         handle
-    }
-}
-
-impl Default for AudioDevice {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

@@ -104,7 +104,10 @@ impl Profiler {
             let frame_ms = self
                 .frame_start
                 .take()
-                .map(|t| t.elapsed().as_secs_f64() * 1000.0)
+                .map(|t| {
+                    // Clamp to at least 1 ns so fps is always computable.
+                    t.elapsed().as_nanos().max(1) as f64 * 1e-6
+                })
                 .unwrap_or(0.0);
             let record = FrameRecord {
                 frame_ms,
@@ -223,10 +226,9 @@ impl Profiler {
 
     #[cfg(debug_assertions)]
     fn recompute_stats(&mut self) {
-        if self.history.is_empty() {
+        let Some(last) = self.history.back() else {
             return;
-        }
-        let last = self.history.back().unwrap();
+        };
         self.frame_ms = last.frame_ms as f32;
         let frames: Vec<f32> = self.history.iter().map(|r| r.frame_ms as f32).collect();
         self.min_ms = frames.iter().cloned().fold(f32::MAX, f32::min);

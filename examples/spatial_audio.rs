@@ -44,7 +44,7 @@ struct SpatialAudioDemo {
 
 impl App for SpatialAudioDemo {
     fn new() -> Self {
-        let audio = AudioDevice::new();
+        let audio = AudioDevice::new().expect("no audio device");
         let sound = Arc::new(Sound::sine_wave(TONE_HZ, 0.5, 44100));
         let spatial = SpatialAudio::new(MAX_DIST);
         let source = spatial.play_source(&audio, &sound, Vec2::new(ORBIT_RADIUS, 0.0), true);

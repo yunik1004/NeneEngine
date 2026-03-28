@@ -557,9 +557,11 @@ impl Ui {
 
     /// Thin horizontal separator line.
     pub fn separator(&mut self) {
+        let Some(panel) = self.panels.last() else {
+            return;
+        };
         let pad = self.theme.panel_padding;
         let sep_h = 1.0;
-        let panel = self.panels.last().expect("call begin_panel first");
         let rect: Rect = [
             panel.x + pad,
             panel.cursor_y + 4.0,
@@ -577,7 +579,9 @@ impl Ui {
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     fn layout_rect(&self) -> Rect {
-        let panel = self.panels.last().expect("call begin_panel first");
+        let Some(panel) = self.panels.last() else {
+            return [0.0, 0.0, 0.0, 0.0];
+        };
         panel.next_rect(self.theme.item_height, self.theme.panel_padding)
     }
 

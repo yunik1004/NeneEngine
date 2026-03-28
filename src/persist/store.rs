@@ -118,7 +118,9 @@ impl SaveStore {
         let path = self.slot_path(slot);
         std::fs::create_dir_all(&self.dir).map_err(SaveError::Io)?;
         std::fs::write(&path, json).map_err(SaveError::Io)?;
-        self.slots.get_mut(slot).unwrap().dirty = false;
+        if let Some(s) = self.slots.get_mut(slot) {
+            s.dirty = false;
+        }
         Ok(())
     }
 
@@ -140,7 +142,9 @@ impl SaveStore {
         };
         let path = self.slot_path(slot);
         let dir = self.dir.clone();
-        self.slots.get_mut(slot).unwrap().dirty = false;
+        if let Some(s) = self.slots.get_mut(slot) {
+            s.dirty = false;
+        }
         std::thread::spawn(move || {
             std::fs::create_dir_all(&dir).map_err(SaveError::Io)?;
             std::fs::write(&path, json).map_err(SaveError::Io)?;

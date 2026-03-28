@@ -161,15 +161,16 @@ impl Scene {
     }
 
     /// Add `node` as a child of `parent` and return its id.
-    pub fn add_child(&mut self, parent: NodeId, mut node: Node) -> NodeId {
+    ///
+    /// Returns `None` if `parent` is not a live node.
+    pub fn add_child(&mut self, parent: NodeId, mut node: Node) -> Option<NodeId> {
+        self.nodes.get(parent.0).and_then(Option::as_ref)?;
         node.parent = Some(parent);
         let id = self.alloc(node);
-        self.nodes[parent.0]
-            .as_mut()
-            .expect("invalid parent NodeId")
-            .children
-            .push(id);
-        id
+        if let Some(Some(p)) = self.nodes.get_mut(parent.0) {
+            p.children.push(id);
+        }
+        Some(id)
     }
 
     /// Remove `id` and all its descendants from the scene.
@@ -200,13 +201,13 @@ impl Scene {
         }
     }
 
-    pub fn get(&self, id: NodeId) -> &Node {
-        self.nodes[id.0].as_ref().expect("invalid NodeId")
+    pub fn get(&self, id: NodeId) -> Option<&Node> {
+        self.nodes.get(id.0)?.as_ref()
     }
 
     /// Remember to call [`Scene::update`] afterwards to refresh world transforms.
-    pub fn get_mut(&mut self, id: NodeId) -> &mut Node {
-        self.nodes[id.0].as_mut().expect("invalid NodeId")
+    pub fn get_mut(&mut self, id: NodeId) -> Option<&mut Node> {
+        self.nodes.get_mut(id.0)?.as_mut()
     }
 
     pub fn roots(&self) -> &[NodeId] {
@@ -231,10 +232,18 @@ impl Scene {
     }
 
     fn update_subtree(&mut self, id: NodeId, parent_world: Mat4) {
-        let world = parent_world * self.nodes[id.0].as_ref().unwrap().transform.to_mat4();
-        self.nodes[id.0].as_mut().unwrap().world_transform = world;
-        for i in 0..self.nodes[id.0].as_ref().unwrap().children.len() {
-            let child = self.nodes[id.0].as_ref().unwrap().children[i];
+        let (world, children) = if let Some(Some(node)) = self.nodes.get(id.0) {
+            (
+                parent_world * node.transform.to_mat4(),
+                node.children.clone(),
+            )
+        } else {
+            return;
+        };
+        if let Some(Some(node)) = self.nodes.get_mut(id.0) {
+            node.world_transform = world;
+        }
+        for child in children {
             self.update_subtree(child, world);
         }
     }

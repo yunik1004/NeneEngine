@@ -75,14 +75,20 @@ impl Client {
                 match buf[0] {
                     KIND_CONNECT_ACK => {
                         connected_recv.store(true, Ordering::Relaxed);
-                        let _ = tx.send(ClientEvent::Connected);
+                        if tx.send(ClientEvent::Connected).is_err() {
+                            break;
+                        }
                     }
                     KIND_DISCONNECT => {
                         connected_recv.store(false, Ordering::Relaxed);
-                        let _ = tx.send(ClientEvent::Disconnected);
+                        if tx.send(ClientEvent::Disconnected).is_err() {
+                            break;
+                        }
                     }
                     KIND_DATA => {
-                        let _ = tx.send(ClientEvent::Message(buf[1..len].to_vec()));
+                        if tx.send(ClientEvent::Message(buf[1..len].to_vec())).is_err() {
+                            break;
+                        }
                     }
                     _ => {}
                 }
@@ -101,6 +107,7 @@ impl Client {
                         pkt.extend_from_slice(&data);
                         let _ = socket_send.send(&pkt).await;
                     }
+                    else => break,
                 }
             }
         });
@@ -132,7 +139,9 @@ impl Client {
         if !self.connected.load(Ordering::Relaxed) {
             return Err(NetError::NotConnected);
         }
-        self.tx_out.send(data.to_vec()).ok();
+        self.tx_out
+            .send(data.to_vec())
+            .map_err(|_| NetError::Io(std::io::Error::other("send task closed")))?;
         Ok(())
     }
 

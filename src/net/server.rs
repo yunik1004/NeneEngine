@@ -86,22 +86,39 @@ impl Server {
 
                 match kind {
                     KIND_CONNECT => {
-                        let id = ClientId(next_id);
-                        next_id += 1;
-                        a2i.lock().await.insert(from, id);
-                        i2a_recv.lock().await.insert(id, from);
-                        let _ = socket.send_to(&[KIND_CONNECT_ACK], from).await;
-                        let _ = tx.send(ServerEvent::Connected(id));
+                        let mut a2i_guard = a2i.lock().await;
+                        if let std::collections::hash_map::Entry::Vacant(e) = a2i_guard.entry(from)
+                        {
+                            let id = ClientId(next_id);
+                            next_id += 1;
+                            e.insert(id);
+                            i2a_recv.lock().await.insert(id, from);
+                            drop(a2i_guard);
+                            let _ = socket.send_to(&[KIND_CONNECT_ACK], from).await;
+                            if tx.send(ServerEvent::Connected(id)).is_err() {
+                                break;
+                            }
+                        } else {
+                            // Already connected — re-ACK, no new ClientId.
+                            drop(a2i_guard);
+                            let _ = socket.send_to(&[KIND_CONNECT_ACK], from).await;
+                        }
                     }
                     KIND_DISCONNECT => {
-                        if let Some(id) = a2i.lock().await.remove(&from) {
+                        let mut a2i_guard = a2i.lock().await;
+                        if let Some(id) = a2i_guard.remove(&from) {
                             i2a_recv.lock().await.remove(&id);
-                            let _ = tx.send(ServerEvent::Disconnected(id));
+                            drop(a2i_guard);
+                            if tx.send(ServerEvent::Disconnected(id)).is_err() {
+                                break;
+                            }
                         }
                     }
                     KIND_DATA => {
-                        if let Some(&id) = a2i.lock().await.get(&from) {
-                            let _ = tx.send(ServerEvent::Message(id, payload));
+                        if let Some(&id) = a2i.lock().await.get(&from)
+                            && tx.send(ServerEvent::Message(id, payload)).is_err()
+                        {
+                            break;
                         }
                     }
                     KIND_HEARTBEAT => {
@@ -166,7 +183,9 @@ impl Server {
         if !self.clients.contains_key(&id) {
             return Err(NetError::UnknownClient(id));
         }
-        self.tx_out.send((id, data.to_vec())).ok();
+        self.tx_out
+            .send((id, data.to_vec()))
+            .map_err(|_| NetError::Io(std::io::Error::other("send task closed")))?;
         Ok(())
     }
 
