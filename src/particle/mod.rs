@@ -24,4 +24,4 @@ mod system;
 
 pub use emitter::{EmitterConfig, ParticleInstance};
 pub use pool::ParticlePool;
-pub use system::{ParticleSystem, MAX_PARTICLES};
+pub use system::{MAX_PARTICLES, ParticleSystem};

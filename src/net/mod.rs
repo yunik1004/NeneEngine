@@ -39,10 +39,10 @@
 //! client.update(1.0 / 60.0);
 //! ```
 
+mod client;
 mod protocol;
 mod server;
-mod client;
 
+pub use client::{Client, ClientEvent};
 pub use protocol::{ClientId, NetError};
 pub use server::{Server, ServerEvent};
-pub use client::{Client, ClientEvent};

@@ -8,7 +8,11 @@ pub struct Time {
 
 impl Time {
     pub fn fps(&self) -> f32 {
-        if self.delta > 0.0 { 1.0 / self.delta } else { 0.0 }
+        if self.delta > 0.0 {
+            1.0 / self.delta
+        } else {
+            0.0
+        }
     }
 }
 

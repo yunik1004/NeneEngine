@@ -39,7 +39,7 @@ impl Drop for ScopeGuard<'_> {
 // ── Internal types ────────────────────────────────────────────────────────────
 
 #[derive(Clone)]
-struct ScopeEntry {
+pub(crate) struct ScopeEntry {
     name: &'static str,
     ms: f64,
 }

@@ -140,7 +140,12 @@ impl Server {
         while let Ok(ev) = self.rx.try_recv() {
             match &ev {
                 ServerEvent::Connected(id) => {
-                    self.clients.insert(*id, ClientState { time_since_recv: 0.0 });
+                    self.clients.insert(
+                        *id,
+                        ClientState {
+                            time_since_recv: 0.0,
+                        },
+                    );
                     self.next_id += 1;
                 }
                 ServerEvent::Disconnected(id) => {
@@ -193,7 +198,8 @@ impl Server {
         for state in self.clients.values_mut() {
             state.time_since_recv += dt;
         }
-        self.clients.retain(|_, state| state.time_since_recv < TIMEOUT_SECS);
+        self.clients
+            .retain(|_, state| state.time_since_recv < TIMEOUT_SECS);
     }
 
     pub fn client_ids(&self) -> Vec<ClientId> {

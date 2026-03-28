@@ -22,4 +22,4 @@ mod map;
 mod renderer;
 
 pub use map::{TileLayer, TileMap, TileSet};
-pub use renderer::{TileMapRenderer, MAX_VISIBLE_TILES};
+pub use renderer::{MAX_VISIBLE_TILES, TileMapRenderer};

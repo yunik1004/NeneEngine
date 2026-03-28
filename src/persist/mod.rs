@@ -1,7 +1,7 @@
 //! Persistence: slot-based game saves and typed settings.
 
-mod store;
 mod settings;
+mod store;
 
-pub use store::{SaveError, SaveStore};
 pub use settings::Settings;
+pub use store::{SaveError, SaveStore};

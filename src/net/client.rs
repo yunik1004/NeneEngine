@@ -1,5 +1,8 @@
 use std::net::SocketAddr;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use tokio::{net::UdpSocket, runtime::Runtime, sync::mpsc};
 

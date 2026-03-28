@@ -17,5 +17,5 @@
 mod draw;
 mod profiler;
 
-pub use draw::{color, DebugBuffer, DebugDraw, DebugVertex, MAX_DEBUG_VERTS};
-pub use profiler::{Profiler, ScopeGuard, PROFILE_HISTORY};
+pub use draw::{DebugBuffer, DebugDraw, DebugVertex, MAX_DEBUG_VERTS, color};
+pub use profiler::{PROFILE_HISTORY, Profiler, ScopeGuard};
