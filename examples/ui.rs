@@ -83,7 +83,8 @@ fn init(ctx: &mut Context) -> State {
         BG_SHADER,
     ));
 
-    let mut settings = Settings::new("saves/settings.json");
+    let tmp = std::env::temp_dir().join("nene_ui_example");
+    let mut settings = Settings::new(tmp.join("settings.json"));
     settings.register("sim.speed", 3.5f32);
     settings.register("sim.intensity", 0.7f32);
     settings.register("sim.brightness", 1.0f32);
@@ -112,7 +113,7 @@ fn init(ctx: &mut Context) -> State {
         show_fps,
         settings,
         settings_msg,
-        store: SaveStore::new("saves"),
+        store: SaveStore::new(&tmp),
         game: GameState::default(),
         save_msg: "no save loaded".into(),
         locale,
