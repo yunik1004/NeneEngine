@@ -162,7 +162,7 @@ impl App for SceneDemo {
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
         let Some(mesh) = &self.mesh else { return };
         for body in &self.bodies {
-            body.mat.render(pass, mesh);
+            body.mat.render(pass, mesh, None, None);
         }
         if let Some(debug) = &self.debug {
             debug.draw(pass);

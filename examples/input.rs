@@ -19,7 +19,7 @@ use nene::{
     event::Events,
     input::{GamepadAxis, Input, Key, MouseButton},
     math::{Mat4, Vec2, Vec3, Vec4},
-    renderer::{Context, FlatObject, Pos2, RenderPass},
+    renderer::{Context, FlatObject, RenderPass},
     time::Time,
     ui::Ui,
     window::Config,
@@ -42,13 +42,13 @@ const LOG_MAX: usize = 8;
 const W: u32 = 860;
 const H: u32 = 480;
 
-const QUAD: &[Pos2] = &[
-    Pos2 { pos: [-0.5, -0.5] },
-    Pos2 { pos: [0.5, -0.5] },
-    Pos2 { pos: [0.5, 0.5] },
-    Pos2 { pos: [-0.5, -0.5] },
-    Pos2 { pos: [0.5, 0.5] },
-    Pos2 { pos: [-0.5, 0.5] },
+const QUAD: &[Vec2] = &[
+    Vec2::new(-0.5, -0.5),
+    Vec2::new(0.5, -0.5),
+    Vec2::new(0.5, 0.5),
+    Vec2::new(-0.5, -0.5),
+    Vec2::new(0.5, 0.5),
+    Vec2::new(-0.5, 0.5),
 ];
 
 fn ortho() -> Mat4 {

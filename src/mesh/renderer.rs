@@ -5,8 +5,8 @@ use bytemuck::{Pod, Zeroable};
 use crate::renderer::material::{Features, gen_main_wgsl, gen_shadow_wgsl};
 use crate::renderer::{
     AmbientLight, BuiltinPipeline, Context, DirectionalLight, FilterMode, IndexBuffer,
-    MaterialUniform, MvpUniform, Pipeline, PipelineDescriptor, RenderPass, ShadowMap, Texture,
-    UniformBuffer, VertexAttribute, VertexBuffer, VertexFormat, VertexLayout,
+    MaterialUniform, Pipeline, PipelineDescriptor, RenderPass, ShadowMap, Texture, UniformBuffer,
+    VertexAttribute, VertexBuffer, VertexFormat, VertexLayout,
 };
 
 use super::{ColorVertex, MeshVertex, Model};
@@ -40,6 +40,7 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) color: vec4<f32> 
 #[allow(private_interfaces)]
 impl GpuVertex for ColorVertex {
     fn create_pipeline(ctx: &mut Context) -> Pipeline {
+        use std::mem::offset_of;
         ctx.create_pipeline(
             PipelineDescriptor::new(
                 COLOR_WGSL,
@@ -47,12 +48,12 @@ impl GpuVertex for ColorVertex {
                     stride: std::mem::size_of::<ColorVertex>() as u64,
                     attributes: vec![
                         VertexAttribute {
-                            offset: 0,
+                            offset: offset_of!(ColorVertex, pos) as u64,
                             location: 0,
                             format: VertexFormat::Float32x3,
                         },
                         VertexAttribute {
-                            offset: 12,
+                            offset: offset_of!(ColorVertex, color) as u64,
                             location: 1,
                             format: VertexFormat::Float32x4,
                         },
@@ -93,7 +94,7 @@ impl<V: GpuVertex> Renderer<V> {
             vbuf: None,
             ibuf: None,
             vert_count: 0,
-            ubuf: ctx.create_uniform_buffer(&MvpUniform::identity()),
+            ubuf: ctx.create_uniform_buffer(&glam::Mat4::IDENTITY),
             texture: None,
             _phantom: PhantomData,
         }
@@ -121,7 +122,7 @@ impl<V: GpuVertex> Renderer<V> {
     }
 
     pub fn set_transform(&mut self, ctx: &mut Context, mvp: glam::Mat4) {
-        ctx.update_uniform_buffer(&self.ubuf, &MvpUniform::new(mvp));
+        ctx.update_uniform_buffer(&self.ubuf, &mvp);
     }
 
     pub fn render(&self, pass: &mut RenderPass) {

@@ -12,9 +12,9 @@ use nene::{
     app::{App, WindowId, run},
     camera::Camera,
     input::{Input, Key},
-    math::{Mat4, Vec3, Vec4},
+    math::{Mat4, Vec2, Vec3, Vec4},
     mesh::unit_cube,
-    renderer::{Context, FlatObject, Material, MaterialBuilder, Mesh, Pos2, RenderPass},
+    renderer::{Context, FlatObject, Material, MaterialBuilder, Mesh, RenderPass},
     time::Time,
     ui::Ui,
     window::Config,
@@ -30,13 +30,11 @@ struct State2D {
     camera: Camera,
 }
 
-fn circle_verts(radius: f32, segs: u32) -> (Vec<Pos2>, Vec<u32>) {
-    let mut verts = vec![Pos2 { pos: [0.0, 0.0] }];
+fn circle_verts(radius: f32, segs: u32) -> (Vec<Vec2>, Vec<u32>) {
+    let mut verts = vec![Vec2::new(0.0, 0.0)];
     for i in 0..=segs {
         let a = i as f32 / segs as f32 * TAU;
-        verts.push(Pos2 {
-            pos: [radius * a.cos(), radius * a.sin()],
-        });
+        verts.push(Vec2::new(radius * a.cos(), radius * a.sin()));
     }
     let mut idx = Vec::new();
     for i in 0..segs {
@@ -45,13 +43,13 @@ fn circle_verts(radius: f32, segs: u32) -> (Vec<Pos2>, Vec<u32>) {
     (verts, idx)
 }
 
-fn rect_verts(w: f32, h: f32) -> (Vec<Pos2>, Vec<u32>) {
+fn rect_verts(w: f32, h: f32) -> (Vec<Vec2>, Vec<u32>) {
     let (hw, hh) = (w * 0.5, h * 0.5);
     let v = vec![
-        Pos2 { pos: [-hw, -hh] },
-        Pos2 { pos: [hw, -hh] },
-        Pos2 { pos: [hw, hh] },
-        Pos2 { pos: [-hw, hh] },
+        Vec2::new(-hw, -hh),
+        Vec2::new(hw, -hh),
+        Vec2::new(hw, hh),
+        Vec2::new(-hw, hh),
     ];
     (v, vec![0, 1, 2, 0, 2, 3])
 }
@@ -223,8 +221,8 @@ impl App for PhysicsDemo {
             }
         } else {
             if let Some(s) = &self.s3d {
-                s.floor_mat.render(pass, &s.floor_mesh);
-                s.cube_mat.render(pass, &s.cube_mesh);
+                s.floor_mat.render(pass, &s.floor_mesh, None, None);
+                s.cube_mat.render(pass, &s.cube_mesh, None, None);
             }
         }
         if let Some(ui) = &self.ui {

@@ -344,7 +344,7 @@ impl App for StateMachineDemo {
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
         let Some(mat) = &self.mat else { return };
-        mat.render(pass, &self.model.skinned_meshes[0]);
+        mat.render(pass, &self.model.skinned_meshes[0], None);
         if let Some(ui) = &self.ui {
             ui.render(pass);
         }

@@ -1,10 +1,10 @@
 //! [`FlatObject`] — 2-D colored shape rendered via the built-in Transform2d pipeline.
 
 use super::{
-    BuiltinPipeline, Context, IndexBuffer, Pipeline, Pos2, RenderPass, TransformUniform,
-    UniformBuffer, VertexBuffer,
+    BuiltinPipeline, Context, IndexBuffer, Pipeline, RenderPass, TransformUniform, UniformBuffer,
+    VertexBuffer,
 };
-use glam::{Mat4, Vec4};
+use glam::{Mat4, Vec2, Vec4};
 
 enum Draw {
     NonIndexed(u32),
@@ -19,12 +19,12 @@ enum Draw {
 ///
 /// # Example
 /// ```no_run
-/// # use nene::renderer::{Context, FlatObject, Pos2, RenderPass};
-/// # use nene::math::{Mat4, Vec4};
-/// const QUAD: &[Pos2] = &[
-///     Pos2 { pos: [-0.5, -0.5] }, Pos2 { pos: [0.5, -0.5] },
-///     Pos2 { pos: [0.5,  0.5] }, Pos2 { pos: [-0.5, -0.5] },
-///     Pos2 { pos: [0.5,  0.5] }, Pos2 { pos: [-0.5,  0.5] },
+/// # use nene::renderer::{Context, FlatObject, RenderPass};
+/// # use nene::math::{Mat4, Vec2, Vec4};
+/// const QUAD: &[Vec2] = &[
+///     Vec2::new(-0.5, -0.5), Vec2::new(0.5, -0.5),
+///     Vec2::new(0.5,  0.5),  Vec2::new(-0.5, -0.5),
+///     Vec2::new(0.5,  0.5),  Vec2::new(-0.5,  0.5),
 /// ];
 /// // window_ready:
 /// // let square = FlatObject::new(ctx, QUAD, Vec4::new(0.3, 0.6, 1.0, 1.0));
@@ -44,7 +44,7 @@ pub struct FlatObject {
 
 impl FlatObject {
     /// Create from a pre-triangulated vertex list (no index buffer).
-    pub fn new(ctx: &mut Context, vertices: &[Pos2], color: Vec4) -> Self {
+    pub fn new(ctx: &mut Context, vertices: &[Vec2], color: Vec4) -> Self {
         let count = vertices.len() as u32;
         Self {
             pipeline: ctx.create_builtin_pipeline(BuiltinPipeline::Transform2d),
@@ -56,7 +56,7 @@ impl FlatObject {
     }
 
     /// Create from a vertex list and an index buffer.
-    pub fn new_indexed(ctx: &mut Context, vertices: &[Pos2], indices: &[u32], color: Vec4) -> Self {
+    pub fn new_indexed(ctx: &mut Context, vertices: &[Vec2], indices: &[u32], color: Vec4) -> Self {
         Self {
             pipeline: ctx.create_builtin_pipeline(BuiltinPipeline::Transform2d),
             vbuf: ctx.create_vertex_buffer(vertices),

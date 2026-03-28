@@ -158,13 +158,7 @@ pub struct SpriteBatch {
 impl SpriteBatch {
     /// Create a new batch that can hold up to `max_sprites` sprites per frame.
     pub fn new(ctx: &mut Context, max_sprites: usize) -> Self {
-        // Static index buffer: each quad uses indices [b, b+1, b+2, b, b+2, b+3].
-        let indices: Vec<u32> = (0..max_sprites as u32)
-            .flat_map(|i| {
-                let b = i * 4;
-                [b, b + 1, b + 2, b, b + 2, b + 3]
-            })
-            .collect();
+        let indices = crate::renderer::quad_indices(max_sprites as u32);
 
         // Pre-allocate vertex buffer (zeroed).
         let vertices = vec![

@@ -44,7 +44,7 @@
 //!     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
 //!         let (Some(mat), Some(mesh), Some(sm)) =
 //!             (&self.mat, &self.mesh, &self.shadow_map) else { return };
-//!         mat.render_shadowed(pass, mesh, sm);
+//!         mat.render(pass, mesh, None, Some(sm));
 //!     }
 //!
 //!     fn windows() -> Vec<Config> { vec![Config::default()] }
@@ -190,8 +190,7 @@ impl MaterialBuilder {
         self
     }
 
-    /// Sample a diffuse texture at group 1. Bind a [`Texture`] by passing
-    /// it to [`Material::render_textured`] or [`Material::render_textured_shadowed`].
+    /// Sample a diffuse texture at group 1. Pass `Some(&texture)` to [`Material::render`].
     pub fn texture(mut self) -> Self {
         self.feat.texture = true;
         self
@@ -233,8 +232,7 @@ impl MaterialBuilder {
     /// Override the auto-generated WGSL with a custom shader.
     ///
     /// Your shader must accept `MeshVertex` at locations 0–2 and bind
-    /// `MaterialU` at `@group(0) @binding(0)`. All other render methods
-    /// (`render`, `render_textured`, etc.) continue to work as usual.
+    /// `MaterialU` at `@group(0) @binding(0)`. [`Material::render`] continues to work as usual.
     pub fn shader(mut self, wgsl: impl Into<String>) -> Self {
         self.custom_wgsl = Some(wgsl.into());
         self
@@ -306,36 +304,18 @@ impl Material {
         ctx.update_uniform_buffer(&self.ubuf, &self.uniform);
     }
 
-    /// Draw with flat/lit color (no texture, no shadow map).
-    pub fn render(&self, pass: &mut RenderPass, mesh: &Mesh) {
-        self.draw(pass, &mesh.vbuf, &mesh.ibuf, None, None);
-    }
-
-    /// Draw with a diffuse texture at group 1.
-    pub fn render_textured(&self, pass: &mut RenderPass, mesh: &Mesh, texture: &Texture) {
-        self.draw(pass, &mesh.vbuf, &mesh.ibuf, Some(texture), None);
-    }
-
-    /// Draw with PCF shadow map at group 2 (no texture).
-    pub fn render_shadowed(&self, pass: &mut RenderPass, mesh: &Mesh, shadow_map: &ShadowMap) {
-        self.draw(pass, &mesh.vbuf, &mesh.ibuf, None, Some(shadow_map));
-    }
-
-    /// Draw with both texture and shadow map.
-    pub fn render_textured_shadowed(
+    /// Draw the mesh.
+    ///
+    /// Pass `Some(&texture)` if the material was built with [`.texture()`](MaterialBuilder::texture).
+    /// Pass `Some(&shadow_map)` if the material was built with [`.shadow()`](MaterialBuilder::shadow).
+    pub fn render(
         &self,
         pass: &mut RenderPass,
         mesh: &Mesh,
-        texture: &Texture,
-        shadow_map: &ShadowMap,
+        texture: Option<&Texture>,
+        shadow_map: Option<&ShadowMap>,
     ) {
-        self.draw(
-            pass,
-            &mesh.vbuf,
-            &mesh.ibuf,
-            Some(texture),
-            Some(shadow_map),
-        );
+        self.draw(pass, &mesh.vbuf, &mesh.ibuf, texture, shadow_map);
     }
 
     /// Instanced draw. Only valid for materials built with

@@ -89,8 +89,7 @@ impl<const N: usize> SkinnedMaterialBuilder<N> {
         self
     }
 
-    /// Sample a diffuse texture at group 2. Bind via
-    /// [`SkinnedMaterial::render_textured`].
+    /// Sample a diffuse texture at group 2. Pass `Some(&texture)` to [`SkinnedMaterial::render`].
     pub fn texture(mut self) -> Self {
         self.feat.texture = true;
         self
@@ -147,18 +146,12 @@ impl<const N: usize> SkinnedMaterial<N> {
         ctx.update_uniform_buffer(&self.joint_buf, joints);
     }
 
-    /// Draw with flat color (no texture).
+    /// Draw the mesh.
     ///
+    /// Pass `Some(&texture)` if the material was built with [`.texture()`](SkinnedMaterialBuilder::texture).
     /// The mesh must have been [`upload`](SkinnedMesh::upload)ed first.
-    pub fn render(&self, pass: &mut RenderPass, mesh: &SkinnedMesh) {
-        self.draw(pass, mesh, None);
-    }
-
-    /// Draw with a diffuse texture at group 2.
-    ///
-    /// The mesh must have been [`upload`](SkinnedMesh::upload)ed first.
-    pub fn render_textured(&self, pass: &mut RenderPass, mesh: &SkinnedMesh, texture: &Texture) {
-        self.draw(pass, mesh, Some(texture));
+    pub fn render(&self, pass: &mut RenderPass, mesh: &SkinnedMesh, texture: Option<&Texture>) {
+        self.draw(pass, mesh, texture);
     }
 
     fn draw(&self, pass: &mut RenderPass, mesh: &SkinnedMesh, texture: Option<&Texture>) {

@@ -1,100 +1,8 @@
 //! Pre-built pipelines and vertex types used internally by the renderer.
 
-use bytemuck::{Pod, Zeroable};
-
 use super::{PipelineDescriptor, VertexAttribute, VertexFormat, VertexLayout};
 
-// ── Vertex types ──────────────────────────────────────────────────────────────
-
-/// 2-D position vertex — NDC space, location 0.
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub struct Pos2 {
-    pub pos: [f32; 2],
-}
-
-impl Pos2 {
-    pub fn new(x: f32, y: f32) -> Self {
-        Self { pos: [x, y] }
-    }
-
-    pub(crate) fn layout() -> VertexLayout {
-        VertexLayout {
-            stride: 8,
-            attributes: vec![VertexAttribute {
-                offset: 0,
-                location: 0,
-                format: VertexFormat::Float32x2,
-            }],
-        }
-    }
-}
-
-/// 2-D position + UV vertex — locations 0, 1.
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub struct Pos2Uv {
-    pub pos: [f32; 2],
-    pub uv: [f32; 2],
-}
-
-impl Pos2Uv {
-    pub fn new(x: f32, y: f32, u: f32, v: f32) -> Self {
-        Self {
-            pos: [x, y],
-            uv: [u, v],
-        }
-    }
-}
-
-/// 3-D position vertex — location 0.
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub struct Pos3 {
-    pub pos: [f32; 3],
-}
-
-impl Pos3 {
-    pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self { pos: [x, y, z] }
-    }
-}
-
-/// 3-D position + normal vertex — locations 0, 1.
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-pub struct Pos3Norm {
-    pub pos: [f32; 3],
-    pub normal: [f32; 3],
-}
-
-impl Pos3Norm {
-    pub fn new(x: f32, y: f32, z: f32, nx: f32, ny: f32, nz: f32) -> Self {
-        Self {
-            pos: [x, y, z],
-            normal: [nx, ny, nz],
-        }
-    }
-}
-
 // ── Uniform types ─────────────────────────────────────────────────────────────
-
-#[derive(Clone, Copy, encase::ShaderType)]
-pub(crate) struct MvpUniform {
-    pub(crate) mvp: glam::Mat4,
-}
-
-impl MvpUniform {
-    pub(crate) fn new(mvp: glam::Mat4) -> Self {
-        Self { mvp }
-    }
-
-    pub(crate) fn identity() -> Self {
-        Self {
-            mvp: glam::Mat4::IDENTITY,
-        }
-    }
-}
 
 #[derive(Clone, Copy, encase::ShaderType)]
 pub(crate) struct TransformUniform {
@@ -204,7 +112,7 @@ fn gen_flat_wgsl(
 ///
 /// | Variant | Vertex | Uniform | Blend | Depth |
 /// |---------|--------|---------|-------|-------|
-/// | `Transform2d` | [`Pos2`] | [`TransformUniform`] | opaque | off |
+/// | `Transform2d` | `Vec2` | [`TransformUniform`] | opaque | off |
 /// | `Textured3d` | `MeshVertex` | [`MvpUniform`] + texture | alpha | on |
 pub(crate) enum BuiltinPipeline {
     /// 2-D solid-color triangles with an MVP uniform transform.
@@ -219,7 +127,14 @@ impl BuiltinPipeline {
         match self {
             BuiltinPipeline::Transform2d => PipelineDescriptor::new(
                 gen_flat_wgsl(VertexIn::Pos2, true, true, false, 0),
-                Pos2::layout(),
+                VertexLayout {
+                    stride: 8,
+                    attributes: vec![VertexAttribute {
+                        offset: 0,
+                        location: 0,
+                        format: VertexFormat::Float32x2,
+                    }],
+                },
             )
             .with_uniform(),
             BuiltinPipeline::Textured3d => PipelineDescriptor::new(

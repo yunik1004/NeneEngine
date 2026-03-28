@@ -112,13 +112,7 @@ impl TileMapRenderer {
 
         let uniform = ctx.create_uniform_buffer(&crate::math::Mat4::IDENTITY);
 
-        // Static index buffer: quad i → [4i, 4i+1, 4i+2, 4i, 4i+2, 4i+3]
-        let indices: Vec<u32> = (0..MAX_VISIBLE_TILES as u32)
-            .flat_map(|i| {
-                let b = i * 4;
-                [b, b + 1, b + 2, b, b + 2, b + 3]
-            })
-            .collect();
+        let indices = crate::renderer::quad_indices(MAX_VISIBLE_TILES as u32);
         let ibuf = ctx.create_index_buffer(&indices);
 
         Self {
