@@ -22,8 +22,8 @@
 
 use crate::input::{Input, MouseButton};
 use crate::renderer::{
-    Context, HeadlessContext, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer,
-    VertexAttribute, VertexBuffer, VertexFormat, VertexLayout,
+    Context, GpuBatch, HeadlessContext, PipelineDescriptor, RenderPass, VertexAttribute,
+    VertexFormat, VertexLayout,
 };
 use crate::text::TextRenderer;
 
@@ -203,9 +203,7 @@ pub struct Ui {
     texts: Vec<TextCmd>,
 
     // GPU
-    pipeline: Pipeline,
-    vbuf: VertexBuffer,
-    ubuf: UniformBuffer,
+    gpu: GpuBatch,
 
     // Text renderer
     text: TextRenderer,
@@ -277,9 +275,7 @@ impl Ui {
             active: 0,
             verts: Vec::with_capacity(MAX_VERTS),
             texts: Vec::new(),
-            pipeline,
-            vbuf,
-            ubuf,
+            gpu: GpuBatch::new(pipeline, ubuf, vbuf),
             text: ctx.create_text_renderer(),
             screen_w: 1.0,
             screen_h: 1.0,
@@ -326,7 +322,7 @@ impl Ui {
 
         // Shader NDC conversion uses physical pixel coords
         ctx.update_uniform_buffer(
-            &self.ubuf,
+            &self.gpu.ubuf,
             &ScreenUniform {
                 width: phys_w,
                 height: phys_h,
@@ -343,7 +339,7 @@ impl Ui {
                     color: v.color,
                 })
                 .collect();
-            ctx.update_vertex_buffer(&self.vbuf, &scaled);
+            ctx.update_vertex_buffer(&self.gpu.vbuf, &scaled);
         }
 
         // Scale text positions and sizes from logical → physical before queuing
@@ -364,10 +360,7 @@ impl Ui {
     /// Draw all UI into the current render pass.
     pub fn render(&self, pass: &mut RenderPass) {
         if !self.verts.is_empty() {
-            pass.set_pipeline(&self.pipeline);
-            pass.set_uniform(0, &self.ubuf);
-            pass.set_vertex_buffer(0, &self.vbuf);
-            pass.draw(0..self.verts.len() as u32);
+            self.gpu.draw(pass, self.verts.len() as u32);
         }
         self.text.render(pass);
     }

@@ -1,7 +1,6 @@
 use crate::math::{Mat4, Vec3};
 use crate::renderer::{
-    Context, InstanceBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
-    VertexFormat, VertexLayout,
+    Context, GpuBatch, InstanceBuffer, PipelineDescriptor, RenderPass, VertexFormat, VertexLayout,
 };
 
 use super::emitter::{EmitterConfig, ParticleInstance, QuadVert};
@@ -63,11 +62,8 @@ pub const MAX_PARTICLES: usize = 4096;
 /// vertex buffer, and pre-allocated instance buffer.
 pub struct ParticleSystem {
     pool: ParticlePool,
-    pipeline: Pipeline,
-    /// Unit-quad vertex buffer (6 vertices, no index buffer).
-    quad_vbuf: VertexBuffer,
+    gpu: GpuBatch,
     inst_buf: InstanceBuffer,
-    ubuf: UniformBuffer,
     inst_count: u32,
 }
 
@@ -124,7 +120,14 @@ impl ParticleSystem {
             },
         ]);
 
-        // Pre-allocate instance buffer for MAX_PARTICLES
+        let ubuf = ctx.create_uniform_buffer(&ParticleUniform {
+            view_proj: Mat4::IDENTITY,
+            cam_right: Vec3::X,
+            cam_up: Vec3::Y,
+        });
+
+        let gpu = GpuBatch::new(pipeline, ubuf, quad_vbuf);
+
         let dummy = vec![
             ParticleInstance {
                 pos_size: [0.0; 4],
@@ -134,18 +137,10 @@ impl ParticleSystem {
         ];
         let inst_buf = ctx.create_instance_buffer(&dummy);
 
-        let ubuf = ctx.create_uniform_buffer(&ParticleUniform {
-            view_proj: Mat4::IDENTITY,
-            cam_right: Vec3::X,
-            cam_up: Vec3::Y,
-        });
-
         Self {
             pool: ParticlePool::new(config),
-            pipeline,
-            quad_vbuf,
+            gpu,
             inst_buf,
-            ubuf,
             inst_count: 0,
         }
     }
@@ -174,7 +169,7 @@ impl ParticleSystem {
         self.pool.update(dt, emitter_pos.to_array());
 
         ctx.update_uniform_buffer(
-            &self.ubuf,
+            &self.gpu.ubuf,
             &ParticleUniform {
                 view_proj,
                 cam_right,
@@ -200,10 +195,7 @@ impl ParticleSystem {
         if self.inst_count == 0 {
             return;
         }
-        pass.set_pipeline(&self.pipeline);
-        pass.set_uniform(0, &self.ubuf);
-        pass.set_vertex_buffer(0, &self.quad_vbuf);
-        pass.set_instance_buffer(1, &self.inst_buf);
-        pass.draw_instanced(0..6, self.inst_count);
+        self.gpu
+            .draw_instanced(pass, &self.inst_buf, 6, self.inst_count);
     }
 }

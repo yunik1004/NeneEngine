@@ -2,6 +2,7 @@ mod buffer;
 mod builtin;
 mod context;
 mod flat_object;
+mod gpu_batch;
 pub mod light;
 pub(crate) mod material;
 mod mesh;
@@ -18,6 +19,7 @@ pub(crate) use builtin::{BuiltinPipeline, TransformUniform};
 pub(crate) use context::RenderContext;
 pub use context::{Context, HeadlessContext};
 pub use flat_object::FlatObject;
+pub(crate) use gpu_batch::GpuBatch;
 pub use light::{
     AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight, POINT_LIGHT_WGSL,
     PointLight, PointLightArray, point_light_array_wgsl,

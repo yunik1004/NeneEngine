@@ -4,8 +4,8 @@ use crate::{
     camera::Camera,
     math::Vec2,
     renderer::{
-        Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, Texture, UniformBuffer,
-        VertexAttribute, VertexBuffer, VertexFormat, VertexLayout,
+        Context, GpuBatch, IndexBuffer, PipelineDescriptor, RenderPass, Texture, VertexAttribute,
+        VertexFormat, VertexLayout,
     },
 };
 
@@ -146,10 +146,8 @@ impl Default for Sprite {
 /// batch.render(pass, &texture);
 /// ```
 pub struct SpriteBatch {
-    pipeline: Pipeline,
-    vertex_buffer: VertexBuffer,
+    gpu: GpuBatch,
     index_buffer: IndexBuffer,
-    uniform_buffer: UniformBuffer,
     cpu_vertices: Vec<SpriteVertex>,
     max_sprites: usize,
     index_count: u32,
@@ -170,22 +168,22 @@ impl SpriteBatch {
             max_sprites * 4
         ];
 
-        let vertex_buffer = ctx.create_vertex_buffer(&vertices);
-        let index_buffer = ctx.create_index_buffer(&indices);
-        let uniform_buffer = ctx.create_uniform_buffer(&crate::math::Mat4::IDENTITY);
-
         let pipeline = ctx.create_pipeline(
             PipelineDescriptor::new(SHADER, vertex_layout())
                 .with_uniform()
                 .with_texture()
                 .with_alpha_blend(),
         );
+        let gpu = GpuBatch::new(
+            pipeline,
+            ctx.create_uniform_buffer(&crate::math::Mat4::IDENTITY),
+            ctx.create_vertex_buffer(&vertices),
+        );
+        let index_buffer = ctx.create_index_buffer(&indices);
 
         Self {
-            pipeline,
-            vertex_buffer,
+            gpu,
             index_buffer,
-            uniform_buffer,
             cpu_vertices: Vec::with_capacity(max_sprites * 4),
             max_sprites,
             index_count: 0,
@@ -236,9 +234,9 @@ impl SpriteBatch {
 
     /// Upload sprite data to the GPU. Call in the `update` callback after all [`draw`](Self::draw) calls.
     pub fn prepare(&self, ctx: &mut Context, camera: &Camera, aspect: f32) {
-        ctx.update_uniform_buffer(&self.uniform_buffer, &camera.view_proj(aspect));
+        ctx.update_uniform_buffer(&self.gpu.ubuf, &camera.view_proj(aspect));
         if !self.cpu_vertices.is_empty() {
-            ctx.update_vertex_buffer(&self.vertex_buffer, &self.cpu_vertices);
+            ctx.update_vertex_buffer(&self.gpu.vbuf, &self.cpu_vertices);
         }
     }
 
@@ -247,10 +245,7 @@ impl SpriteBatch {
         if self.index_count == 0 {
             return;
         }
-        pass.set_pipeline(&self.pipeline);
-        pass.set_uniform(0, &self.uniform_buffer);
-        pass.set_texture(1, texture);
-        pass.set_vertex_buffer(0, &self.vertex_buffer);
-        pass.draw_indexed_count(&self.index_buffer, self.index_count);
+        self.gpu
+            .draw_textured(pass, texture, &self.index_buffer, self.index_count);
     }
 }
