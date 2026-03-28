@@ -394,6 +394,13 @@ impl<A: FixedApp> ApplicationHandler for FixedAppRunner<A> {
         };
         self.inner.input.process_gilrs();
 
+        // Snapshot transient input (just-pressed / just-released) and clear it
+        // before the fixed loop. Fixed steps see only held state, which avoids
+        // key_pressed firing N times when N fixed steps run in one frame.
+        // The snapshot is restored for the variable update so App and FixedApp
+        // behave identically from the user's perspective.
+        let transient = self.inner.input.take_transient();
+
         // Fixed-timestep ticks
         self.accumulator += frame_dt;
         let max_acc = self.fixed_step * MAX_FIXED_STEPS as f32;
@@ -416,6 +423,10 @@ impl<A: FixedApp> ApplicationHandler for FixedAppRunner<A> {
             self.tick += 1;
             step += 1;
         }
+
+        // Restore transient state so variable update sees key_pressed etc.,
+        // exactly as App::update() does.
+        self.inner.input.restore_transient(transient);
 
         // Variable-rate update
         if let Some(app) = &mut self.inner.app {

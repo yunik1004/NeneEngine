@@ -92,6 +92,35 @@ impl Input {
         self.pad_released.clear();
     }
 
+    /// Take a snapshot of all transient (just-this-frame) state and clear it.
+    ///
+    /// Used by `FixedApp` so that `fixed_update` steps only see held state while
+    /// the variable `update()` sees the same transient snapshot as `App::update()`.
+    pub(crate) fn take_transient(&mut self) -> InputTransient {
+        InputTransient {
+            keys_pressed: std::mem::take(&mut self.keys_pressed),
+            keys_released: std::mem::take(&mut self.keys_released),
+            mouse_just_pressed: std::mem::take(&mut self.mouse_just_pressed),
+            mouse_just_released: std::mem::take(&mut self.mouse_just_released),
+            mouse_delta: std::mem::replace(&mut self.mouse_delta, Vec2::ZERO),
+            scroll_delta: std::mem::replace(&mut self.scroll_delta, Vec2::ZERO),
+            pad_pressed: std::mem::take(&mut self.pad_pressed),
+            pad_released: std::mem::take(&mut self.pad_released),
+        }
+    }
+
+    /// Restore transient state from a snapshot previously taken with [`take_transient`].
+    pub(crate) fn restore_transient(&mut self, snap: InputTransient) {
+        self.keys_pressed = snap.keys_pressed;
+        self.keys_released = snap.keys_released;
+        self.mouse_just_pressed = snap.mouse_just_pressed;
+        self.mouse_just_released = snap.mouse_just_released;
+        self.mouse_delta = snap.mouse_delta;
+        self.scroll_delta = snap.scroll_delta;
+        self.pad_pressed = snap.pad_pressed;
+        self.pad_released = snap.pad_released;
+    }
+
     /// Drain gilrs events and update gamepad state.
     pub(crate) fn process_gilrs(&mut self) {
         while let Some(gilrs::Event { id, event, .. }) = self.gilrs.next_event() {
@@ -241,4 +270,19 @@ impl Input {
     pub fn gamepads(&self) -> impl Iterator<Item = (GamepadId, gilrs::Gamepad<'_>)> {
         self.gilrs.gamepads()
     }
+}
+
+// ── InputTransient ────────────────────────────────────────────────────────────
+
+/// Snapshot of per-frame transient input state, used by `FixedApp` to restore
+/// just-pressed/released events for the variable-rate update.
+pub(crate) struct InputTransient {
+    pub keys_pressed: HashSet<Key>,
+    pub keys_released: HashSet<Key>,
+    pub mouse_just_pressed: HashSet<MouseButton>,
+    pub mouse_just_released: HashSet<MouseButton>,
+    pub mouse_delta: Vec2,
+    pub scroll_delta: Vec2,
+    pub pad_pressed: HashSet<(GamepadId, GamepadButton)>,
+    pub pad_released: HashSet<(GamepadId, GamepadButton)>,
 }
