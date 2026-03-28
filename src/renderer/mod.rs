@@ -9,8 +9,8 @@ mod mesh;
 mod pass;
 mod pipeline;
 pub mod postprocess;
-pub mod shadow;
-pub mod texture;
+pub(crate) mod shadow;
+pub(crate) mod texture;
 mod uniform;
 
 // Internal re-exports (pub(crate)) — used by engine subsystems (sprite, text, particle, etc.)

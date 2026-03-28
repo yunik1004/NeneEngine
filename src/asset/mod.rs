@@ -521,6 +521,18 @@ impl Assets {
             .remove(&(path.as_ref().to_owned(), filter_key(filter)));
     }
 
+    /// Remove all cached texture entries for `path`, regardless of filter mode.
+    ///
+    /// Prefer this over [`evict_texture`](Self::evict_texture) when you don't
+    /// know (or don't care about) the filter mode used at load time.
+    pub fn evict_texture_all(&mut self, path: impl AsRef<Path>) {
+        let path = path.as_ref();
+        self.textures
+            .retain(|(p, _), _| p != path);
+        #[cfg(debug_assertions)]
+        self.texture_filters.remove(path);
+    }
+
     // ── Models ────────────────────────────────────────────────────────────────
 
     /// Load (or return cached) a [`Model`] from an OBJ or glTF file.

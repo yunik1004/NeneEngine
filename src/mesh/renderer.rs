@@ -128,6 +128,10 @@ impl<V: GpuVertex> Renderer<V> {
     pub fn render(&self, pass: &mut RenderPass) {
         let Some(vbuf) = &self.vbuf else { return };
         if V::USES_TEXTURE && self.texture.is_none() {
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "[nene] TexturedMesh::render() skipped — call set_texture() before rendering"
+            );
             return;
         }
         pass.set_pipeline(&self.pipeline);
