@@ -17,13 +17,14 @@ glam = { version = "0.30", features = ["bytemuck", "encase"] }
 gltf = "1.4.1"
 image = "0.25.10"
 nene-derive = { path = "crates/nene-derive" }
+notify = "8.2.0"
 pollster = "0.3"
-serde = { version = "1.0.228", features = ["derive"] }
-tokio = { version = "1.50.0", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
-serde_json = "1.0.149"
 rapier2d = "0.32.0"
 rapier3d = "0.32.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 symphonia = "0.5.5"
 tobj = "4.0.3"
+tokio = { version = "1.50.0", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
 wgpu = "29.0.0"
 winit = "0.30.13"

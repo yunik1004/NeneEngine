@@ -4,6 +4,7 @@ pub mod asset;
 pub mod audio;
 pub mod camera;
 pub mod debug;
+pub mod ecs;
 pub mod event;
 pub mod input;
 pub mod locale;

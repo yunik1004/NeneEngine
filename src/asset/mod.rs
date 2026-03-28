@@ -9,19 +9,31 @@
 //! underlying resource is freed only when *all* handles and the cache entry
 //! are dropped.
 //!
+//! # Hot reload (debug builds only)
+//!
+//! Call [`Assets::enable_hot_reload`] once at startup, then
+//! [`Assets::poll_changes`] each frame. Changed assets are evicted from the
+//! cache and reloaded automatically; the return value lists every path that
+//! was reloaded so you can re-fetch new handles.
+//!
+//! Both methods compile to no-ops in release builds.
+//!
 //! # Example
 //! ```no_run
 //! use nene::asset::Assets;
 //! use nene::renderer::FilterMode;
 //! # fn demo(ctx: &mut nene::renderer::Context) {
 //! let mut assets = Assets::new();
+//! assets.enable_hot_reload();
 //!
 //! // First call: loads from disk and uploads to GPU.
-//! let tex = assets.texture(ctx, "assets/hero.png", FilterMode::Linear);
+//! let mut tex = assets.texture(ctx, "assets/hero.png", FilterMode::Linear);
 //!
-//! // Second call: returns a clone of the cached handle — zero I/O.
-//! let same = assets.texture(ctx, "assets/hero.png", FilterMode::Linear);
-//! assert!(tex == same);
+//! // Each frame:
+//! let changed = assets.poll_changes(ctx);
+//! if changed.iter().any(|p| p.ends_with("hero.png")) {
+//!     tex = assets.texture(ctx, "assets/hero.png", FilterMode::Linear);
+//! }
 //! # }
 //! ```
 
@@ -77,6 +89,44 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Handle<T> {
     }
 }
 
+// ── Hot reloader (debug only) ─────────────────────────────────────────────────
+
+#[cfg(debug_assertions)]
+struct HotReloader {
+    watcher: notify::RecommendedWatcher,
+    rx: std::sync::mpsc::Receiver<PathBuf>,
+}
+
+#[cfg(debug_assertions)]
+impl HotReloader {
+    fn new() -> Self {
+        let (tx, rx) = std::sync::mpsc::channel::<PathBuf>();
+        let watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if let Ok(ev) = res {
+                use notify::EventKind::*;
+                if matches!(ev.kind, Modify(_) | Create(_)) {
+                    for path in ev.paths {
+                        let _ = tx.send(path);
+                    }
+                }
+            }
+        })
+        .expect("failed to create file watcher");
+        Self { watcher, rx }
+    }
+
+    fn watch(&mut self, path: &Path) {
+        use notify::Watcher as _;
+        let _ = self
+            .watcher
+            .watch(path, notify::RecursiveMode::NonRecursive);
+    }
+
+    fn drain(&self) -> Vec<PathBuf> {
+        self.rx.try_iter().collect()
+    }
+}
+
 // ── Assets ────────────────────────────────────────────────────────────────────
 
 /// Centralised asset cache.
@@ -86,6 +136,11 @@ pub struct Assets {
     textures: HashMap<(PathBuf, u8), Handle<Texture>>,
     models: HashMap<PathBuf, Handle<Model>>,
     sounds: HashMap<PathBuf, Handle<Sound>>,
+    #[cfg(debug_assertions)]
+    hot: Option<HotReloader>,
+    /// Tracks filter mode per path so poll_changes can reload correctly.
+    #[cfg(debug_assertions)]
+    texture_filters: HashMap<PathBuf, FilterMode>,
 }
 
 impl Assets {
@@ -95,7 +150,60 @@ impl Assets {
             textures: HashMap::new(),
             models: HashMap::new(),
             sounds: HashMap::new(),
+            #[cfg(debug_assertions)]
+            hot: None,
+            #[cfg(debug_assertions)]
+            texture_filters: HashMap::new(),
         }
+    }
+
+    // ── Hot reload ────────────────────────────────────────────────────────────
+
+    /// Start watching loaded assets for file-system changes.
+    ///
+    /// Must be called before loading any assets you want watched.
+    /// No-op in release builds.
+    pub fn enable_hot_reload(&mut self) {
+        #[cfg(debug_assertions)]
+        {
+            self.hot = Some(HotReloader::new());
+        }
+    }
+
+    /// Reload any assets whose source files changed since the last call.
+    ///
+    /// Evicts stale cache entries and reloads them immediately. Returns the
+    /// paths of every reloaded asset so you can re-fetch updated [`Handle`]s.
+    ///
+    /// Always returns an empty `Vec` in release builds.
+    pub fn poll_changes(&mut self, ctx: &mut Context) -> Vec<PathBuf> {
+        #[cfg(debug_assertions)]
+        {
+            let changed: Vec<PathBuf> = match &self.hot {
+                Some(hot) => hot.drain(),
+                None => return Vec::new(),
+            };
+
+            let mut reloaded = Vec::new();
+            for path in changed {
+                if let Some(filter) = self.texture_filters.get(&path).copied() {
+                    self.textures.remove(&(path.clone(), filter_key(filter)));
+                    self.load_texture(ctx, &path, filter);
+                    reloaded.push(path);
+                } else if self.models.contains_key(&path) {
+                    self.models.remove(&path);
+                    self.load_model(&path);
+                    reloaded.push(path);
+                } else if self.sounds.contains_key(&path) {
+                    self.sounds.remove(&path);
+                    self.load_sound(&path);
+                    reloaded.push(path);
+                }
+            }
+            reloaded
+        }
+        #[cfg(not(debug_assertions))]
+        Vec::new()
     }
 
     // ── Textures ──────────────────────────────────────────────────────────────
@@ -118,12 +226,29 @@ impl Assets {
         if let Some(h) = self.textures.get(&key) {
             return h.clone();
         }
-        let img = image::open(path.as_ref())
-            .unwrap_or_else(|e| panic!("failed to load texture '{}': {e}", path.as_ref().display()))
+        self.load_texture(ctx, path.as_ref(), filter)
+    }
+
+    fn load_texture(
+        &mut self,
+        ctx: &mut Context,
+        path: &Path,
+        filter: FilterMode,
+    ) -> Handle<Texture> {
+        let img = image::open(path)
+            .unwrap_or_else(|e| panic!("failed to load texture '{}': {e}", path.display()))
             .into_rgba8();
         let texture = ctx.create_texture_with(img.width(), img.height(), &img, filter);
         let handle = Handle::new(texture);
-        self.textures.insert(key, handle.clone());
+        self.textures
+            .insert((path.to_owned(), filter_key(filter)), handle.clone());
+        #[cfg(debug_assertions)]
+        {
+            self.texture_filters.insert(path.to_owned(), filter);
+            if let Some(ref mut hot) = self.hot {
+                hot.watch(path);
+            }
+        }
         handle
     }
 
@@ -147,9 +272,17 @@ impl Assets {
         if let Some(h) = self.models.get(&key) {
             return h.clone();
         }
-        let model = Model::load(&key).expect("failed to load model");
+        self.load_model(path.as_ref())
+    }
+
+    fn load_model(&mut self, path: &Path) -> Handle<Model> {
+        let model = Model::load(path).expect("failed to load model");
         let handle = Handle::new(model);
-        self.models.insert(key, handle.clone());
+        self.models.insert(path.to_owned(), handle.clone());
+        #[cfg(debug_assertions)]
+        if let Some(ref mut hot) = self.hot {
+            hot.watch(path);
+        }
         handle
     }
 
@@ -169,9 +302,17 @@ impl Assets {
         if let Some(h) = self.sounds.get(&key) {
             return h.clone();
         }
-        let sound = Sound::load(&key);
+        self.load_sound(path.as_ref())
+    }
+
+    fn load_sound(&mut self, path: &Path) -> Handle<Sound> {
+        let sound = Sound::load(path);
         let handle = Handle::new(sound);
-        self.sounds.insert(key, handle.clone());
+        self.sounds.insert(path.to_owned(), handle.clone());
+        #[cfg(debug_assertions)]
+        if let Some(ref mut hot) = self.hot {
+            hot.watch(path);
+        }
         handle
     }
 
