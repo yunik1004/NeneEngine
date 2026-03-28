@@ -1,16 +1,27 @@
 //! Composable material system — assemble a 3-D shader from feature flags
 //! without writing WGSL by hand.
 //!
+//! [`Material`] is parameterised over two marker types that encode which
+//! optional bind-groups are needed at render time:
+//!
+//! | Type parameter | Meaning |
+//! |---|---|
+//! | `T = NoTexture` / `HasTexture` | whether a diffuse texture is bound |
+//! | `S = NoShadow`  / `HasShadow`  | whether a shadow map is bound |
+//!
+//! The combination is chosen at build time via the builder, and the compiler
+//! enforces the correct [`render`](Material::render) signature for each variant.
+//!
 //! # Example
 //!
 //! ```no_run
 //! # use nene::app::{App, WindowId, run};
 //! # use nene::math::{Mat4, Vec4};
-//! # use nene::renderer::{AmbientLight, Context, DirectionalLight, Material, MaterialBuilder,
-//! #     Mesh, RenderPass, ShadowMap};
+//! # use nene::renderer::{AmbientLight, Context, DirectionalLight, HasShadow, Material,
+//! #     MaterialBuilder, Mesh, NoTexture, RenderPass, ShadowMap};
 //! # use nene::app::Config;
 //! struct Demo {
-//!     mat:        Option<Material>,
+//!     mat:        Option<Material<NoTexture, HasShadow>>,
 //!     mesh:       Option<Mesh>,
 //!     shadow_map: Option<ShadowMap>,
 //!     ambient:    AmbientLight,
@@ -44,12 +55,14 @@
 //!     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
 //!         let (Some(mat), Some(mesh), Some(sm)) =
 //!             (&self.mat, &self.mesh, &self.shadow_map) else { return };
-//!         mat.render(pass, mesh, None, Some(sm));
+//!         mat.render(pass, mesh, sm);
 //!     }
 //!
 //!     fn windows() -> Vec<Config> { vec![Config::default()] }
 //! }
 //! ```
+
+use std::marker::PhantomData;
 
 use super::{
     IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexAttribute,
@@ -60,6 +73,17 @@ use super::{
     shadow::{SHADOW_WGSL, ShadowMap},
     texture::Texture,
 };
+
+// ── Texture / shadow marker types ─────────────────────────────────────────────
+
+/// Marker: material does **not** sample a diffuse texture.
+pub struct NoTexture;
+/// Marker: material samples a diffuse texture at bind group 1.
+pub struct HasTexture;
+/// Marker: material does **not** read a shadow map.
+pub struct NoShadow;
+/// Marker: material reads a PCF shadow map at bind group 2.
+pub struct HasShadow;
 
 // ── MaterialUniform ───────────────────────────────────────────────────────────
 
@@ -171,28 +195,38 @@ pub(crate) struct Features {
 ///
 /// Start with [`MaterialBuilder::new`], chain feature methods, and finish
 /// with [`build`](MaterialBuilder::build).
-#[derive(Default)]
-pub struct MaterialBuilder {
+///
+/// Calling [`.texture()`](Self::texture) or [`.shadow()`](Self::shadow)
+/// changes the builder's type, so the compiled [`Material`] has the correct
+/// [`render`](Material::render) signature.
+pub struct MaterialBuilder<T = NoTexture, S = NoShadow> {
     feat: Features,
     init: MaterialUniform,
     custom_wgsl: Option<String>,
+    _phantom: PhantomData<(T, S)>,
+}
+
+impl Default for MaterialBuilder {
+    fn default() -> Self {
+        Self {
+            feat: Features::default(),
+            init: MaterialUniform::default(),
+            custom_wgsl: None,
+            _phantom: PhantomData,
+        }
+    }
 }
 
 impl MaterialBuilder {
     pub fn new() -> Self {
         Self::default()
     }
+}
 
-    /// Initial tint color written into the uniform. You can change it later
-    /// via [`Material::uniform`].
+impl<T, S> MaterialBuilder<T, S> {
+    /// Initial tint color written into the uniform.
     pub fn color(mut self, c: glam::Vec4) -> Self {
         self.init.color = c;
-        self
-    }
-
-    /// Sample a diffuse texture at group 1. Pass `Some(&texture)` to [`Material::render`].
-    pub fn texture(mut self) -> Self {
-        self.feat.texture = true;
         self
     }
 
@@ -205,13 +239,6 @@ impl MaterialBuilder {
     /// Apply directional lighting from [`MaterialUniform::directional`].
     pub fn directional(mut self) -> Self {
         self.feat.directional = true;
-        self
-    }
-
-    /// Read a PCF shadow map at group 2. Implies [`casts_shadow`](Self::casts_shadow).
-    pub fn shadow(mut self) -> Self {
-        self.feat.shadow = true;
-        self.feat.casts_shadow = true;
         self
     }
 
@@ -230,16 +257,46 @@ impl MaterialBuilder {
     }
 
     /// Override the auto-generated WGSL with a custom shader.
-    ///
-    /// Your shader must accept `MeshVertex` at locations 0–2 and bind
-    /// `MaterialU` at `@group(0) @binding(0)`. [`Material::render`] continues to work as usual.
     pub fn shader(mut self, wgsl: impl Into<String>) -> Self {
         self.custom_wgsl = Some(wgsl.into());
         self
     }
 
+    /// Sample a diffuse texture at group 1.
+    ///
+    /// Transitions to `MaterialBuilder<HasTexture, S>` — the resulting
+    /// [`Material::render`] will require a `&Texture` argument.
+    pub fn texture(self) -> MaterialBuilder<HasTexture, S> {
+        MaterialBuilder {
+            feat: Features {
+                texture: true,
+                ..self.feat
+            },
+            init: self.init,
+            custom_wgsl: self.custom_wgsl,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Read a PCF shadow map at group 2. Implies [`casts_shadow`](Self::casts_shadow).
+    ///
+    /// Transitions to `MaterialBuilder<T, HasShadow>` — the resulting
+    /// [`Material::render`] will require a `&ShadowMap` argument.
+    pub fn shadow(self) -> MaterialBuilder<T, HasShadow> {
+        MaterialBuilder {
+            feat: Features {
+                shadow: true,
+                casts_shadow: true,
+                ..self.feat
+            },
+            init: self.init,
+            custom_wgsl: self.custom_wgsl,
+            _phantom: PhantomData,
+        }
+    }
+
     /// Consume the builder and create a [`Material`] on the GPU.
-    pub fn build(self, ctx: &mut Context) -> Material {
+    pub fn build(self, ctx: &mut Context) -> Material<T, S> {
         let main_wgsl = self.custom_wgsl.unwrap_or_else(|| gen_main_wgsl(self.feat));
         let mut desc = PipelineDescriptor::new(main_wgsl, crate::mesh::MeshVertex::layout())
             .with_uniform()
@@ -278,6 +335,7 @@ impl MaterialBuilder {
             shadow_pipeline,
             ubuf,
             uniform: self.init,
+            _phantom: PhantomData,
         }
     }
 }
@@ -286,46 +344,35 @@ impl MaterialBuilder {
 
 /// A GPU material assembled from feature flags.
 ///
+/// The type parameters `T` and `S` encode which resources must be provided at
+/// render time:
+///
+/// | Type | `render` signature |
+/// |---|---|
+/// | `Material` (`NoTexture, NoShadow`) | `render(pass, mesh)` |
+/// | `Material<HasTexture>` | `render(pass, mesh, &texture)` |
+/// | `Material<NoTexture, HasShadow>` | `render(pass, mesh, &shadow_map)` |
+/// | `Material<HasTexture, HasShadow>` | `render(pass, mesh, &texture, &shadow_map)` |
+///
 /// Mutate [`Material::uniform`] each frame, call [`flush`](Material::flush)
 /// once to upload, then call a render method.
-pub struct Material {
+pub struct Material<T = NoTexture, S = NoShadow> {
     pipeline: Pipeline,
     shadow_pipeline: Option<Pipeline>,
     ubuf: UniformBuffer,
     /// CPU-side copy of the uniform. Mutate fields freely; call
     /// [`flush`](Material::flush) to upload changes to the GPU.
     pub uniform: MaterialUniform,
+    _phantom: PhantomData<(T, S)>,
 }
 
-impl Material {
+// ── Shared methods (all variants) ─────────────────────────────────────────────
+
+impl<T, S> Material<T, S> {
     /// Upload [`uniform`](Material::uniform) to the GPU. Call once per frame
     /// after mutating any fields.
     pub fn flush(&self, ctx: &mut Context) {
         ctx.update_uniform_buffer(&self.ubuf, &self.uniform);
-    }
-
-    /// Draw the mesh.
-    ///
-    /// Pass `Some(&texture)` if the material was built with [`.texture()`](MaterialBuilder::texture).
-    /// Pass `Some(&shadow_map)` if the material was built with [`.shadow()`](MaterialBuilder::shadow).
-    pub fn render(
-        &self,
-        pass: &mut RenderPass,
-        mesh: &Mesh,
-        texture: Option<&Texture>,
-        shadow_map: Option<&ShadowMap>,
-    ) {
-        self.draw(pass, &mesh.vbuf, &mesh.ibuf, texture, shadow_map);
-    }
-
-    /// Instanced draw. Only valid for materials built with
-    /// [`.instanced()`](MaterialBuilder::instanced).
-    pub fn render_instanced(&self, pass: &mut RenderPass, mesh: &InstancedMesh) {
-        pass.set_pipeline(&self.pipeline);
-        pass.set_uniform(0, &self.ubuf);
-        pass.set_vertex_buffer(0, &mesh.vbuf);
-        pass.set_instance_buffer(1, &mesh.inst_buf);
-        pass.draw_indexed_instanced(&mesh.ibuf, mesh.count());
     }
 
     /// Depth-only draw for the shadow pass. Call inside [`Context::shadow_pass`].
@@ -340,7 +387,17 @@ impl Material {
         pass.draw_indexed(&mesh.ibuf);
     }
 
-    fn draw(
+    /// Instanced draw. Only valid for materials built with
+    /// [`.instanced()`](MaterialBuilder::instanced).
+    pub fn render_instanced(&self, pass: &mut RenderPass, mesh: &InstancedMesh) {
+        pass.set_pipeline(&self.pipeline);
+        pass.set_uniform(0, &self.ubuf);
+        pass.set_vertex_buffer(0, &mesh.vbuf);
+        pass.set_instance_buffer(1, &mesh.inst_buf);
+        pass.draw_indexed_instanced(&mesh.ibuf, mesh.count());
+    }
+
+    fn draw_inner(
         &self,
         pass: &mut RenderPass,
         vbuf: &VertexBuffer,
@@ -358,6 +415,48 @@ impl Material {
         }
         pass.set_vertex_buffer(0, vbuf);
         pass.draw_indexed(ibuf);
+    }
+}
+
+// ── render() — one impl per feature combination ───────────────────────────────
+
+impl Material<NoTexture, NoShadow> {
+    /// Draw the mesh.
+    pub fn render(&self, pass: &mut RenderPass, mesh: &Mesh) {
+        self.draw_inner(pass, &mesh.vbuf, &mesh.ibuf, None, None);
+    }
+}
+
+impl Material<HasTexture, NoShadow> {
+    /// Draw the mesh with a diffuse texture.
+    pub fn render(&self, pass: &mut RenderPass, mesh: &Mesh, texture: &Texture) {
+        self.draw_inner(pass, &mesh.vbuf, &mesh.ibuf, Some(texture), None);
+    }
+}
+
+impl Material<NoTexture, HasShadow> {
+    /// Draw the mesh, reading from a shadow map.
+    pub fn render(&self, pass: &mut RenderPass, mesh: &Mesh, shadow_map: &ShadowMap) {
+        self.draw_inner(pass, &mesh.vbuf, &mesh.ibuf, None, Some(shadow_map));
+    }
+}
+
+impl Material<HasTexture, HasShadow> {
+    /// Draw the mesh with a diffuse texture and shadow map.
+    pub fn render(
+        &self,
+        pass: &mut RenderPass,
+        mesh: &Mesh,
+        texture: &Texture,
+        shadow_map: &ShadowMap,
+    ) {
+        self.draw_inner(
+            pass,
+            &mesh.vbuf,
+            &mesh.ibuf,
+            Some(texture),
+            Some(shadow_map),
+        );
     }
 }
 

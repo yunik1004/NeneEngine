@@ -22,7 +22,10 @@ pub use light::{
     AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight, POINT_LIGHT_WGSL,
     PointLight, PointLightArray, point_light_array_wgsl,
 };
-pub use material::{InstanceData, Material, MaterialBuilder, MaterialUniform};
+pub use material::{
+    HasShadow, HasTexture, InstanceData, Material, MaterialBuilder, MaterialUniform, NoShadow,
+    NoTexture,
+};
 pub use mesh::{InstancedMesh, Mesh};
 pub use pass::RenderPass;
 pub(crate) use pipeline::{
@@ -30,7 +33,7 @@ pub(crate) use pipeline::{
 };
 pub use shadow::{SHADOW_WGSL, ShadowMap};
 pub use texture::{FilterMode, RenderTarget, Texture};
-pub(crate) use uniform::UniformBuffer;
+pub(crate) use uniform::{StorageBuffer, UniformBuffer};
 
 /// Generate indices for `count` axis-aligned quads (2 triangles each, 6 indices per quad).
 ///

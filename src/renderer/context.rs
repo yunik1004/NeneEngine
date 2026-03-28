@@ -7,8 +7,8 @@ use super::shadow::{self, ShadowMap};
 use super::texture::{self, FilterMode, RenderTarget, Texture};
 use super::uniform;
 use super::{
-    IndexBuffer, InstanceBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer,
-    VertexBuffer,
+    IndexBuffer, InstanceBuffer, Pipeline, PipelineDescriptor, RenderPass, StorageBuffer,
+    UniformBuffer, VertexBuffer,
 };
 use crate::text::TextRenderer;
 
@@ -99,6 +99,14 @@ impl GpuDevice {
             .write_buffer(&buf.inner, 0, storage.into_inner().as_slice());
     }
 
+    pub(crate) fn create_storage_buffer(&self, data: &[u8]) -> StorageBuffer {
+        uniform::create_storage(&self.device, data)
+    }
+
+    pub(crate) fn update_storage_buffer(&self, buf: &StorageBuffer, data: &[u8]) {
+        self.queue.write_buffer(&buf.inner, 0, data);
+    }
+
     pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {
         self.load_texture_with(path, FilterMode::Linear)
     }
@@ -183,6 +191,8 @@ impl GpuDevice {
 
         let uniform_layout =
             (desc.uniform_count > 0).then(|| uniform::bind_group_layout(&self.device));
+        let storage_layout =
+            (desc.storage_count > 0).then(|| uniform::storage_bind_group_layout(&self.device));
         let texture_layout = desc
             .use_texture
             .then(|| texture::bind_group_layout(&self.device));
@@ -194,6 +204,11 @@ impl GpuDevice {
         if let Some(u) = &uniform_layout {
             for _ in 0..desc.uniform_count {
                 bgl.push(Some(u));
+            }
+        }
+        if let Some(s) = &storage_layout {
+            for _ in 0..desc.storage_count {
+                bgl.push(Some(s));
             }
         }
         if let Some(t) = &texture_layout {
@@ -716,6 +731,14 @@ impl Context {
         data: &T,
     ) {
         self.gpu.update_uniform_buffer(buf, data)
+    }
+
+    pub(crate) fn create_storage_buffer(&self, data: &[u8]) -> StorageBuffer {
+        self.gpu.create_storage_buffer(data)
+    }
+
+    pub(crate) fn update_storage_buffer(&self, buf: &StorageBuffer, data: &[u8]) {
+        self.gpu.update_storage_buffer(buf, data)
     }
 
     /// Compile a render pipeline targeting the swapchain surface format.

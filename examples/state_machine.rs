@@ -17,7 +17,7 @@ use std::f32::consts::{PI, TAU};
 
 use nene::{
     animation::{
-        AnimChannel, AnimState, Channel, Clip, Joint, JointMatrices, Skeleton, SkinnedMaterial,
+        AnimChannel, AnimState, Channel, Clip, Joint, Skeleton, SkinnedMaterial,
         SkinnedMaterialBuilder, SkinnedMesh, SkinnedVertex, StateMachine,
     },
     app::{App, Config, WindowId, run},
@@ -33,7 +33,6 @@ use nene::{
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const NUM_JOINTS: usize = 7;
-const MAX_JOINTS: usize = 8;
 const SIDES: usize = 14;
 const RINGS: usize = (NUM_JOINTS - 1) * 2 + 1;
 
@@ -198,7 +197,7 @@ struct StateMachineDemo {
     blend_tween: Option<Tween<f32>>,
     ease_idx: usize,
     // GPU
-    mat: Option<SkinnedMaterial<MAX_JOINTS>>,
+    mat: Option<SkinnedMaterial>,
     ui: Option<Ui>,
 }
 
@@ -248,11 +247,11 @@ impl App for StateMachineDemo {
 
         self.model.skinned_meshes[0].upload(ctx);
 
-        let mut mat = SkinnedMaterialBuilder::<MAX_JOINTS>::new()
+        let mut mat = SkinnedMaterialBuilder::new()
             .ambient()
             .directional()
             .rim()
-            .build(ctx);
+            .build(ctx, self.model.skeleton.joints.len());
         mat.uniform.color = Vec4::new(0.9, 0.6, 0.2, 1.0);
         mat.uniform.rim_color = Vec4::new(0.6, 0.9, 1.0, 1.0);
         mat.uniform.view_proj = camera.view_proj(aspect);
@@ -294,9 +293,9 @@ impl App for StateMachineDemo {
     }
 
     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
-        let joint_mats: JointMatrices<MAX_JOINTS> = self
+        let joint_mats = self
             .sm
-            .joint_buffer(&self.model.clips, &self.model.skeleton);
+            .joint_matrices(&self.model.clips, &self.model.skeleton);
         if let Some(mat) = &self.mat {
             mat.update_joints(ctx, &joint_mats);
         }

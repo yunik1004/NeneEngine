@@ -241,10 +241,10 @@ fn skinned_vertex_layout_stride() {
 // ── skinning_wgsl ─────────────────────────────────────────────────────────────
 
 #[test]
-fn skinning_wgsl_contains_joint_matrices() {
-    let wgsl = skinning_wgsl(64);
-    assert!(wgsl.contains("JointMatrices"));
-    assert!(wgsl.contains("array<mat4x4<f32>, 64>"));
+fn skinning_wgsl_contains_storage_binding() {
+    let wgsl = skinning_wgsl();
+    assert!(wgsl.contains("storage, read"));
+    assert!(wgsl.contains("array<mat4x4<f32>>"));
 }
 
 // ── JointPose::lerp ───────────────────────────────────────────────────────────

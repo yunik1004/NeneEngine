@@ -1,13 +1,14 @@
 //! [`SkinnedMaterial`] — GPU material for skeletal meshes.
 
+use crate::math::Mat4;
 use crate::mesh::{SkinnedMesh, SkinnedVertex};
 use crate::renderer::{
-    AmbientLight, Context, DirectionalLight, Pipeline, PipelineDescriptor, RenderPass, Texture,
-    UniformBuffer,
+    AmbientLight, Context, DirectionalLight, Pipeline, PipelineDescriptor, RenderPass,
+    StorageBuffer, Texture, UniformBuffer,
     light::{AMBIENT_LIGHT_WGSL, DIRECTIONAL_LIGHT_WGSL},
 };
 
-use super::animator::{JointMatrices, skinning_wgsl};
+use super::animator::skinning_wgsl;
 
 // ── Uniform ───────────────────────────────────────────────────────────────────
 
@@ -53,19 +54,20 @@ struct Features {
 
 // ── Builder ───────────────────────────────────────────────────────────────────
 
-/// Builder for a [`SkinnedMaterial<N>`].
+/// Builder for a [`SkinnedMaterial`].
 ///
-/// `N` is the maximum number of joints. Use the turbofish syntax:
+/// Pass the joint count from your loaded skeleton so the GPU buffer is sized
+/// correctly at build time:
 /// ```ignore
-/// let mat = SkinnedMaterialBuilder::<64>::new().ambient().build(ctx);
+/// let mat = SkinnedMaterialBuilder::new(skeleton.joints.len()).ambient().build(ctx);
 /// ```
 #[derive(Default)]
-pub struct SkinnedMaterialBuilder<const N: usize> {
+pub struct SkinnedMaterialBuilder {
     feat: Features,
     init: SkinnedMaterialUniform,
 }
 
-impl<const N: usize> SkinnedMaterialBuilder<N> {
+impl SkinnedMaterialBuilder {
     pub fn new() -> Self {
         Self::default()
     }
@@ -95,21 +97,26 @@ impl<const N: usize> SkinnedMaterialBuilder<N> {
         self
     }
 
-    /// Consume the builder and create a [`SkinnedMaterial<N>`] on the GPU.
-    pub fn build(self, ctx: &mut Context) -> SkinnedMaterial<N> {
-        let shader = gen_skinned_wgsl(self.feat, N);
+    /// Consume the builder and create a [`SkinnedMaterial`] on the GPU.
+    ///
+    /// `joint_count` must match the number of joints in the skeleton that will
+    /// be animated with this material.
+    pub fn build(self, ctx: &mut Context, joint_count: usize) -> SkinnedMaterial {
+        let shader = gen_skinned_wgsl(self.feat);
         let mut desc = PipelineDescriptor::new(shader, SkinnedVertex::layout())
             .with_uniform() // group 0: scene
-            .with_uniform() // group 1: joint matrices
+            .with_storage() // group 1: joint matrices
             .with_depth();
         if self.feat.texture {
             desc = desc.with_texture().with_alpha_blend();
         }
         let pipeline = ctx.create_pipeline(desc);
         let ubuf = ctx.create_uniform_buffer(&self.init);
-        let joint_buf = ctx.create_uniform_buffer(&JointMatrices::<N> {
-            mats: [glam::Mat4::IDENTITY; N],
-        });
+
+        // Initialise joint buffer with identity matrices.
+        let identity_mats: Vec<Mat4> = vec![Mat4::IDENTITY; joint_count];
+        let joint_buf = ctx.create_storage_buffer(bytemuck::cast_slice(&identity_mats));
+
         SkinnedMaterial {
             pipeline,
             ubuf,
@@ -121,29 +128,31 @@ impl<const N: usize> SkinnedMaterialBuilder<N> {
 
 // ── Material ──────────────────────────────────────────────────────────────────
 
-/// A GPU material for skeletal meshes with up to `N` joints.
+/// A GPU material for skeletal meshes.
 ///
 /// Mutate [`uniform`](SkinnedMaterial::uniform) each frame, call
 /// [`flush`](SkinnedMaterial::flush), then call
 /// [`update_joints`](SkinnedMaterial::update_joints) with the current pose.
-pub struct SkinnedMaterial<const N: usize> {
+pub struct SkinnedMaterial {
     pipeline: Pipeline,
     ubuf: UniformBuffer,
-    joint_buf: UniformBuffer,
+    joint_buf: StorageBuffer,
     /// CPU-side copy of the scene uniform. Mutate freely; call
     /// [`flush`](SkinnedMaterial::flush) to upload to the GPU.
     pub uniform: SkinnedMaterialUniform,
 }
 
-impl<const N: usize> SkinnedMaterial<N> {
+impl SkinnedMaterial {
     /// Upload [`uniform`](SkinnedMaterial::uniform) to the GPU.
     pub fn flush(&self, ctx: &mut Context) {
         ctx.update_uniform_buffer(&self.ubuf, &self.uniform);
     }
 
     /// Upload the current joint matrices to the GPU.
-    pub fn update_joints(&self, ctx: &mut Context, joints: &JointMatrices<N>) {
-        ctx.update_uniform_buffer(&self.joint_buf, joints);
+    ///
+    /// `joints` is typically the return value of [`Animator::joint_matrices`].
+    pub fn update_joints(&self, ctx: &mut Context, joints: &[Mat4]) {
+        ctx.update_storage_buffer(&self.joint_buf, bytemuck::cast_slice(joints));
     }
 
     /// Draw the mesh.
@@ -151,16 +160,12 @@ impl<const N: usize> SkinnedMaterial<N> {
     /// Pass `Some(&texture)` if the material was built with [`.texture()`](SkinnedMaterialBuilder::texture).
     /// The mesh must have been [`upload`](SkinnedMesh::upload)ed first.
     pub fn render(&self, pass: &mut RenderPass, mesh: &SkinnedMesh, texture: Option<&Texture>) {
-        self.draw(pass, mesh, texture);
-    }
-
-    fn draw(&self, pass: &mut RenderPass, mesh: &SkinnedMesh, texture: Option<&Texture>) {
         let (Some(vbuf), Some(ibuf)) = (&mesh.vbuf, &mesh.ibuf) else {
             return; // not uploaded yet
         };
         pass.set_pipeline(&self.pipeline);
         pass.set_uniform(0, &self.ubuf);
-        pass.set_uniform(1, &self.joint_buf);
+        pass.set_storage(1, &self.joint_buf);
         if let Some(t) = texture {
             pass.set_texture(2, t);
         }
@@ -184,7 +189,7 @@ struct SkinnedU {
 @group(0) @binding(0) var<uniform> u: SkinnedU;
 ";
 
-fn gen_skinned_wgsl(feat: Features, max_joints: usize) -> String {
+fn gen_skinned_wgsl(feat: Features) -> String {
     let needs_normal = feat.ambient || feat.directional || feat.rim;
     let needs_uv = feat.texture;
     let needs_world_pos = feat.rim;
@@ -202,11 +207,10 @@ fn gen_skinned_wgsl(feat: Features, max_joints: usize) -> String {
     let mut s = String::new();
 
     // Type declarations
-    s.push_str(&skinning_wgsl(max_joints));
+    s.push_str(skinning_wgsl());
     s.push_str(AMBIENT_LIGHT_WGSL);
     s.push_str(DIRECTIONAL_LIGHT_WGSL);
     s.push_str(SKINNED_U_WGSL);
-    s.push_str("@group(1) @binding(0) var<uniform> joint_mats: JointMatrices;\n");
 
     if feat.texture {
         s.push_str(
@@ -238,10 +242,10 @@ fn gen_skinned_wgsl(feat: Features, max_joints: usize) -> String {
          \t@location(4) weights:  vec4<f32>,\n\
          ) -> VOut {\n\
          \tlet skin =\n\
-         \t\t  weights.x * joint_mats.mats[joints.x]\n\
-         \t\t+ weights.y * joint_mats.mats[joints.y]\n\
-         \t\t+ weights.z * joint_mats.mats[joints.z]\n\
-         \t\t+ weights.w * joint_mats.mats[joints.w];\n\
+         \t\t  weights.x * joint_mats[joints.x]\n\
+         \t\t+ weights.y * joint_mats[joints.y]\n\
+         \t\t+ weights.z * joint_mats[joints.z]\n\
+         \t\t+ weights.w * joint_mats[joints.w];\n\
          \tlet world = u.model * skin * vec4<f32>(position, 1.0);\n\
          \tvar o: VOut;\n\
          \to.clip = u.view_proj * world;\n",

@@ -1,8 +1,6 @@
 use crate::math::Mat4;
 use crate::mesh::{Clip, JointPose, Skeleton};
 
-use super::animator::JointMatrices;
-
 /// One state in a [`StateMachine`].
 pub struct AnimState {
     /// Identifier used with [`StateMachine::trigger`].
@@ -143,28 +141,6 @@ impl StateMachine {
                 skeleton.compute_joint_matrices(&blended)
             }
         }
-    }
-
-    /// Pack joint matrices into a fixed-size [`JointMatrices<N>`] for GPU upload.
-    ///
-    /// # Panics
-    /// If the skeleton has more joints than `N`.
-    pub fn joint_buffer<const N: usize>(
-        &self,
-        clips: &[Clip],
-        skeleton: &Skeleton,
-    ) -> JointMatrices<N> {
-        let mats = self.joint_matrices(clips, skeleton);
-        assert!(
-            mats.len() <= N,
-            "skeleton has {} joints but JointMatrices buffer is only {N}",
-            mats.len()
-        );
-        let mut buf = JointMatrices {
-            mats: [Mat4::IDENTITY; N],
-        };
-        buf.mats[..mats.len()].copy_from_slice(&mats);
-        buf
     }
 }
 

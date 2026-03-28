@@ -1,5 +1,6 @@
 use super::{
-    IndexBuffer, InstanceBuffer, Pipeline, ShadowMap, Texture, UniformBuffer, VertexBuffer,
+    IndexBuffer, InstanceBuffer, Pipeline, ShadowMap, StorageBuffer, Texture, UniformBuffer,
+    VertexBuffer,
 };
 
 pub struct RenderPass<'a> {
@@ -30,6 +31,10 @@ impl<'a> RenderPass<'a> {
     }
 
     pub(crate) fn set_uniform(&mut self, group: u32, buffer: &UniformBuffer) {
+        self.inner.set_bind_group(group, &buffer.bind_group, &[]);
+    }
+
+    pub(crate) fn set_storage(&mut self, group: u32, buffer: &StorageBuffer) {
         self.inner.set_bind_group(group, &buffer.bind_group, &[]);
     }
 

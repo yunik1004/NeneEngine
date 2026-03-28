@@ -10,6 +10,8 @@ pub(crate) struct PipelineDescriptor {
     pub use_texture: bool,
     /// Number of uniform buffer bind groups (each occupies one group slot).
     pub uniform_count: u32,
+    /// Number of read-only storage buffer bind groups, placed after uniforms.
+    pub storage_count: u32,
     pub alpha_blend: bool,
     pub additive_blend: bool,
     pub depth_write: bool,
@@ -35,6 +37,7 @@ impl PipelineDescriptor {
             fragment_entry: "fs_main",
             use_texture: false,
             uniform_count: 0,
+            storage_count: 0,
             alpha_blend: false,
             additive_blend: false,
             depth_write: false,
@@ -60,6 +63,7 @@ impl PipelineDescriptor {
             fragment_entry: "fs_main",
             use_texture: false,
             uniform_count: 0,
+            storage_count: 0,
             alpha_blend: false,
             additive_blend: false,
             depth_write: false,
@@ -104,6 +108,12 @@ impl PipelineDescriptor {
     /// uniform bindings (e.g. scene + joint matrices).
     pub fn with_uniform(mut self) -> Self {
         self.uniform_count += 1;
+        self
+    }
+
+    /// Add one read-only storage buffer bind group, placed after all uniforms.
+    pub fn with_storage(mut self) -> Self {
+        self.storage_count += 1;
         self
     }
 

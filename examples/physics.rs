@@ -220,8 +220,8 @@ impl App for PhysicsDemo {
             }
         } else {
             if let Some(s) = &self.s3d {
-                s.floor_mat.render(pass, &s.floor_mesh, None, None);
-                s.cube_mat.render(pass, &s.cube_mesh, None, None);
+                s.floor_mat.render(pass, &s.floor_mesh);
+                s.cube_mat.render(pass, &s.cube_mesh);
             }
         }
         if let Some(ui) = &self.ui {

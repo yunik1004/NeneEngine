@@ -49,7 +49,7 @@
 //!
 //!     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
 //!         let (Some(mat), Some(mesh)) = (&self.mat, &self.mesh) else { return };
-//!         mat.render(pass, mesh, None, None);
+//!         mat.render(pass, mesh);
 //!     }
 //!
 //!     fn windows() -> Vec<Config> {
