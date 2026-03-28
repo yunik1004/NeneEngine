@@ -43,8 +43,7 @@ impl Settings {
             .unwrap_or("settings")
             .to_owned();
 
-        let mut store = SaveStore::new(dir);
-        let _ = store.keys(&slot);
+        let store = SaveStore::new(dir);
 
         Self {
             store,
@@ -113,6 +112,14 @@ impl Settings {
     /// Write in-memory changes to disk.
     pub fn save(&mut self) -> Result<(), SaveError> {
         self.store.flush(&self.slot)
+    }
+
+    /// Write in-memory changes to disk on a background thread.
+    ///
+    /// Serialisation happens immediately on the calling thread; only the
+    /// file write is offloaded. Join the handle to check for I/O errors.
+    pub fn save_async(&mut self) -> std::thread::JoinHandle<Result<(), super::store::SaveError>> {
+        self.store.flush_async(&self.slot)
     }
 
     /// Returns `true` if the settings file exists on disk.

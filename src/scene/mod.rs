@@ -1,3 +1,4 @@
+use crate::ecs::Entity;
 use crate::math::{Mat4, Quat, Vec3};
 
 /// Local-space transform: position, rotation, uniform scale.
@@ -53,6 +54,11 @@ pub struct NodeId(usize);
 pub struct Node {
     pub name: Option<String>,
     pub transform: Transform,
+    /// Optional ECS entity associated with this node.
+    ///
+    /// Set this to link a scene node to its ECS data. [`Scene::walk_entities`]
+    /// then lets you iterate only nodes that have an entity attached.
+    pub entity: Option<Entity>,
     world_transform: Mat4,
     parent: Option<NodeId>,
     children: Vec<NodeId>,
@@ -69,6 +75,7 @@ impl Node {
         Self {
             name: None,
             transform: Transform::default(),
+            entity: None,
             world_transform: Mat4::IDENTITY,
             parent: None,
             children: Vec::new(),
@@ -84,6 +91,12 @@ impl Node {
 
     pub fn with_transform(mut self, transform: Transform) -> Self {
         self.transform = transform;
+        self
+    }
+
+    /// Attach an ECS entity to this node.
+    pub fn with_entity(mut self, entity: Entity) -> Self {
+        self.entity = Some(entity);
         self
     }
 
@@ -231,6 +244,33 @@ impl Scene {
         for &root in &self.roots {
             self.walk_subtree(root, &mut f);
         }
+    }
+
+    /// Visit every node that has an ECS [`Entity`] attached, in pre-order.
+    ///
+    /// Skips nodes whose [`Node::entity`] field is `None`. Use this to
+    /// synchronise world transforms into ECS components each frame.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use nene::scene::{Scene, Node};
+    /// # use nene::ecs::World;
+    /// # struct Transform3d(nene::math::Mat4);
+    /// # let mut scene = Scene::new();
+    /// # let mut world = World::new();
+    /// // After scene.update():
+    /// scene.walk_entities(|_id, node, entity| {
+    ///     if let Some(t) = world.get_mut::<Transform3d>(entity) {
+    ///         t.0 = node.world_transform();
+    ///     }
+    /// });
+    /// ```
+    pub fn walk_entities<F: FnMut(NodeId, &Node, Entity)>(&self, mut f: F) {
+        self.walk(|id, node| {
+            if let Some(entity) = node.entity {
+                f(id, node, entity);
+            }
+        });
     }
 
     fn walk_subtree<F: FnMut(NodeId, &Node)>(&self, id: NodeId, f: &mut F) {

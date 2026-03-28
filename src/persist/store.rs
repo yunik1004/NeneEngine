@@ -122,6 +122,32 @@ impl SaveStore {
         Ok(())
     }
 
+    /// Write `slot` to disk on a background thread.
+    ///
+    /// Serialisation happens on the calling thread (fast); only the actual
+    /// `fs::write` is offloaded. The slot is optimistically marked clean
+    /// immediately. Join the returned handle to check for I/O errors.
+    pub fn flush_async(&mut self, slot: &str) -> std::thread::JoinHandle<Result<(), SaveError>> {
+        let Some(s) = self.slots.get(slot) else {
+            return std::thread::spawn(|| Ok(()));
+        };
+        if !s.dirty {
+            return std::thread::spawn(|| Ok(()));
+        }
+        let json = match serde_json::to_string_pretty(&s.data) {
+            Ok(j) => j,
+            Err(e) => return std::thread::spawn(move || Err(SaveError::Serialize(e))),
+        };
+        let path = self.slot_path(slot);
+        let dir = self.dir.clone();
+        self.slots.get_mut(slot).unwrap().dirty = false;
+        std::thread::spawn(move || {
+            std::fs::create_dir_all(&dir).map_err(SaveError::Io)?;
+            std::fs::write(&path, json).map_err(SaveError::Io)?;
+            Ok(())
+        })
+    }
+
     /// Write all slots that have unsaved changes.
     pub fn flush_all(&mut self) -> Result<(), SaveError> {
         let keys: Vec<String> = self.slots.keys().cloned().collect();
