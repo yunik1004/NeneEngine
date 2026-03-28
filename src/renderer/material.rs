@@ -8,7 +8,7 @@
 //! # use nene::math::{Mat4, Vec4};
 //! # use nene::renderer::{AmbientLight, Context, DirectionalLight, Material, MaterialBuilder,
 //! #     Mesh, RenderPass, ShadowMap};
-//! # use nene::window::Config;
+//! # use nene::app::Config;
 //! struct Demo {
 //!     mat:        Option<Material>,
 //!     mesh:       Option<Mesh>,

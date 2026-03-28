@@ -12,7 +12,7 @@
 //! LMB (held)    — tint player red
 
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     camera::{Camera, Frustum},
     input::{Input, Key, MouseButton},
     math::{Vec2, Vec3},
@@ -20,7 +20,6 @@ use nene::{
     sprite::{Sprite, SpriteBatch, UvRect},
     time::Time,
     ui::Ui,
-    window::Config,
 };
 
 const W: u32 = 960;

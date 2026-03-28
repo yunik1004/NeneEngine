@@ -14,14 +14,13 @@
 //! Space             — spawn 10 more enemies
 
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     ecs::{Entity, World},
     input::{Input, Key},
     mesh::{ColorMesh, circle},
     renderer::{Context, RenderPass},
     time::Time,
     ui::Ui,
-    window::Config,
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────

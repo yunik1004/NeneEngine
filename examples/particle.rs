@@ -9,13 +9,12 @@
 //!   Space — trigger a spark burst at the fire position
 
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     input::{Input, Key},
     math::{Mat4, Vec3},
     particle::{EmitterConfig, ParticleSystem},
     renderer::{Context, RenderPass},
     time::Time,
-    window::Config,
 };
 
 const W: f32 = 960.0;

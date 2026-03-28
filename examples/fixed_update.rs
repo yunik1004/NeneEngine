@@ -8,7 +8,7 @@
 //! rendering stays fluid.
 
 use nene::{
-    app::{App, FixedApp, WindowId, run_fixed},
+    app::{App, Config, FixedApp, WindowId, run_fixed},
     debug::Profiler,
     input::Input,
     math::Mat4,
@@ -16,7 +16,6 @@ use nene::{
     renderer::{Context, RenderPass},
     time::{FixedTime, Time},
     ui::Ui,
-    window::Config,
 };
 
 const FIXED_HZ: f32 = 60.0;

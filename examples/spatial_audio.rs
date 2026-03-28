@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     audio::{AudioDevice, Sound, SpatialAudio},
     camera::Camera,
     debug::DebugDraw,
@@ -21,7 +21,6 @@ use nene::{
     renderer::{Context, RenderPass},
     time::Time,
     ui::Ui,
-    window::Config,
 };
 
 const W: u32 = 720;

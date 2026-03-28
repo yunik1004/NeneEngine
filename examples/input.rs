@@ -15,14 +15,13 @@
 //! R              — reset HP          (emits event → combat system)
 
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     event::Events,
     input::{GamepadAxis, Input, Key, MouseButton},
     math::{Mat4, Vec2, Vec3, Vec4},
     renderer::{Context, FlatObject, RenderPass},
     time::Time,
     ui::Ui,
-    window::Config,
 };
 
 // ── Event types ───────────────────────────────────────────────────────────────

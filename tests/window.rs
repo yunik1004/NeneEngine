@@ -1,4 +1,4 @@
-use nene::window::{Config, Window};
+use nene::app::Config;
 
 #[test]
 fn default_config() {
@@ -29,18 +29,4 @@ fn partial_default_config() {
     assert_eq!(config.title, "MyGame");
     assert_eq!(config.width, 1280);
     assert_eq!(config.height, 720);
-}
-
-#[test]
-fn window_new() {
-    let _window = Window::new(Config::default());
-}
-
-#[test]
-fn window_new_custom() {
-    let _window = Window::new(Config {
-        title: "Custom",
-        width: 1920,
-        height: 1080,
-    });
 }

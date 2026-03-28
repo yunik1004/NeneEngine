@@ -22,7 +22,6 @@ pub mod text;
 pub mod tilemap;
 pub mod time;
 pub mod ui;
-pub mod window;
 
 pub use nene_derive::data;
 pub use nene_derive::uniform;

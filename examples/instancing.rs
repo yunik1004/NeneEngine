@@ -3,7 +3,7 @@
 //! Controls: nothing — camera orbits automatically.
 
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     input::Input,
     math::{Mat4, Quat, Vec3, Vec4},
     mesh::unit_cube,
@@ -12,7 +12,6 @@ use nene::{
         MaterialBuilder, RenderPass,
     },
     time::Time,
-    window::Config,
 };
 
 const GRID: i32 = 50;

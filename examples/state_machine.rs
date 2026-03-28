@@ -20,7 +20,7 @@ use nene::{
         AnimChannel, AnimState, Channel, Clip, Joint, JointMatrices, Skeleton, SkinnedMaterial,
         SkinnedMaterialBuilder, SkinnedMesh, SkinnedVertex, StateMachine,
     },
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     camera::Camera,
     input::{Input, Key},
     math::{Mat4, Quat, Vec3, Vec4},
@@ -28,7 +28,6 @@ use nene::{
     renderer::{AmbientLight, Context, DirectionalLight, RenderPass},
     time::{Ease, Time, Tween},
     ui::Ui,
-    window::Config,
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────

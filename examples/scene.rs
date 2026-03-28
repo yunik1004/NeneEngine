@@ -1,6 +1,6 @@
 /// Scene-graph demo: sun → planet → moon hierarchy with debug overlays.
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     camera::Camera,
     debug::{DebugDraw, color},
     input::Input,
@@ -9,7 +9,6 @@ use nene::{
     renderer::{Context, Material, MaterialBuilder, Mesh, RenderPass},
     scene::{Node, NodeId, Scene, Transform},
     time::Time,
-    window::Config,
 };
 
 struct BodyConfig {

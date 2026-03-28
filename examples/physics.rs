@@ -9,7 +9,7 @@
 use std::f32::consts::TAU;
 
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     camera::Camera,
     input::{Input, Key},
     math::{Mat4, Vec2, Vec3, Vec4},
@@ -17,7 +17,6 @@ use nene::{
     renderer::{Context, FlatObject, Material, MaterialBuilder, Mesh, RenderPass},
     time::Time,
     ui::Ui,
-    window::Config,
 };
 
 // ── 2D ───────────────────────────────────────────────────────────────────────

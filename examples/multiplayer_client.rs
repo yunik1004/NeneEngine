@@ -10,7 +10,7 @@
 //! Other players appear as colored squares.
 
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     camera::Camera,
     debug::DebugDraw,
     input::{Input, Key},
@@ -19,7 +19,6 @@ use nene::{
     renderer::{Context, RenderPass},
     time::Time,
     ui::Ui,
-    window::Config,
 };
 use std::collections::HashMap;
 

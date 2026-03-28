@@ -234,7 +234,7 @@ impl TexturedMesh {
 /// # use nene::math::{Mat4, Vec3};
 /// # use nene::mesh::{LitShadowedModel, Model};
 /// # use nene::renderer::{AmbientLight, Context, DirectionalLight, RenderPass, ShadowMap};
-/// # use nene::window::Config;
+/// # use nene::app::Config;
 /// struct Demo {
 ///     model:       Model,
 ///     ambient:     AmbientLight,

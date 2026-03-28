@@ -7,7 +7,7 @@
 //! 2. **Texture bake** — `render_to_texture`: rasterise text into a [`Texture`]
 //!    and sample it on a spinning 3D quad.
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     camera::Camera,
     input::Input,
     math::Vec3,
@@ -15,7 +15,6 @@ use nene::{
     renderer::{Context, RenderPass},
     text::TextRenderer,
     time::Time,
-    window::Config,
 };
 
 struct TextDemo {

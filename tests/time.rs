@@ -129,7 +129,7 @@ fn accumulator_fires_correct_tick_count() {
 /// A very slow frame should not exceed MAX_FIXED_STEPS ticks.
 #[test]
 fn accumulator_capped_by_max_fixed_steps() {
-    use nene::window::MAX_FIXED_STEPS;
+    use nene::app::MAX_FIXED_STEPS;
     let fixed_step = 1.0_f32 / 60.0;
     let frame_dt = 10.0_f32; // absurdly slow
 

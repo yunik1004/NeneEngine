@@ -21,12 +21,11 @@
 //! # Single-window example
 //!
 //! ```no_run
-//! use nene::app::{App, WindowId, run};
+//! use nene::app::{App, Config, WindowId, run};
 //! use nene::input::Input;
 //! use nene::math::{Mat4, Vec4};
 //! use nene::renderer::{Context, Material, MaterialBuilder, Mesh, RenderPass};
 //! use nene::time::Time;
-//! use nene::window::Config;
 //! use nene::mesh::MeshVertex;
 //!
 //! struct MyGame {
@@ -64,9 +63,8 @@
 //! # Multi-window example
 //!
 //! ```no_run
-//! # use nene::app::{App, WindowId, run};
+//! # use nene::app::{App, Config, WindowId, run};
 //! # use nene::renderer::{Context, RenderPass};
-//! # use nene::window::Config;
 //! struct MultiWin { main: Option<WindowId>, hud: Option<WindowId> }
 //!
 //! impl App for MultiWin {
@@ -110,8 +108,31 @@ use crate::{
     input::Input,
     renderer::{Context, RenderPass},
     time::{FixedTime, Time},
-    window::{Config, MAX_FIXED_STEPS},
 };
+
+// ── Window configuration ──────────────────────────────────────────────────────
+
+/// Window creation parameters passed to [`App::windows`].
+pub struct Config {
+    pub title: &'static str,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            title: "Nene",
+            width: 1280,
+            height: 720,
+        }
+    }
+}
+
+/// Maximum number of fixed-timestep ticks allowed per rendered frame.
+///
+/// Prevents the spiral-of-death when a frame takes longer than expected.
+pub const MAX_FIXED_STEPS: u32 = 8;
 
 pub use winit::window::WindowId;
 

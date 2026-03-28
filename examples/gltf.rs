@@ -3,13 +3,12 @@
 /// Usage: cargo run --example gltf -- path/to/model.gltf|glb
 /// (argument optional — defaults to a built-in cube)
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     camera::Camera,
     math::{Mat4, Vec3},
     mesh::{LitShadowedModel, Model},
     renderer::{AmbientLight, Context, DirectionalLight, RenderPass, ShadowMap},
     time::Time,
-    window::Config,
 };
 
 fn camera_view_proj(aspect: f32) -> Mat4 {

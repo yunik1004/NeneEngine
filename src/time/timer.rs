@@ -19,7 +19,7 @@ impl Time {
 /// Timing information for one fixed-timestep tick.
 ///
 /// Passed to the `fixed_update` callback by
-/// [`Window::run_with_fixed_update`](crate::window::Window::run_with_fixed_update).
+/// [`Window::run_with_fixed_update`](`run_fixed`).
 ///
 /// Unlike [`Time`], `delta` is always the same constant value (1 / hz).
 /// When a frame is slower than the fixed step the callback fires multiple times

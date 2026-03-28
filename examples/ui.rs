@@ -12,14 +12,13 @@
 //! L — cycle language in the Locale panel.
 
 use nene::{
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     input::{Input, Key},
     locale::{Locale, from_json},
     persist::{SaveStore, Settings},
     renderer::{Context, RenderPass},
     time::Time,
     ui::Ui,
-    window::Config,
 };
 
 // ── Saved game state ──────────────────────────────────────────────────────────

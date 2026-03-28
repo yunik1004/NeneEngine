@@ -12,13 +12,12 @@
 
 use nene::{
     ai::pathfinding::{TileMapGraph, find_path},
-    app::{App, WindowId, run},
+    app::{App, Config, WindowId, run},
     input::{Input, Key, MouseButton},
     renderer::{Context, FilterMode, RenderPass, Texture},
     tilemap::{TileMap, TileMapRenderer, TileSet},
     time::Time,
     ui::Ui,
-    window::Config,
 };
 
 const COLS: u32 = 20;
