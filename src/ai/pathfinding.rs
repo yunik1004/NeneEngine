@@ -4,7 +4,7 @@
 //!
 //! ## Tile map
 //! ```no_run
-//! use nene::pathfinding::{find_path, TileMapGraph};
+//! use nene::ai::pathfinding::{find_path, TileMapGraph};
 //! use nene::tilemap::TileMap;
 //!
 //! let mut map = TileMap::new(10, 10);
@@ -19,7 +19,7 @@
 //!
 //! ## Custom graph (any node type)
 //! ```no_run
-//! use nene::pathfinding::{PathGraph, find_path};
+//! use nene::ai::pathfinding::{PathGraph, find_path};
 //!
 //! struct RoomGraph;
 //! impl PathGraph for RoomGraph {

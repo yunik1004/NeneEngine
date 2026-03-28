@@ -11,8 +11,8 @@
 //! R            — randomise walls
 
 use nene::{
+    ai::pathfinding::{TileMapGraph, find_path},
     input::{Input, Key, MouseButton},
-    pathfinding::{TileMapGraph, find_path},
     renderer::{Context, FilterMode, RenderPass, Texture},
     tilemap::{TileMap, TileMapRenderer, TileSet},
     ui::Ui,

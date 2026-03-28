@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod animation;
 pub mod asset;
 pub mod audio;
@@ -10,7 +11,6 @@ pub mod math;
 pub mod mesh;
 pub mod net;
 pub mod particle;
-pub mod pathfinding;
 pub mod persist;
 pub mod physics;
 pub mod renderer;

@@ -1,4 +1,4 @@
-use nene::pathfinding::{TileMapGraph, find_path, tile_to_world, world_to_tile};
+use nene::ai::pathfinding::{TileMapGraph, find_path, tile_to_world, world_to_tile};
 use nene::tilemap::TileMap;
 
 fn empty(cols: u32, rows: u32) -> TileMap {
@@ -135,7 +135,7 @@ fn out_of_bounds_start_returns_none() {
 
 // ── Custom graph ──────────────────────────────────────────────────────────────
 
-use nene::pathfinding::PathGraph;
+use nene::ai::pathfinding::PathGraph;
 
 struct Chain(u32); // nodes 0..n, each connects to next
 impl PathGraph for Chain {
