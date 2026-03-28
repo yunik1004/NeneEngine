@@ -6,7 +6,7 @@ use nene::{
     input::Input,
     math::{Mat4, Quat, Vec3, Vec4},
     mesh::unit_cube,
-    renderer::{Context, IndexBuffer, Material, MaterialBuilder, RenderPass, VertexBuffer},
+    renderer::{Context, Material, MaterialBuilder, Mesh, RenderPass},
     scene::{Node, NodeId, Scene, Transform},
     time::Time,
     window::Config,
@@ -33,8 +33,7 @@ struct SceneDemo {
     scene: Scene,
     body_configs: Vec<BodyConfig>,
     camera: Camera,
-    vbuf: Option<VertexBuffer>,
-    ibuf: Option<IndexBuffer>,
+    mesh: Option<Mesh>,
     debug: Option<DebugDraw>,
     bodies: Vec<Body>,
 }
@@ -79,8 +78,7 @@ impl App for SceneDemo {
                 },
             ],
             camera: Camera::perspective(Vec3::new(0., 5., 12.), 45., 0.1, 100.),
-            vbuf: None,
-            ibuf: None,
+            mesh: None,
             debug: None,
             bodies: Vec::new(),
         }
@@ -88,8 +86,7 @@ impl App for SceneDemo {
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         let (verts, indices) = unit_cube().mesh();
-        self.vbuf = Some(ctx.create_vertex_buffer(&verts));
-        self.ibuf = Some(ctx.create_index_buffer(&indices));
+        self.mesh = Some(Mesh::new(ctx, &verts, &indices));
         self.debug = Some(DebugDraw::new(ctx));
 
         self.bodies = self
@@ -163,11 +160,9 @@ impl App for SceneDemo {
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-        let (Some(vbuf), Some(ibuf)) = (&self.vbuf, &self.ibuf) else {
-            return;
-        };
+        let Some(mesh) = &self.mesh else { return };
         for body in &self.bodies {
-            body.mat.render(pass, vbuf, ibuf);
+            body.mat.render(pass, mesh);
         }
         if let Some(debug) = &self.debug {
             debug.draw(pass);

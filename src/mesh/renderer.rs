@@ -13,7 +13,8 @@ use super::{ColorVertex, MeshVertex, Model};
 
 // ── GpuVertex trait ───────────────────────────────────────────────────────────
 
-pub trait GpuVertex: Pod + Zeroable + 'static {
+#[allow(private_interfaces)]
+pub(crate) trait GpuVertex: Pod + Zeroable + 'static {
     fn create_pipeline(ctx: &mut Context) -> Pipeline;
     const USES_TEXTURE: bool;
 }
@@ -36,6 +37,7 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) color: vec4<f32> 
 }
 ";
 
+#[allow(private_interfaces)]
 impl GpuVertex for ColorVertex {
     fn create_pipeline(ctx: &mut Context) -> Pipeline {
         ctx.create_pipeline(
@@ -64,6 +66,7 @@ impl GpuVertex for ColorVertex {
     const USES_TEXTURE: bool = false;
 }
 
+#[allow(private_interfaces)]
 impl GpuVertex for MeshVertex {
     fn create_pipeline(ctx: &mut Context) -> Pipeline {
         ctx.create_builtin_pipeline(BuiltinPipeline::Textured3d)
@@ -73,7 +76,7 @@ impl GpuVertex for MeshVertex {
 
 // ── Renderer<V> ───────────────────────────────────────────────────────────────
 
-pub struct Renderer<V: GpuVertex> {
+pub(crate) struct Renderer<V: GpuVertex> {
     pipeline: Pipeline,
     vbuf: Option<VertexBuffer>,
     ibuf: Option<IndexBuffer>,
@@ -137,6 +140,84 @@ impl<V: GpuVertex> Renderer<V> {
         } else {
             pass.draw(0..self.vert_count);
         }
+    }
+}
+
+// ── ColorMesh ─────────────────────────────────────────────────────────────────
+
+/// A dynamic mesh rendered with per-vertex colors.
+///
+/// Use this when geometry changes every frame (e.g. procedurally generated shapes).
+/// For static geometry consider [`crate::renderer::FlatObject`].
+pub struct ColorMesh {
+    inner: Renderer<ColorVertex>,
+}
+
+impl ColorMesh {
+    /// Create an empty mesh. Call [`set_geometry`](Self::set_geometry) before rendering.
+    pub fn new(ctx: &mut Context) -> Self {
+        Self {
+            inner: Renderer::new(ctx),
+        }
+    }
+
+    /// Upload new vertex data. Must be called at least once before [`render`](Self::render).
+    pub fn set_geometry(&mut self, ctx: &mut Context, verts: &[ColorVertex]) {
+        self.inner.set_geometry(ctx, verts);
+    }
+
+    /// Update the model-view-projection transform.
+    pub fn set_transform(&mut self, ctx: &mut Context, mvp: glam::Mat4) {
+        self.inner.set_transform(ctx, mvp);
+    }
+
+    /// Draw the mesh into `pass`.
+    pub fn render(&self, pass: &mut RenderPass) {
+        self.inner.render(pass);
+    }
+}
+
+// ── TexturedMesh ──────────────────────────────────────────────────────────────
+
+/// A dynamic textured 3D mesh.
+///
+/// Renders [`MeshVertex`] geometry with a UV-mapped texture and an MVP transform.
+pub struct TexturedMesh {
+    inner: Renderer<MeshVertex>,
+}
+
+impl TexturedMesh {
+    /// Create an empty mesh. Call [`set_geometry`](Self::set_geometry) and
+    /// [`set_texture`](Self::set_texture) before rendering.
+    pub fn new(ctx: &mut Context) -> Self {
+        Self {
+            inner: Renderer::new(ctx),
+        }
+    }
+
+    /// Upload vertex data.
+    pub fn set_geometry(&mut self, ctx: &mut Context, verts: &[MeshVertex]) {
+        self.inner.set_geometry(ctx, verts);
+    }
+
+    /// Upload index data.
+    pub fn set_indices(&mut self, ctx: &mut Context, indices: &[u32]) {
+        self.inner.set_indices(ctx, indices);
+    }
+
+    /// Assign the texture to sample during rendering.
+    pub fn set_texture(&mut self, texture: Texture) {
+        self.inner.set_texture(texture);
+    }
+
+    /// Update the model-view-projection transform.
+    pub fn set_transform(&mut self, ctx: &mut Context, mvp: glam::Mat4) {
+        self.inner.set_transform(ctx, mvp);
+    }
+
+    /// Draw the mesh into `pass`.
+    pub fn render(&self, pass: &mut RenderPass) {
+        self.inner.render(pass);
     }
 }
 

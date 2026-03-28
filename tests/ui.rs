@@ -10,13 +10,13 @@ fn make_ctx() -> Option<HeadlessContext> {
 #[test]
 fn ui_new_headless() {
     let Some(ctx) = make_ctx() else { return };
-    let _ui = Ui::new(&ctx);
+    let _ui = Ui::new_headless(&ctx);
 }
 
 #[test]
 fn ui_begin_end_panel_no_crash() {
     let Some(ctx) = make_ctx() else { return };
-    let mut ui = Ui::new(&ctx);
+    let mut ui = Ui::new_headless(&ctx);
     // Simulate a frame with panels and widgets (no GPU upload — just CPU state)
     ui.begin_panel("Test", 10.0, 10.0, 200.0);
     ui.label("hello");
@@ -26,7 +26,7 @@ fn ui_begin_end_panel_no_crash() {
 #[test]
 fn ui_multiple_panels() {
     let Some(ctx) = make_ctx() else { return };
-    let mut ui = Ui::new(&ctx);
+    let mut ui = Ui::new_headless(&ctx);
     ui.begin_panel("A", 0.0, 0.0, 100.0);
     ui.label("a");
     ui.end_panel();
@@ -38,7 +38,7 @@ fn ui_multiple_panels() {
 #[test]
 fn ui_all_widgets_no_crash() {
     let Some(ctx) = make_ctx() else { return };
-    let mut ui = Ui::new(&ctx);
+    let mut ui = Ui::new_headless(&ctx);
     let mut checked = false;
     let mut val = 0.5_f32;
     ui.begin_panel("All", 0.0, 0.0, 250.0);
@@ -54,7 +54,7 @@ fn ui_all_widgets_no_crash() {
 #[test]
 fn ui_button_returns_false_without_click() {
     let Some(ctx) = make_ctx() else { return };
-    let mut ui = Ui::new(&ctx);
+    let mut ui = Ui::new_headless(&ctx);
     ui.begin_panel("P", 0.0, 0.0, 200.0);
     // No input injected → button must not fire
     assert!(!ui.button("No click"));
@@ -64,7 +64,7 @@ fn ui_button_returns_false_without_click() {
 #[test]
 fn ui_checkbox_default_unchanged() {
     let Some(ctx) = make_ctx() else { return };
-    let mut ui = Ui::new(&ctx);
+    let mut ui = Ui::new_headless(&ctx);
     let mut v = false;
     ui.begin_panel("P", 0.0, 0.0, 200.0);
     let changed = ui.checkbox("box", &mut v);
@@ -76,7 +76,7 @@ fn ui_checkbox_default_unchanged() {
 #[test]
 fn ui_slider_value_unchanged_without_drag() {
     let Some(ctx) = make_ctx() else { return };
-    let mut ui = Ui::new(&ctx);
+    let mut ui = Ui::new_headless(&ctx);
     let mut v = 0.5_f32;
     ui.begin_panel("P", 0.0, 0.0, 200.0);
     let changed = ui.slider("s", &mut v, 0.0, 1.0);
@@ -88,7 +88,7 @@ fn ui_slider_value_unchanged_without_drag() {
 #[test]
 fn ui_theme_can_be_mutated() {
     let Some(ctx) = make_ctx() else { return };
-    let mut ui = Ui::new(&ctx);
+    let mut ui = Ui::new_headless(&ctx);
     ui.theme.font_size = 18.0;
     assert_eq!(ui.theme.font_size, 18.0);
 }

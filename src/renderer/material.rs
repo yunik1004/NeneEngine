@@ -7,13 +7,11 @@
 //! # use nene::app::{App, WindowId, run};
 //! # use nene::math::{Mat4, Vec4};
 //! # use nene::renderer::{AmbientLight, Context, DirectionalLight, Material, MaterialBuilder,
-//! #     RenderPass, ShadowMap};
-//! # use nene::renderer::{IndexBuffer, VertexBuffer};
+//! #     Mesh, RenderPass, ShadowMap};
 //! # use nene::window::Config;
 //! struct Demo {
 //!     mat:        Option<Material>,
-//!     vbuf:       Option<VertexBuffer>,
-//!     ibuf:       Option<IndexBuffer>,
+//!     mesh:       Option<Mesh>,
 //!     shadow_map: Option<ShadowMap>,
 //!     ambient:    AmbientLight,
 //!     directional: DirectionalLight,
@@ -39,15 +37,14 @@
 //!         mat.uniform.ambient     = self.ambient;
 //!         mat.uniform.directional = self.directional;
 //!         mat.flush(ctx);
-//!         let (Some(vbuf), Some(ibuf), Some(sm)) =
-//!             (&self.vbuf, &self.ibuf, &self.shadow_map) else { return };
-//!         ctx.shadow_pass(sm, |pass| mat.shadow_draw(pass, vbuf, ibuf));
+//!         let (Some(mesh), Some(sm)) = (&self.mesh, &self.shadow_map) else { return };
+//!         ctx.shadow_pass(sm, |pass| mat.shadow_draw(pass, mesh));
 //!     }
 //!
 //!     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-//!         let (Some(mat), Some(vbuf), Some(ibuf), Some(sm)) =
-//!             (&self.mat, &self.vbuf, &self.ibuf, &self.shadow_map) else { return };
-//!         mat.render_shadowed(pass, vbuf, ibuf, sm);
+//!         let (Some(mat), Some(mesh), Some(sm)) =
+//!             (&self.mat, &self.mesh, &self.shadow_map) else { return };
+//!         mat.render_shadowed(pass, mesh, sm);
 //!     }
 //!
 //!     fn windows() -> Vec<Config> { vec![Config::default()] }
@@ -55,10 +52,11 @@
 //! ```
 
 use super::{
-    IndexBuffer, InstanceBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer,
-    VertexAttribute, VertexBuffer, VertexFormat, VertexLayout,
+    IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexAttribute,
+    VertexBuffer, VertexFormat, VertexLayout,
     context::Context,
     light::{AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight},
+    mesh::{InstancedMesh, Mesh},
     shadow::{SHADOW_WGSL, ShadowMap},
     texture::Texture,
 };
@@ -177,6 +175,7 @@ pub(crate) struct Features {
 pub struct MaterialBuilder {
     feat: Features,
     init: MaterialUniform,
+    custom_wgsl: Option<String>,
 }
 
 impl MaterialBuilder {
@@ -231,9 +230,19 @@ impl MaterialBuilder {
         self
     }
 
+    /// Override the auto-generated WGSL with a custom shader.
+    ///
+    /// Your shader must accept `MeshVertex` at locations 0–2 and bind
+    /// `MaterialU` at `@group(0) @binding(0)`. All other render methods
+    /// (`render`, `render_textured`, etc.) continue to work as usual.
+    pub fn shader(mut self, wgsl: impl Into<String>) -> Self {
+        self.custom_wgsl = Some(wgsl.into());
+        self
+    }
+
     /// Consume the builder and create a [`Material`] on the GPU.
     pub fn build(self, ctx: &mut Context) -> Material {
-        let main_wgsl = gen_main_wgsl(self.feat);
+        let main_wgsl = self.custom_wgsl.unwrap_or_else(|| gen_main_wgsl(self.feat));
         let mut desc = PipelineDescriptor::new(main_wgsl, crate::mesh::MeshVertex::layout())
             .with_uniform()
             .with_depth();
@@ -297,74 +306,58 @@ impl Material {
         ctx.update_uniform_buffer(&self.ubuf, &self.uniform);
     }
 
-    /// Draw with a flat color (or lit color — no texture, no shadow map).
-    pub fn render(&self, pass: &mut RenderPass, vbuf: &VertexBuffer, ibuf: &IndexBuffer) {
-        self.draw(pass, vbuf, ibuf, None, None);
+    /// Draw with flat/lit color (no texture, no shadow map).
+    pub fn render(&self, pass: &mut RenderPass, mesh: &Mesh) {
+        self.draw(pass, &mesh.vbuf, &mesh.ibuf, None, None);
     }
 
     /// Draw with a diffuse texture at group 1.
-    pub fn render_textured(
-        &self,
-        pass: &mut RenderPass,
-        vbuf: &VertexBuffer,
-        ibuf: &IndexBuffer,
-        texture: &Texture,
-    ) {
-        self.draw(pass, vbuf, ibuf, Some(texture), None);
+    pub fn render_textured(&self, pass: &mut RenderPass, mesh: &Mesh, texture: &Texture) {
+        self.draw(pass, &mesh.vbuf, &mesh.ibuf, Some(texture), None);
     }
 
     /// Draw with PCF shadow map at group 2 (no texture).
-    pub fn render_shadowed(
-        &self,
-        pass: &mut RenderPass,
-        vbuf: &VertexBuffer,
-        ibuf: &IndexBuffer,
-        shadow_map: &ShadowMap,
-    ) {
-        self.draw(pass, vbuf, ibuf, None, Some(shadow_map));
+    pub fn render_shadowed(&self, pass: &mut RenderPass, mesh: &Mesh, shadow_map: &ShadowMap) {
+        self.draw(pass, &mesh.vbuf, &mesh.ibuf, None, Some(shadow_map));
     }
 
     /// Draw with both texture and shadow map.
     pub fn render_textured_shadowed(
         &self,
         pass: &mut RenderPass,
-        vbuf: &VertexBuffer,
-        ibuf: &IndexBuffer,
+        mesh: &Mesh,
         texture: &Texture,
         shadow_map: &ShadowMap,
     ) {
-        self.draw(pass, vbuf, ibuf, Some(texture), Some(shadow_map));
+        self.draw(
+            pass,
+            &mesh.vbuf,
+            &mesh.ibuf,
+            Some(texture),
+            Some(shadow_map),
+        );
     }
 
-    /// Instanced draw — renders `count` instances from `inst_buf`.
-    ///
-    /// Only valid for materials built with [`.instanced()`](MaterialBuilder::instanced).
-    pub fn render_instanced(
-        &self,
-        pass: &mut RenderPass,
-        vbuf: &VertexBuffer,
-        ibuf: &IndexBuffer,
-        inst_buf: &InstanceBuffer,
-        count: u32,
-    ) {
+    /// Instanced draw. Only valid for materials built with
+    /// [`.instanced()`](MaterialBuilder::instanced).
+    pub fn render_instanced(&self, pass: &mut RenderPass, mesh: &InstancedMesh) {
         pass.set_pipeline(&self.pipeline);
         pass.set_uniform(0, &self.ubuf);
-        pass.set_vertex_buffer(0, vbuf);
-        pass.set_instance_buffer(1, inst_buf);
-        pass.draw_indexed_instanced(ibuf, count);
+        pass.set_vertex_buffer(0, &mesh.vbuf);
+        pass.set_instance_buffer(1, &mesh.inst_buf);
+        pass.draw_indexed_instanced(&mesh.ibuf, mesh.count());
     }
 
-    /// Depth-only draw for the shadow pass. Call inside
-    /// [`Context::shadow_pass`]. No-op if the material was not built with
-    /// `.casts_shadow()` or `.shadow()`.
-    pub fn shadow_draw(&self, pass: &mut RenderPass, vbuf: &VertexBuffer, ibuf: &IndexBuffer) {
+    /// Depth-only draw for the shadow pass. Call inside [`Context::shadow_pass`].
+    /// No-op if the material was not built with `.casts_shadow()` or `.shadow()`.
+    pub fn shadow_draw(&self, pass: &mut RenderPass, mesh: &Mesh) {
         let Some(sp) = &self.shadow_pipeline else {
             return;
         };
         pass.set_pipeline(sp);
         pass.set_uniform(0, &self.ubuf);
-        pass.set_vertex_buffer(0, vbuf);
-        pass.draw_indexed(ibuf);
+        pass.set_vertex_buffer(0, &mesh.vbuf);
+        pass.draw_indexed(&mesh.ibuf);
     }
 
     fn draw(

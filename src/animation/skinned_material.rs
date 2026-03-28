@@ -1,9 +1,9 @@
-//! [`SkinnedMaterial`] — lit, optionally rim-shaded material for skeletal meshes.
+//! [`SkinnedMaterial`] — GPU material for skeletal meshes.
 
-use crate::mesh::SkinnedVertex;
+use crate::mesh::{SkinnedMesh, SkinnedVertex};
 use crate::renderer::{
-    AmbientLight, Context, DirectionalLight, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass,
-    Texture, UniformBuffer, VertexBuffer,
+    AmbientLight, Context, DirectionalLight, Pipeline, PipelineDescriptor, RenderPass, Texture,
+    UniformBuffer,
     light::{AMBIENT_LIGHT_WGSL, DIRECTIONAL_LIGHT_WGSL},
 };
 
@@ -147,29 +147,24 @@ impl<const N: usize> SkinnedMaterial<N> {
         ctx.update_uniform_buffer(&self.joint_buf, joints);
     }
 
-    /// Draw with flat/gradient color (no texture).
-    pub fn render(&self, pass: &mut RenderPass, vbuf: &VertexBuffer, ibuf: &IndexBuffer) {
-        self.draw(pass, vbuf, ibuf, None);
+    /// Draw with flat color (no texture).
+    ///
+    /// The mesh must have been [`upload`](SkinnedMesh::upload)ed first.
+    pub fn render(&self, pass: &mut RenderPass, mesh: &SkinnedMesh) {
+        self.draw(pass, mesh, None);
     }
 
     /// Draw with a diffuse texture at group 2.
-    pub fn render_textured(
-        &self,
-        pass: &mut RenderPass,
-        vbuf: &VertexBuffer,
-        ibuf: &IndexBuffer,
-        texture: &Texture,
-    ) {
-        self.draw(pass, vbuf, ibuf, Some(texture));
+    ///
+    /// The mesh must have been [`upload`](SkinnedMesh::upload)ed first.
+    pub fn render_textured(&self, pass: &mut RenderPass, mesh: &SkinnedMesh, texture: &Texture) {
+        self.draw(pass, mesh, Some(texture));
     }
 
-    fn draw(
-        &self,
-        pass: &mut RenderPass,
-        vbuf: &VertexBuffer,
-        ibuf: &IndexBuffer,
-        texture: Option<&Texture>,
-    ) {
+    fn draw(&self, pass: &mut RenderPass, mesh: &SkinnedMesh, texture: Option<&Texture>) {
+        let (Some(vbuf), Some(ibuf)) = (&mesh.vbuf, &mesh.ibuf) else {
+            return; // not uploaded yet
+        };
         pass.set_pipeline(&self.pipeline);
         pass.set_uniform(0, &self.ubuf);
         pass.set_uniform(1, &self.joint_buf);

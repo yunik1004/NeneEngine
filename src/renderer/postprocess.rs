@@ -1,4 +1,6 @@
-use super::{Pipeline, PipelineDescriptor, RenderContext, RenderPass, RenderTarget, UniformBuffer};
+use super::{
+    Context, HeadlessContext, Pipeline, PipelineDescriptor, RenderPass, RenderTarget, UniformBuffer,
+};
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
@@ -172,13 +174,37 @@ pub struct PostProcessStack {
 
 impl PostProcessStack {
     /// Create a new stack with default settings.
-    pub fn new(ctx: &mut impl RenderContext, width: u32, height: u32) -> Self {
-        Self::with_settings(ctx, width, height, PostProcessSettings::default())
+    pub fn new(ctx: &mut Context, width: u32, height: u32) -> Self {
+        Self::init(ctx, width, height, PostProcessSettings::default())
+    }
+
+    /// Create a new stack with default settings (headless / test context).
+    pub fn new_headless(ctx: &mut HeadlessContext, width: u32, height: u32) -> Self {
+        Self::init(ctx, width, height, PostProcessSettings::default())
     }
 
     /// Create a new stack with custom settings.
     pub fn with_settings(
-        ctx: &mut impl RenderContext,
+        ctx: &mut Context,
+        width: u32,
+        height: u32,
+        settings: PostProcessSettings,
+    ) -> Self {
+        Self::init(ctx, width, height, settings)
+    }
+
+    /// Create a new stack with custom settings (headless / test context).
+    pub fn with_settings_headless(
+        ctx: &mut HeadlessContext,
+        width: u32,
+        height: u32,
+        settings: PostProcessSettings,
+    ) -> Self {
+        Self::init(ctx, width, height, settings)
+    }
+
+    fn init(
+        ctx: &mut impl super::context::RenderContext,
         width: u32,
         height: u32,
         settings: PostProcessSettings,
@@ -201,18 +227,23 @@ impl PostProcessStack {
     /// Render the scene into the internal off-screen target.
     ///
     /// Call this from `pre_render` or `update` before the main `render` callback.
-    pub fn scene_pass<F: FnOnce(&mut RenderPass<'_>)>(
-        &self,
-        ctx: &mut impl RenderContext,
-        draw: F,
-    ) {
+    pub fn scene_pass<F: FnOnce(&mut RenderPass<'_>)>(&self, ctx: &mut Context, draw: F) {
         ctx.render_to_target(&self.scene, draw);
     }
 
     /// Upload [`settings`](Self::settings) to the GPU.
     ///
     /// Must be called after mutating `self.settings` for the change to take effect.
-    pub fn apply_settings(&self, ctx: &mut impl RenderContext) {
+    pub fn apply_settings(&self, ctx: &mut Context) {
+        self.upload_settings(ctx);
+    }
+
+    /// Upload settings to the GPU (headless / test context).
+    pub fn apply_settings_headless(&self, ctx: &mut HeadlessContext) {
+        self.upload_settings(ctx);
+    }
+
+    fn upload_settings(&self, ctx: &mut impl super::context::RenderContext) {
         ctx.update_uniform_buffer(&self.ubuf, &PostUniform::from(&self.settings));
     }
 
@@ -227,7 +258,16 @@ impl PostProcessStack {
     }
 
     /// Recreate render targets after a window resize.
-    pub fn resize(&mut self, ctx: &mut impl RenderContext, width: u32, height: u32) {
+    pub fn resize(&mut self, ctx: &mut Context, width: u32, height: u32) {
+        self.do_resize(ctx, width, height);
+    }
+
+    /// Recreate render targets after a window resize (headless / test context).
+    pub fn resize_headless(&mut self, ctx: &mut HeadlessContext, width: u32, height: u32) {
+        self.do_resize(ctx, width, height);
+    }
+
+    fn do_resize(&mut self, ctx: &mut impl super::context::RenderContext, width: u32, height: u32) {
         self.scene = ctx.create_scene_target(width, height);
     }
 }

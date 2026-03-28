@@ -25,7 +25,7 @@ use nene::{
     input::{Input, Key},
     math::{Mat4, Quat, Vec3, Vec4},
     mesh::Model,
-    renderer::{AmbientLight, Context, DirectionalLight, IndexBuffer, RenderPass, VertexBuffer},
+    renderer::{AmbientLight, Context, DirectionalLight, RenderPass},
     time::{Ease, Time, Tween},
     ui::Ui,
     window::Config,
@@ -171,12 +171,7 @@ fn build_mesh() -> SkinnedMesh {
         indices.extend_from_slice(&[tip_cap, last_ring + i, last_ring + next]);
     }
 
-    SkinnedMesh {
-        vertices,
-        indices,
-        transform: Mat4::IDENTITY,
-        base_color: None,
-    }
+    SkinnedMesh::new(vertices, indices)
 }
 
 fn build_model() -> Model {
@@ -205,8 +200,6 @@ struct StateMachineDemo {
     ease_idx: usize,
     // GPU
     mat: Option<SkinnedMaterial<MAX_JOINTS>>,
-    vbuf: Option<VertexBuffer>,
-    ibuf: Option<IndexBuffer>,
     ui: Option<Ui>,
 }
 
@@ -239,8 +232,6 @@ impl App for StateMachineDemo {
             blend_tween: None,
             ease_idx: 0,
             mat: None,
-            vbuf: None,
-            ibuf: None,
             ui: None,
         }
     }
@@ -256,9 +247,7 @@ impl App for StateMachineDemo {
         };
         let aspect = width as f32 / height as f32;
 
-        let mesh = &self.model.skinned_meshes[0];
-        self.vbuf = Some(ctx.create_vertex_buffer(&mesh.vertices));
-        self.ibuf = Some(ctx.create_index_buffer(&mesh.indices));
+        self.model.skinned_meshes[0].upload(ctx);
 
         let mut mat = SkinnedMaterialBuilder::<MAX_JOINTS>::new()
             .ambient()
@@ -354,10 +343,8 @@ impl App for StateMachineDemo {
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-        let (Some(mat), Some(vbuf), Some(ibuf)) = (&self.mat, &self.vbuf, &self.ibuf) else {
-            return;
-        };
-        mat.render(pass, vbuf, ibuf);
+        let Some(mat) = &self.mat else { return };
+        mat.render(pass, &self.model.skinned_meshes[0]);
         if let Some(ui) = &self.ui {
             ui.render(pass);
         }

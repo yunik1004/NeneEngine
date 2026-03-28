@@ -22,8 +22,8 @@
 
 use crate::input::{Input, MouseButton};
 use crate::renderer::{
-    Pipeline, PipelineDescriptor, RenderContext, RenderPass, UniformBuffer, VertexAttribute,
-    VertexBuffer, VertexFormat, VertexLayout,
+    Context, HeadlessContext, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer,
+    VertexAttribute, VertexBuffer, VertexFormat, VertexLayout,
 };
 use crate::text::TextRenderer;
 
@@ -219,9 +219,17 @@ pub struct Ui {
 }
 
 impl Ui {
-    /// Create the UI context. Accepts both [`Context`](crate::renderer::Context) and
-    /// [`HeadlessContext`](crate::renderer::HeadlessContext).
-    pub fn new(ctx: &impl RenderContext) -> Self {
+    /// Create the UI context.
+    pub fn new(ctx: &Context) -> Self {
+        Self::init(ctx)
+    }
+
+    /// Create the UI context from a headless context (for testing).
+    pub fn new_headless(ctx: &HeadlessContext) -> Self {
+        Self::init(ctx)
+    }
+
+    fn init(ctx: &impl crate::renderer::RenderContext) -> Self {
         let vert_layout = VertexLayout {
             stride: std::mem::size_of::<UiVert>() as u64,
             attributes: vec![

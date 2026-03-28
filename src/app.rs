@@ -23,27 +23,34 @@
 //! ```no_run
 //! use nene::app::{App, WindowId, run};
 //! use nene::input::Input;
-//! use nene::renderer::{Context, Pipeline, PipelineDescriptor, RenderPass};
+//! use nene::math::{Mat4, Vec4};
+//! use nene::renderer::{Context, Material, MaterialBuilder, Mesh, RenderPass};
 //! use nene::time::Time;
 //! use nene::window::Config;
-//! # use nene::vertex;
-//! # #[vertex] struct Vtx { pos: [f32; 2] }
+//! use nene::mesh::MeshVertex;
 //!
 //! struct MyGame {
-//!     pipeline: Option<Pipeline>,
+//!     mat:  Option<Material>,
+//!     mesh: Option<Mesh>,
 //! }
 //!
 //! impl App for MyGame {
-//!     fn new() -> Self { MyGame { pipeline: None } }
+//!     fn new() -> Self { MyGame { mat: None, mesh: None } }
 //!
 //!     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-//!         self.pipeline = Some(ctx.create_pipeline(PipelineDescriptor::new("...", Vtx::layout())));
+//!         self.mat  = Some(MaterialBuilder::new().ambient().build(ctx));
+//!         self.mesh = Some(Mesh::new(ctx, &[], &[]));
 //!     }
 //!
-//!     fn update(&mut self, _input: &Input, _time: &Time) { /* game logic */ }
+//!     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
+//!         let Some(mat) = &mut self.mat else { return };
+//!         mat.uniform.view_proj = Mat4::IDENTITY;
+//!         mat.flush(ctx);
+//!     }
 //!
 //!     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-//!         pass.set_pipeline(self.pipeline.as_ref().unwrap());
+//!         let (Some(mat), Some(mesh)) = (&self.mat, &self.mesh) else { return };
+//!         mat.render(pass, mesh);
 //!     }
 //!
 //!     fn windows() -> Vec<Config> {

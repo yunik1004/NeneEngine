@@ -27,7 +27,7 @@ fn settings_default_values() {
 fn stack_new() {
     let Some(ctx) = make_ctx() else { return };
     let mut ctx = ctx;
-    let _stack = PostProcessStack::new(&mut ctx, 320, 240);
+    let _stack = PostProcessStack::new_headless(&mut ctx, 320, 240);
 }
 
 #[test]
@@ -42,23 +42,23 @@ fn stack_with_settings() {
         saturation: 0.8,
         contrast: 1.1,
     };
-    let _stack = PostProcessStack::with_settings(&mut ctx, 320, 240, settings);
+    let _stack = PostProcessStack::with_settings_headless(&mut ctx, 320, 240, settings);
 }
 
 #[test]
 fn stack_apply_settings() {
     let Some(ctx) = make_ctx() else { return };
     let mut ctx = ctx;
-    let mut stack = PostProcessStack::new(&mut ctx, 320, 240);
+    let mut stack = PostProcessStack::new_headless(&mut ctx, 320, 240);
     stack.settings.exposure = 2.0;
     stack.settings.tone_map = ToneMap::None;
-    stack.apply_settings(&mut ctx);
+    stack.apply_settings_headless(&mut ctx);
 }
 
 #[test]
 fn stack_resize() {
     let Some(ctx) = make_ctx() else { return };
     let mut ctx = ctx;
-    let mut stack = PostProcessStack::new(&mut ctx, 320, 240);
-    stack.resize(&mut ctx, 640, 480);
+    let mut stack = PostProcessStack::new_headless(&mut ctx, 320, 240);
+    stack.resize_headless(&mut ctx, 640, 480);
 }

@@ -19,10 +19,7 @@ use nene::{
     event::Events,
     input::{GamepadAxis, Input, Key, MouseButton},
     math::{Mat4, Vec2, Vec3, Vec4},
-    renderer::{
-        BuiltinPipeline, Context, Pipeline, Pos2, RenderPass, TransformUniform, UniformBuffer,
-        VertexBuffer,
-    },
+    renderer::{Context, FlatObject, Pos2, RenderPass},
     time::Time,
     ui::Ui,
     window::Config,
@@ -58,11 +55,6 @@ fn ortho() -> Mat4 {
     Mat4::orthographic_rh(-8.0, 8.0, -4.5, 4.5, -1.0, 1.0)
 }
 
-fn build_transform(pos: Vec2, color: Vec4) -> TransformUniform {
-    let mvp = ortho() * Mat4::from_translation(Vec3::new(pos.x, pos.y, 0.0));
-    TransformUniform::new(mvp, color)
-}
-
 struct InputDemo {
     // Direct-input state
     pos: Vec2,
@@ -72,9 +64,7 @@ struct InputDemo {
     hp: i32,
     log: Vec<String>,
     // GPU
-    pipeline: Option<Pipeline>,
-    vb: Option<VertexBuffer>,
-    uniform: Option<UniformBuffer>,
+    square: Option<FlatObject>,
     ui: Option<Ui>,
 }
 
@@ -86,21 +76,13 @@ impl App for InputDemo {
             events: Events::new(),
             hp: MAX_HP,
             log: vec!["Ready.".into()],
-            pipeline: None,
-            vb: None,
-            uniform: None,
+            square: None,
             ui: None,
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        let vb = ctx.create_vertex_buffer(QUAD);
-        let uniform =
-            ctx.create_uniform_buffer(&build_transform(Vec2::ZERO, Vec4::new(0.3, 0.6, 1.0, 1.0)));
-        let pipeline = ctx.create_builtin_pipeline(BuiltinPipeline::Transform2d);
-        self.vb = Some(vb);
-        self.uniform = Some(uniform);
-        self.pipeline = Some(pipeline);
+        self.square = Some(FlatObject::new(ctx, QUAD, Vec4::new(0.3, 0.6, 1.0, 1.0)));
         self.ui = Some(Ui::new(ctx));
     }
 
@@ -181,8 +163,10 @@ impl App for InputDemo {
     }
 
     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
-        if let Some(uniform) = &self.uniform {
-            ctx.update_uniform_buffer(uniform, &build_transform(self.pos, self.color));
+        if let Some(square) = &mut self.square {
+            square.color = self.color;
+            let mvp = ortho() * Mat4::from_translation(Vec3::new(self.pos.x, self.pos.y, 0.0));
+            square.set_transform(ctx, mvp);
         }
 
         let Some(ui) = &mut self.ui else { return };
@@ -211,12 +195,8 @@ impl App for InputDemo {
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-        if let (Some(pipeline), Some(uniform), Some(vb)) = (&self.pipeline, &self.uniform, &self.vb)
-        {
-            pass.set_pipeline(pipeline);
-            pass.set_uniform(0, uniform);
-            pass.set_vertex_buffer(0, vb);
-            pass.draw(0..6);
+        if let Some(square) = &self.square {
+            square.render(pass);
         }
         if let Some(ui) = &self.ui {
             ui.render(pass);

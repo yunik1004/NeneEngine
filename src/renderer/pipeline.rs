@@ -1,8 +1,8 @@
-pub struct Pipeline {
+pub(crate) struct Pipeline {
     pub(crate) inner: wgpu::RenderPipeline,
 }
 
-pub struct PipelineDescriptor {
+pub(crate) struct PipelineDescriptor {
     pub shader: String,
     pub vertex_layout: VertexLayout,
     pub vertex_entry: &'static str,
@@ -71,18 +71,6 @@ impl PipelineDescriptor {
         }
     }
 
-    /// Add a per-instance vertex buffer at slot 1.
-    ///
-    /// Use [`VertexLayout::at_locations`] to shift instance attribute
-    /// locations past the per-vertex attributes before passing the layout:
-    ///
-    /// ```no_run
-    /// # use nene::renderer::{PipelineDescriptor, VertexLayout};
-    /// # fn demo(vl: VertexLayout, il: VertexLayout) -> PipelineDescriptor {
-    /// PipelineDescriptor::new("/* shader */", vl)
-    ///     .with_instance_layout(il.at_locations(2))
-    /// # }
-    /// ```
     pub fn with_instance_layout(mut self, layout: VertexLayout) -> Self {
         self.instance_layout = Some(layout);
         self
@@ -137,37 +125,19 @@ impl PipelineDescriptor {
     }
 }
 
-pub struct VertexLayout {
-    pub stride: u64,
-    pub attributes: Vec<VertexAttribute>,
+pub(crate) struct VertexLayout {
+    pub(crate) stride: u64,
+    pub(crate) attributes: Vec<VertexAttribute>,
 }
 
-impl VertexLayout {
-    /// Shift all attribute shader locations by `base`.
-    ///
-    /// Use this when binding an instance buffer whose attributes must start
-    /// at a higher location than the per-vertex attributes:
-    ///
-    /// ```no_run
-    /// // Per-vertex uses locations 0, 1.  Instance data starts at 2.
-    /// // InstanceData::layout().at_locations(2)
-    /// ```
-    pub fn at_locations(mut self, base: u32) -> Self {
-        for attr in &mut self.attributes {
-            attr.location += base;
-        }
-        self
-    }
-}
-
-pub struct VertexAttribute {
-    pub offset: u64,
-    pub location: u32,
-    pub format: VertexFormat,
+pub(crate) struct VertexAttribute {
+    pub(crate) offset: u64,
+    pub(crate) location: u32,
+    pub(crate) format: VertexFormat,
 }
 
 #[derive(Clone, Copy)]
-pub enum VertexFormat {
+pub(crate) enum VertexFormat {
     Float32x2,
     Float32x3,
     Float32x4,

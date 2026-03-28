@@ -17,7 +17,7 @@ use nene::{
     app::{App, WindowId, run},
     ecs::{Entity, World},
     input::{Input, Key},
-    mesh::{ColorVertex, Renderer, circle},
+    mesh::{ColorMesh, circle},
     renderer::{Context, RenderPass},
     time::Time,
     ui::Ui,
@@ -62,7 +62,7 @@ struct InRange;
 struct EcsDemo {
     world: World,
     player: Entity,
-    draw: Option<Renderer<ColorVertex>>,
+    draw: Option<ColorMesh>,
     ui: Option<Ui>,
 }
 
@@ -125,7 +125,7 @@ impl App for EcsDemo {
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        self.draw = Some(Renderer::<ColorVertex>::new(ctx));
+        self.draw = Some(ColorMesh::new(ctx));
         self.ui = Some(Ui::new(ctx));
     }
 

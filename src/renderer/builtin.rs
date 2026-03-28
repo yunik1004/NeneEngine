@@ -1,48 +1,4 @@
-//! Pre-built pipelines so simple apps don't need to write WGSL.
-//!
-//! # Quick start
-//!
-//! ```no_run
-//! use nene::app::{App, WindowId, run};
-//! use nene::renderer::{
-//!     BuiltinPipeline, ColorUniform, Context, Pipeline, Pos2, RenderPass, UniformBuffer,
-//!     VertexBuffer,
-//! };
-//! use nene::window::Config;
-//!
-//! struct MyApp {
-//!     pipeline: Option<Pipeline>,
-//!     vb:       Option<VertexBuffer>,
-//!     ub:       Option<UniformBuffer>,
-//! }
-//!
-//! impl App for MyApp {
-//!     fn new() -> Self { MyApp { pipeline: None, vb: None, ub: None } }
-//!
-//!     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-//!         self.pipeline = Some(ctx.create_builtin_pipeline(BuiltinPipeline::Flat2d));
-//!         self.vb = Some(ctx.create_vertex_buffer(&[
-//!             Pos2::new(-0.5, -0.5),
-//!             Pos2::new( 0.5, -0.5),
-//!             Pos2::new( 0.0,  0.5),
-//!         ]));
-//!         self.ub = Some(ctx.create_uniform_buffer(&ColorUniform::rgba(1.0, 0.2, 0.4, 1.0)));
-//!     }
-//!
-//!     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-//!         let (Some(p), Some(vb), Some(ub)) =
-//!             (&self.pipeline, &self.vb, &self.ub) else { return };
-//!         pass.set_pipeline(p);
-//!         pass.set_uniform(0, ub);
-//!         pass.set_vertex_buffer(0, vb);
-//!         pass.draw(0..3);
-//!     }
-//!
-//!     fn windows() -> Vec<Config> { vec![Config::default()] }
-//! }
-//!
-//! fn main() { run::<MyApp>(); }
-//! ```
+//! Pre-built pipelines and vertex types used internally by the renderer.
 
 use bytemuck::{Pod, Zeroable};
 
@@ -62,7 +18,7 @@ impl Pos2 {
         Self { pos: [x, y] }
     }
 
-    pub fn layout() -> VertexLayout {
+    pub(crate) fn layout() -> VertexLayout {
         VertexLayout {
             stride: 8,
             attributes: vec![VertexAttribute {
@@ -89,24 +45,6 @@ impl Pos2Uv {
             uv: [u, v],
         }
     }
-
-    pub fn layout() -> VertexLayout {
-        VertexLayout {
-            stride: 16,
-            attributes: vec![
-                VertexAttribute {
-                    offset: 0,
-                    location: 0,
-                    format: VertexFormat::Float32x2,
-                },
-                VertexAttribute {
-                    offset: 8,
-                    location: 1,
-                    format: VertexFormat::Float32x2,
-                },
-            ],
-        }
-    }
 }
 
 /// 3-D position vertex — location 0.
@@ -119,17 +57,6 @@ pub struct Pos3 {
 impl Pos3 {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self { pos: [x, y, z] }
-    }
-
-    pub fn layout() -> VertexLayout {
-        VertexLayout {
-            stride: 12,
-            attributes: vec![VertexAttribute {
-                offset: 0,
-                location: 0,
-                format: VertexFormat::Float32x3,
-            }],
-        }
     }
 }
 
@@ -148,87 +75,36 @@ impl Pos3Norm {
             normal: [nx, ny, nz],
         }
     }
-
-    pub fn layout() -> VertexLayout {
-        VertexLayout {
-            stride: 24,
-            attributes: vec![
-                VertexAttribute {
-                    offset: 0,
-                    location: 0,
-                    format: VertexFormat::Float32x3,
-                },
-                VertexAttribute {
-                    offset: 12,
-                    location: 1,
-                    format: VertexFormat::Float32x3,
-                },
-            ],
-        }
-    }
 }
 
 // ── Uniform types ─────────────────────────────────────────────────────────────
 
-/// Single MVP matrix uniform.
-///
-/// Used with [`BuiltinPipeline::Textured3d`].
 #[derive(Clone, Copy, encase::ShaderType)]
-pub struct MvpUniform {
-    pub mvp: glam::Mat4,
+pub(crate) struct MvpUniform {
+    pub(crate) mvp: glam::Mat4,
 }
 
 impl MvpUniform {
-    pub fn new(mvp: glam::Mat4) -> Self {
+    pub(crate) fn new(mvp: glam::Mat4) -> Self {
         Self { mvp }
     }
 
-    pub fn identity() -> Self {
+    pub(crate) fn identity() -> Self {
         Self {
             mvp: glam::Mat4::IDENTITY,
         }
     }
 }
 
-/// Flat RGBA color uniform.
-///
-/// Used with [`BuiltinPipeline::Flat2d`].
 #[derive(Clone, Copy, encase::ShaderType)]
-pub struct ColorUniform {
-    pub color: glam::Vec4,
-}
-
-impl ColorUniform {
-    pub fn rgba(r: f32, g: f32, b: f32, a: f32) -> Self {
-        Self {
-            color: glam::Vec4::new(r, g, b, a),
-        }
-    }
-
-    pub fn white() -> Self {
-        Self::rgba(1.0, 1.0, 1.0, 1.0)
-    }
-}
-
-/// MVP transform + tint color, for 2-D and 3-D pipelines.
-///
-/// Used with [`BuiltinPipeline::Transform2d`] and [`BuiltinPipeline::Flat3d`].
-#[derive(Clone, Copy, encase::ShaderType)]
-pub struct TransformUniform {
-    pub mvp: glam::Mat4,
-    pub color: glam::Vec4,
+pub(crate) struct TransformUniform {
+    pub(crate) mvp: glam::Mat4,
+    pub(crate) color: glam::Vec4,
 }
 
 impl TransformUniform {
-    pub fn new(mvp: glam::Mat4, color: glam::Vec4) -> Self {
+    pub(crate) fn new(mvp: glam::Mat4, color: glam::Vec4) -> Self {
         Self { mvp, color }
-    }
-
-    pub fn identity_white() -> Self {
-        Self {
-            mvp: glam::Mat4::IDENTITY,
-            color: glam::Vec4::ONE,
-        }
     }
 }
 
@@ -239,8 +115,6 @@ impl TransformUniform {
 #[derive(Clone, Copy)]
 enum VertexIn {
     Pos2,       // @location(0) pos: vec2<f32>
-    Pos2Uv,     // @location(0) pos: vec2<f32>, @location(1) uv: vec2<f32>
-    Pos3,       // @location(0) pos: vec3<f32>
     MeshVertex, // @location(0) pos: vec3<f32>, @location(1) _n: vec3<f32>, @location(2) uv: vec2<f32>
 }
 
@@ -258,8 +132,8 @@ fn gen_flat_wgsl(
     tex_group: u32,
 ) -> String {
     let mut s = String::new();
-    let is_3d = matches!(vin, VertexIn::Pos3 | VertexIn::MeshVertex);
-    let has_uv = matches!(vin, VertexIn::Pos2Uv | VertexIn::MeshVertex);
+    let is_3d = matches!(vin, VertexIn::MeshVertex);
+    let has_uv = matches!(vin, VertexIn::MeshVertex);
     let pass_uv = has_uv && has_texture;
 
     // Uniform struct (group 0 when texture is at group 1 or not present)
@@ -292,12 +166,8 @@ fn gen_flat_wgsl(
     // Vertex shader
     let pos_type = if is_3d { "vec3<f32>" } else { "vec2<f32>" };
     s.push_str(&format!("@vertex fn vs_main(@location(0) pos: {pos_type},"));
-    match vin {
-        VertexIn::Pos2Uv => s.push_str(" @location(1) uv: vec2<f32>,"),
-        VertexIn::MeshVertex => {
-            s.push_str(" @location(1) _n: vec3<f32>, @location(2) uv: vec2<f32>,")
-        }
-        _ => {}
+    if let VertexIn::MeshVertex = vin {
+        s.push_str(" @location(1) _n: vec3<f32>, @location(2) uv: vec2<f32>,")
     }
 
     let clip = match (has_mvp, is_3d) {
@@ -334,23 +204,11 @@ fn gen_flat_wgsl(
 ///
 /// | Variant | Vertex | Uniform | Blend | Depth |
 /// |---------|--------|---------|-------|-------|
-/// | `Flat2d` | [`Pos2`] | [`ColorUniform`] | opaque | off |
-/// | `Flat2dAlpha` | [`Pos2`] | [`ColorUniform`] | alpha | off |
 /// | `Transform2d` | [`Pos2`] | [`TransformUniform`] | opaque | off |
-/// | `Sprite` | [`Pos2Uv`] | — (texture) | alpha | off |
-/// | `Flat3d` | [`Pos3`] | [`TransformUniform`] | opaque | on |
 /// | `Textured3d` | `MeshVertex` | [`MvpUniform`] + texture | alpha | on |
-pub enum BuiltinPipeline {
-    /// 2-D solid-color triangles in NDC space.
-    Flat2d,
-    /// Like `Flat2d` but with alpha blending (for transparent 2-D shapes).
-    Flat2dAlpha,
+pub(crate) enum BuiltinPipeline {
     /// 2-D solid-color triangles with an MVP uniform transform.
     Transform2d,
-    /// 2-D textured sprite in NDC space — bind a [`Texture`](super::Texture).
-    Sprite,
-    /// 3-D solid-color geometry with MVP transform and depth testing.
-    Flat3d,
     /// 3-D textured mesh — `MeshVertex` layout, [`MvpUniform`] at group 0,
     /// texture + sampler at group 1, depth on, alpha blend on.
     Textured3d,
@@ -359,34 +217,11 @@ pub enum BuiltinPipeline {
 impl BuiltinPipeline {
     pub(crate) fn descriptor(&self) -> PipelineDescriptor {
         match self {
-            BuiltinPipeline::Flat2d => PipelineDescriptor::new(
-                gen_flat_wgsl(VertexIn::Pos2, false, true, false, 0),
-                Pos2::layout(),
-            )
-            .with_uniform(),
-            BuiltinPipeline::Flat2dAlpha => PipelineDescriptor::new(
-                gen_flat_wgsl(VertexIn::Pos2, false, true, false, 0),
-                Pos2::layout(),
-            )
-            .with_uniform()
-            .with_alpha_blend(),
             BuiltinPipeline::Transform2d => PipelineDescriptor::new(
                 gen_flat_wgsl(VertexIn::Pos2, true, true, false, 0),
                 Pos2::layout(),
             )
             .with_uniform(),
-            BuiltinPipeline::Sprite => PipelineDescriptor::new(
-                gen_flat_wgsl(VertexIn::Pos2Uv, false, false, true, 0),
-                Pos2Uv::layout(),
-            )
-            .with_texture()
-            .with_alpha_blend(),
-            BuiltinPipeline::Flat3d => PipelineDescriptor::new(
-                gen_flat_wgsl(VertexIn::Pos3, true, true, false, 0),
-                Pos3::layout(),
-            )
-            .with_uniform()
-            .with_depth(),
             BuiltinPipeline::Textured3d => PipelineDescriptor::new(
                 gen_flat_wgsl(VertexIn::MeshVertex, true, false, true, 1),
                 crate::mesh::MeshVertex::layout(),

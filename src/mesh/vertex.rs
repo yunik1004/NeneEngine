@@ -1,5 +1,7 @@
 use crate::math::Mat4;
-use crate::renderer::{VertexAttribute, VertexFormat, VertexLayout};
+use crate::renderer::{
+    Context, IndexBuffer, VertexAttribute, VertexBuffer, VertexFormat, VertexLayout,
+};
 
 /// A single vertex in a mesh.
 #[repr(C)]
@@ -11,7 +13,7 @@ pub struct MeshVertex {
 }
 
 impl MeshVertex {
-    pub fn layout() -> VertexLayout {
+    pub(crate) fn layout() -> VertexLayout {
         use std::mem::offset_of;
         VertexLayout {
             stride: std::mem::size_of::<Self>() as u64,
@@ -63,7 +65,7 @@ pub struct SkinnedVertex {
 }
 
 impl SkinnedVertex {
-    pub fn layout() -> VertexLayout {
+    pub(crate) fn layout() -> VertexLayout {
         use std::mem::offset_of;
         VertexLayout {
             stride: std::mem::size_of::<Self>() as u64,
@@ -117,6 +119,9 @@ pub struct Mesh {
 }
 
 /// A mesh primitive with per-vertex skinning data.
+///
+/// Call [`upload`](Self::upload) once after creation to push vertex/index data
+/// to the GPU before passing to [`SkinnedMaterial::render`].
 pub struct SkinnedMesh {
     pub vertices: Vec<SkinnedVertex>,
     pub indices: Vec<u32>,
@@ -124,4 +129,30 @@ pub struct SkinnedMesh {
     pub transform: Mat4,
     /// Base color texture, if present in the material.
     pub base_color: Option<Image>,
+    pub(crate) vbuf: Option<VertexBuffer>,
+    pub(crate) ibuf: Option<IndexBuffer>,
+}
+
+impl SkinnedMesh {
+    /// Create a new CPU-side mesh. Call [`upload`](Self::upload) before rendering.
+    pub fn new(vertices: Vec<SkinnedVertex>, indices: Vec<u32>) -> Self {
+        Self {
+            vertices,
+            indices,
+            transform: Mat4::IDENTITY,
+            base_color: None,
+            vbuf: None,
+            ibuf: None,
+        }
+    }
+
+    /// Upload vertex and index data to the GPU.
+    ///
+    /// Must be called once before passing this mesh to [`SkinnedMaterial::render`].
+    /// Safe to call again after modifying [`vertices`](Self::vertices) or
+    /// [`indices`](Self::indices) to re-upload changed data.
+    pub fn upload(&mut self, ctx: &mut Context) {
+        self.vbuf = Some(ctx.create_vertex_buffer(&self.vertices));
+        self.ibuf = Some(ctx.create_index_buffer(&self.indices));
+    }
 }

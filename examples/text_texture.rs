@@ -11,7 +11,7 @@ use nene::{
     camera::Camera,
     input::Input,
     math::Vec3,
-    mesh::{MeshVertex, Renderer, quad},
+    mesh::{TexturedMesh, quad},
     renderer::{Context, RenderPass},
     text::TextRenderer,
     time::Time,
@@ -19,7 +19,7 @@ use nene::{
 };
 
 struct TextDemo {
-    mesh: Option<Renderer<MeshVertex>>,
+    mesh: Option<TexturedMesh>,
     text: Option<TextRenderer>,
     angle: f32,
     frame: u32,
@@ -37,7 +37,7 @@ impl App for TextDemo {
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         let (verts, indices) = quad(4.0, 1.0).mesh(); // 4:1 aspect ratio matches texture bake
-        let mut mesh = Renderer::<MeshVertex>::new(ctx);
+        let mut mesh = TexturedMesh::new(ctx);
         mesh.set_geometry(ctx, &verts);
         mesh.set_indices(ctx, &indices);
         self.mesh = Some(mesh);

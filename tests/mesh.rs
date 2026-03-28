@@ -159,16 +159,6 @@ f 1//1 3//1 4//1
 ";
 
 #[test]
-fn mesh_vertex_layout() {
-    let layout = MeshVertex::layout();
-    assert_eq!(layout.stride, std::mem::size_of::<MeshVertex>() as u64);
-    assert_eq!(layout.attributes.len(), 3);
-    assert_eq!(layout.attributes[0].location, 0); // position
-    assert_eq!(layout.attributes[1].location, 1); // normal
-    assert_eq!(layout.attributes[2].location, 2); // uv
-}
-
-#[test]
 fn mesh_vertex_size() {
     // position [f32;3] + normal [f32;3] + uv [f32;2] = 8 * 4 = 32 bytes
     assert_eq!(std::mem::size_of::<MeshVertex>(), 32);

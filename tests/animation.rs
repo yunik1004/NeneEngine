@@ -234,9 +234,8 @@ fn skinned_vertex_size() {
 
 #[test]
 fn skinned_vertex_layout_stride() {
-    let layout = SkinnedVertex::layout();
-    assert_eq!(layout.stride, 52);
-    assert_eq!(layout.attributes.len(), 5);
+    // position(12) + normal(12) + uv(8) + joints(4) + weights(16) = 52 bytes
+    assert_eq!(std::mem::size_of::<SkinnedVertex>(), 52);
 }
 
 // ── skinning_wgsl ─────────────────────────────────────────────────────────────

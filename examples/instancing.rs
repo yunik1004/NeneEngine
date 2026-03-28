@@ -1,8 +1,5 @@
 //! GPU instancing demo — 2 500 cubes, one draw call.
 //!
-//! Per-vertex data  (slot 0): MeshVertex (position + normal + uv)
-//! Per-instance data (slot 1): InstanceData (model matrix + color)
-//!
 //! Controls: nothing — camera orbits automatically.
 
 use nene::{
@@ -11,19 +8,15 @@ use nene::{
     math::{Mat4, Quat, Vec3, Vec4},
     mesh::unit_cube,
     renderer::{
-        AmbientLight, Context, DirectionalLight, IndexBuffer, InstanceBuffer, InstanceData,
-        Material, MaterialBuilder, RenderPass, VertexBuffer,
+        AmbientLight, Context, DirectionalLight, InstanceData, InstancedMesh, Material,
+        MaterialBuilder, RenderPass,
     },
     time::Time,
     window::Config,
 };
 
-// ── Grid ──────────────────────────────────────────────────────────────────────
-
 const GRID: i32 = 50;
 const SPACING: f32 = 2.2;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> [f32; 3] {
     let i = (h * 6.0) as u32;
@@ -39,14 +32,10 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> [f32; 3] {
     }
 }
 
-// ── App state ─────────────────────────────────────────────────────────────────
-
 struct InstancingDemo {
     elapsed: f64,
     mat: Option<Material>,
-    vbuf: Option<VertexBuffer>,
-    ibuf: Option<IndexBuffer>,
-    inst_buf: Option<InstanceBuffer>,
+    mesh: Option<InstancedMesh>,
     instances: Vec<InstanceData>,
 }
 
@@ -55,21 +44,15 @@ impl App for InstancingDemo {
         InstancingDemo {
             elapsed: 0.0,
             mat: None,
-            vbuf: None,
-            ibuf: None,
-            inst_buf: None,
+            mesh: None,
             instances: Vec::new(),
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        let (mesh_verts, indices) = unit_cube().mesh();
-        self.vbuf = Some(ctx.create_vertex_buffer(&mesh_verts));
-        self.ibuf = Some(ctx.create_index_buffer(&indices));
-
-        // Placeholder instance buffer — filled each frame in prepare()
+        let (verts, indices) = unit_cube().mesh();
         self.instances = vec![InstanceData::new(Mat4::IDENTITY, Vec4::ONE); (GRID * GRID) as usize];
-        self.inst_buf = Some(ctx.create_instance_buffer(&self.instances));
+        self.mesh = Some(InstancedMesh::new(ctx, &verts, &indices, &self.instances));
 
         let mut mat = MaterialBuilder::new()
             .ambient()
@@ -89,7 +72,6 @@ impl App for InstancingDemo {
     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
         let t = self.elapsed as f32;
 
-        // Camera
         let (width, height) = {
             let cfg = ctx.surface_config();
             (cfg.width, cfg.height)
@@ -100,36 +82,32 @@ impl App for InstancingDemo {
         let view_proj = Mat4::perspective_rh(45_f32.to_radians(), aspect, 0.5, r * 3.0)
             * Mat4::look_at_rh(cam_pos, Vec3::ZERO, Vec3::Y);
 
-        // Update per-instance transforms on CPU
         for iz in 0..GRID {
             for ix in 0..GRID {
                 let x = (ix - GRID / 2) as f32 * SPACING;
                 let z = (iz - GRID / 2) as f32 * SPACING;
                 let speed = 0.4 + 0.6 * ((x * 0.17 + z * 0.13).abs().fract());
-                let angle = t * speed;
                 let model = Mat4::from_translation(Vec3::new(x, 0.0, z))
-                    * Mat4::from_quat(Quat::from_rotation_y(angle));
+                    * Mat4::from_quat(Quat::from_rotation_y(t * speed));
                 let hue = (ix as f32 / GRID as f32 + iz as f32 / GRID as f32) % 1.0;
                 let [r, g, b] = hsv_to_rgb(hue, 0.75, 0.9);
-                let idx = (iz * GRID + ix) as usize;
-                self.instances[idx] = InstanceData::new(model, Vec4::new(r, g, b, 1.0));
+                self.instances[(iz * GRID + ix) as usize] =
+                    InstanceData::new(model, Vec4::new(r, g, b, 1.0));
             }
         }
 
-        if let (Some(mat), Some(inst_buf)) = (&mut self.mat, &self.inst_buf) {
-            ctx.update_instance_buffer(inst_buf, &self.instances);
+        if let (Some(mat), Some(mesh)) = (&mut self.mat, &mut self.mesh) {
+            mesh.update(ctx, &self.instances);
             mat.uniform.view_proj = view_proj;
             mat.flush(ctx);
         }
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-        let (Some(mat), Some(vbuf), Some(ibuf), Some(inst_buf)) =
-            (&self.mat, &self.vbuf, &self.ibuf, &self.inst_buf)
-        else {
+        let (Some(mat), Some(mesh)) = (&self.mat, &self.mesh) else {
             return;
         };
-        mat.render_instanced(pass, vbuf, ibuf, inst_buf, self.instances.len() as u32);
+        mat.render_instanced(pass, mesh);
     }
 
     fn windows() -> Vec<Config> {

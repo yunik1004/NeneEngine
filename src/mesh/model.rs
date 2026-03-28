@@ -338,6 +338,8 @@ fn collect_skinned_node(
                 indices,
                 transform: world,
                 base_color,
+                vbuf: None,
+                ibuf: None,
             });
         }
     }

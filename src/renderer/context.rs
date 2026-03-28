@@ -29,7 +29,7 @@ pub(crate) struct GpuDevice {
 }
 
 impl GpuDevice {
-    pub fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
+    pub(crate) fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
         let inner = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -40,12 +40,12 @@ impl GpuDevice {
         VertexBuffer { inner }
     }
 
-    pub fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
+    pub(crate) fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
         self.queue
             .write_buffer(&buf.inner, 0, bytemuck::cast_slice(data));
     }
 
-    pub fn create_instance_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> InstanceBuffer {
+    pub(crate) fn create_instance_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> InstanceBuffer {
         let inner = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -53,18 +53,19 @@ impl GpuDevice {
                 contents: bytemuck::cast_slice(data),
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             });
-        InstanceBuffer {
-            inner,
-            count: data.len() as u32,
-        }
+        InstanceBuffer { inner }
     }
 
-    pub fn update_instance_buffer<T: bytemuck::Pod>(&self, buf: &InstanceBuffer, data: &[T]) {
+    pub(crate) fn update_instance_buffer<T: bytemuck::Pod>(
+        &self,
+        buf: &InstanceBuffer,
+        data: &[T],
+    ) {
         self.queue
             .write_buffer(&buf.inner, 0, bytemuck::cast_slice(data));
     }
 
-    pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
+    pub(crate) fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
         let inner = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -78,7 +79,7 @@ impl GpuDevice {
         }
     }
 
-    pub fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
+    pub(crate) fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         data: &T,
     ) -> UniformBuffer {
@@ -87,7 +88,7 @@ impl GpuDevice {
         uniform::create(&self.device, buf.into_inner().as_slice())
     }
 
-    pub fn update_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
+    pub(crate) fn update_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         buf: &UniformBuffer,
         data: &T,
@@ -374,34 +375,18 @@ impl HeadlessContext {
         })
     }
 
-    pub fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
+    pub(crate) fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
         self.gpu.create_vertex_buffer(data)
     }
 
-    pub fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
-        self.gpu.update_vertex_buffer(buf, data)
-    }
-
-    pub fn create_instance_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> InstanceBuffer {
-        self.gpu.create_instance_buffer(data)
-    }
-
-    pub fn update_instance_buffer<T: bytemuck::Pod>(&self, buf: &InstanceBuffer, data: &[T]) {
-        self.gpu.update_instance_buffer(buf, data)
-    }
-
-    pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
-        self.gpu.create_index_buffer(indices)
-    }
-
-    pub fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
+    pub(crate) fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         data: &T,
     ) -> UniformBuffer {
         self.gpu.create_uniform_buffer(data)
     }
 
-    pub fn update_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
+    pub(crate) fn update_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         buf: &UniformBuffer,
         data: &T,
@@ -468,15 +453,9 @@ impl HeadlessContext {
     }
 
     /// Compile a render pipeline targeting `Rgba8UnormSrgb`.
-    pub fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
+    pub(crate) fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
         self.gpu
             .create_pipeline(desc, wgpu::TextureFormat::Rgba8UnormSrgb)
-    }
-
-    /// Compile one of the engine's pre-built pipelines.
-    pub fn create_builtin_pipeline(&self, pipeline: BuiltinPipeline) -> Pipeline {
-        self.gpu
-            .create_pipeline(pipeline.descriptor(), wgpu::TextureFormat::Rgba8UnormSrgb)
     }
 
     /// Render into an off-screen [`RenderTarget`].
@@ -532,11 +511,11 @@ impl HeadlessContext {
 }
 
 /// Abstraction over [`Context`] and [`HeadlessContext`] for code that works in both environments.
-pub trait RenderContext {
+#[allow(private_interfaces)]
+pub(crate) trait RenderContext {
     fn create_scene_target(&self, width: u32, height: u32) -> RenderTarget;
     fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline;
     fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer;
-    fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]);
     fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         data: &T,
@@ -546,10 +525,10 @@ pub trait RenderContext {
         buf: &UniformBuffer,
         data: &T,
     );
-    fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(&mut self, target: &RenderTarget, draw: F);
     fn create_text_renderer(&self) -> TextRenderer;
 }
 
+#[allow(private_interfaces)]
 impl RenderContext for Context {
     fn create_scene_target(&self, width: u32, height: u32) -> RenderTarget {
         self.create_scene_target(width, height)
@@ -560,9 +539,6 @@ impl RenderContext for Context {
     fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
         self.create_vertex_buffer(data)
     }
-    fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
-        self.update_vertex_buffer(buf, data)
-    }
     fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         data: &T,
@@ -575,9 +551,6 @@ impl RenderContext for Context {
         data: &T,
     ) {
         self.update_uniform_buffer(buf, data)
-    }
-    fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(&mut self, target: &RenderTarget, draw: F) {
-        self.render_to_target(target, draw)
     }
     fn create_text_renderer(&self) -> TextRenderer {
         TextRenderer::new_raw(
@@ -588,6 +561,7 @@ impl RenderContext for Context {
     }
 }
 
+#[allow(private_interfaces)]
 impl RenderContext for HeadlessContext {
     fn create_scene_target(&self, width: u32, height: u32) -> RenderTarget {
         self.create_scene_target(width, height)
@@ -597,9 +571,6 @@ impl RenderContext for HeadlessContext {
     }
     fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
         self.create_vertex_buffer(data)
-    }
-    fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
-        self.update_vertex_buffer(buf, data)
     }
     fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
@@ -613,9 +584,6 @@ impl RenderContext for HeadlessContext {
         data: &T,
     ) {
         self.update_uniform_buffer(buf, data)
-    }
-    fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(&mut self, target: &RenderTarget, draw: F) {
-        self.render_to_target(target, draw)
     }
     fn create_text_renderer(&self) -> TextRenderer {
         self.create_text_renderer()
@@ -711,34 +679,38 @@ impl Context {
         });
     }
 
-    pub fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
+    pub(crate) fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
         self.gpu.create_vertex_buffer(data)
     }
 
-    pub fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
+    pub(crate) fn update_vertex_buffer<T: bytemuck::Pod>(&self, buf: &VertexBuffer, data: &[T]) {
         self.gpu.update_vertex_buffer(buf, data)
     }
 
-    pub fn create_instance_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> InstanceBuffer {
+    pub(crate) fn create_instance_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> InstanceBuffer {
         self.gpu.create_instance_buffer(data)
     }
 
-    pub fn update_instance_buffer<T: bytemuck::Pod>(&self, buf: &InstanceBuffer, data: &[T]) {
+    pub(crate) fn update_instance_buffer<T: bytemuck::Pod>(
+        &self,
+        buf: &InstanceBuffer,
+        data: &[T],
+    ) {
         self.gpu.update_instance_buffer(buf, data)
     }
 
-    pub fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
+    pub(crate) fn create_index_buffer(&self, indices: &[u32]) -> IndexBuffer {
         self.gpu.create_index_buffer(indices)
     }
 
-    pub fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
+    pub(crate) fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         data: &T,
     ) -> UniformBuffer {
         self.gpu.create_uniform_buffer(data)
     }
 
-    pub fn update_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
+    pub(crate) fn update_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         buf: &UniformBuffer,
         data: &T,
@@ -747,7 +719,7 @@ impl Context {
     }
 
     /// Compile a render pipeline targeting the swapchain surface format.
-    pub fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
+    pub(crate) fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
         self.gpu.create_pipeline(desc, self.surface_config.format)
     }
 
@@ -755,7 +727,7 @@ impl Context {
     ///
     /// See [`BuiltinPipeline`] for available variants and their required vertex /
     /// uniform types.
-    pub fn create_builtin_pipeline(&self, pipeline: BuiltinPipeline) -> Pipeline {
+    pub(crate) fn create_builtin_pipeline(&self, pipeline: BuiltinPipeline) -> Pipeline {
         self.gpu
             .create_pipeline(pipeline.descriptor(), self.surface_config.format)
     }

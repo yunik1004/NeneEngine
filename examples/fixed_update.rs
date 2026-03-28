@@ -12,7 +12,7 @@ use nene::{
     debug::Profiler,
     input::Input,
     math::Mat4,
-    mesh::{ColorVertex, Renderer, circle_segments},
+    mesh::{ColorMesh, ColorVertex, circle_segments},
     renderer::{Context, RenderPass},
     time::{FixedTime, Time},
     ui::Ui,
@@ -48,7 +48,7 @@ struct FixedUpdateDemo {
     balls: Vec<Ball>,
     profiler: Profiler,
     // GPU
-    renderer: Option<Renderer<ColorVertex>>,
+    renderer: Option<ColorMesh>,
     ui: Option<Ui>,
 }
 
@@ -73,7 +73,7 @@ impl App for FixedUpdateDemo {
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        self.renderer = Some(Renderer::new(ctx));
+        self.renderer = Some(ColorMesh::new(ctx));
         self.ui = Some(Ui::new(ctx));
     }
 

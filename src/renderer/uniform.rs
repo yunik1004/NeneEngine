@@ -1,4 +1,4 @@
-pub struct UniformBuffer {
+pub(crate) struct UniformBuffer {
     pub(crate) inner: wgpu::Buffer,
     pub(crate) bind_group: wgpu::BindGroup,
 }

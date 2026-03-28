@@ -14,10 +14,7 @@ use nene::{
     input::{Input, Key},
     math::{Mat4, Vec3, Vec4},
     mesh::unit_cube,
-    renderer::{
-        BuiltinPipeline, Context, IndexBuffer, Material, MaterialBuilder, Pipeline, Pos2,
-        RenderPass, TransformUniform, UniformBuffer, VertexBuffer,
-    },
+    renderer::{Context, FlatObject, Material, MaterialBuilder, Mesh, Pos2, RenderPass},
     time::Time,
     ui::Ui,
     window::Config,
@@ -26,13 +23,8 @@ use nene::{
 // ── 2D ───────────────────────────────────────────────────────────────────────
 
 struct State2D {
-    pipeline: Pipeline,
-    ball_vb: VertexBuffer,
-    ball_ib: IndexBuffer,
-    ball_uni: UniformBuffer,
-    floor_vb: VertexBuffer,
-    floor_ib: IndexBuffer,
-    floor_uni: UniformBuffer,
+    ball: FlatObject,
+    floor: FlatObject,
     world: nene::physics::d2::World,
     ball_handle: nene::physics::d2::RigidBodyHandle,
     camera: Camera,
@@ -77,26 +69,10 @@ fn init_2d(ctx: &mut Context) -> State2D {
 
     let (bv, bi) = circle_verts(0.5, 32);
     let (fv, fi) = rect_verts(10.0, 0.2);
-    let mvp = camera.view_proj(1.0);
-
-    let ball_uni = ctx.create_uniform_buffer(&TransformUniform::new(
-        mvp * Mat4::from_translation(Vec3::new(0.0, 8.0, 0.0)),
-        Vec4::new(0.4, 0.7, 1.0, 1.0),
-    ));
-    let floor_uni = ctx.create_uniform_buffer(&TransformUniform::new(
-        mvp,
-        Vec4::new(0.55, 0.55, 0.55, 1.0),
-    ));
-    let pipeline = ctx.create_builtin_pipeline(BuiltinPipeline::Transform2d);
 
     State2D {
-        pipeline,
-        ball_vb: ctx.create_vertex_buffer(&bv),
-        ball_ib: ctx.create_index_buffer(&bi),
-        ball_uni,
-        floor_vb: ctx.create_vertex_buffer(&fv),
-        floor_ib: ctx.create_index_buffer(&fi),
-        floor_uni,
+        ball: FlatObject::new_indexed(ctx, &bv, &bi, Vec4::new(0.4, 0.7, 1.0, 1.0)),
+        floor: FlatObject::new_indexed(ctx, &fv, &fi, Vec4::new(0.55, 0.55, 0.55, 1.0)),
         world,
         ball_handle: ball_h,
         camera,
@@ -107,11 +83,9 @@ fn init_2d(ctx: &mut Context) -> State2D {
 
 struct State3D {
     cube_mat: Material,
-    cube_vb: VertexBuffer,
-    cube_ib: IndexBuffer,
+    cube_mesh: Mesh,
     floor_mat: Material,
-    floor_vb: VertexBuffer,
-    floor_ib: IndexBuffer,
+    floor_mesh: Mesh,
     world: nene::physics::d3::World,
     cube_handle: nene::physics::d3::RigidBodyHandle,
 }
@@ -137,6 +111,8 @@ fn init_3d(ctx: &mut Context) -> State3D {
     );
 
     let (cube_verts, cube_indices) = unit_cube().mesh();
+    let cube_mesh = Mesh::new(ctx, &cube_verts, &cube_indices);
+    let floor_mesh = Mesh::new(ctx, &cube_verts, &cube_indices);
 
     let mut cube_mat = MaterialBuilder::new()
         .color(Vec4::new(0.6, 0.75, 1.0, 1.0))
@@ -149,11 +125,9 @@ fn init_3d(ctx: &mut Context) -> State3D {
 
     State3D {
         cube_mat,
-        cube_vb: ctx.create_vertex_buffer(&cube_verts),
-        cube_ib: ctx.create_index_buffer(&cube_indices),
+        cube_mesh,
         floor_mat,
-        floor_vb: ctx.create_vertex_buffer(&cube_verts),
-        floor_ib: ctx.create_index_buffer(&cube_indices),
+        floor_mesh,
         world,
         cube_handle: cube_h,
     }
@@ -210,12 +184,12 @@ impl App for PhysicsDemo {
         if !self.mode_3d {
             if let Some(s) = &mut self.s2d {
                 let pos = s.world.position(s.ball_handle).unwrap();
-                let mvp =
-                    s.camera.view_proj(1.0) * Mat4::from_translation(Vec3::new(pos.x, pos.y, 0.0));
-                ctx.update_uniform_buffer(
-                    &s.ball_uni,
-                    &TransformUniform::new(mvp, Vec4::new(0.4, 0.7, 1.0, 1.0)),
+                let vp = s.camera.view_proj(1.0);
+                s.ball.set_transform(
+                    ctx,
+                    vp * Mat4::from_translation(Vec3::new(pos.x, pos.y, 0.0)),
                 );
+                s.floor.set_transform(ctx, vp);
             }
         } else {
             if let Some(s) = &mut self.s3d {
@@ -244,18 +218,13 @@ impl App for PhysicsDemo {
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
         if !self.mode_3d {
             if let Some(s) = &self.s2d {
-                pass.set_pipeline(&s.pipeline);
-                pass.set_uniform(0, &s.floor_uni);
-                pass.set_vertex_buffer(0, &s.floor_vb);
-                pass.draw_indexed(&s.floor_ib);
-                pass.set_uniform(0, &s.ball_uni);
-                pass.set_vertex_buffer(0, &s.ball_vb);
-                pass.draw_indexed(&s.ball_ib);
+                s.floor.render(pass);
+                s.ball.render(pass);
             }
         } else {
             if let Some(s) = &self.s3d {
-                s.floor_mat.render(pass, &s.floor_vb, &s.floor_ib);
-                s.cube_mat.render(pass, &s.cube_vb, &s.cube_ib);
+                s.floor_mat.render(pass, &s.floor_mesh);
+                s.cube_mat.render(pass, &s.cube_mesh);
             }
         }
         if let Some(ui) = &self.ui {
