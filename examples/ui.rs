@@ -14,7 +14,7 @@
 use nene::{
     app::{App, WindowId, run},
     input::{Input, Key},
-    locale::Locale,
+    locale::{Locale, from_json},
     persist::{SaveStore, Settings},
     renderer::{Context, RenderPass},
     time::Time,
@@ -81,8 +81,9 @@ impl App for UiDemo {
         let brightness: f32 = settings.get("sim.brightness").unwrap_or(1.0);
         let show_fps: bool = settings.get("display.show_fps").unwrap_or(true);
 
-        let locale = Locale::new("examples/assets/locale", "en");
-        let langs = locale.available_languages();
+        let locale_dir = "examples/assets/locale";
+        let langs = available_languages(locale_dir);
+        let locale = Locale::new(load_lang(locale_dir, "en"));
 
         UiDemo {
             ui: None,
@@ -109,7 +110,7 @@ impl App for UiDemo {
         if input.key_pressed(Key::KeyL) && !self.langs.is_empty() {
             self.lang_idx = (self.lang_idx + 1) % self.langs.len();
             let lang = self.langs[self.lang_idx].clone();
-            self.locale.set_language(&lang);
+            self.locale.set(load_lang("examples/assets/locale", &lang));
         }
 
         let Some(ui) = &mut self.ui else { return };
@@ -202,7 +203,12 @@ impl App for UiDemo {
         // ── Right panel: Locale ───────────────────────────────────────────────
         let score_str = self.game.score.to_string();
         ui.begin_panel("Locale", 720.0, 20.0, 220.0);
-        ui.label(&format!("Language: {}", self.locale.language()));
+        let lang = self
+            .langs
+            .get(self.lang_idx)
+            .map(|s| s.as_str())
+            .unwrap_or("en");
+        ui.label(&format!("Language: {lang}"));
         ui.separator();
         ui.label(&self.locale.t("menu.start"));
         ui.label(&self.locale.t("menu.quit"));
@@ -238,4 +244,28 @@ impl App for UiDemo {
 
 fn main() {
     run::<UiDemo>();
+}
+
+fn load_lang(dir: &str, lang: &str) -> std::collections::HashMap<String, String> {
+    let path = format!("{dir}/{lang}.json");
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    from_json(&text)
+}
+
+fn available_languages(dir: &str) -> Vec<String> {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return vec![];
+    };
+    let mut langs: Vec<String> = rd
+        .filter_map(|e| {
+            let p = e.ok()?.path();
+            if p.extension()?.to_str()? == "json" {
+                Some(p.file_stem()?.to_str()?.to_owned())
+            } else {
+                None
+            }
+        })
+        .collect();
+    langs.sort();
+    langs
 }

@@ -1,105 +1,63 @@
-//! Localization — load language files and look up translated strings.
+//! Localization — look up translated strings from an in-memory map.
 //!
-//! Language files are plain JSON objects stored under a common directory,
-//! one file per language:
+//! [`Locale`] holds two flat `key → string` maps (active + optional fallback)
+//! and knows nothing about files or formats.  Load your translations however
+//! you like — [`from_json`] is provided as a convenience for the common case.
 //!
-//! ```text
-//! assets/locale/en.json
-//! assets/locale/ko.json
-//! assets/locale/ja.json
 //! ```
+//! use nene::locale::{Locale, from_json};
 //!
-//! Each file maps dot-separated keys to translated strings.  Values may
-//! contain `{name}`-style placeholders that are filled in at call time.
+//! let en = from_json(r#"{"menu":{"start":"Start Game"},"hud":{"hp":"HP: {hp}"}}"#);
+//! let ko = from_json(r#"{"menu":{"start":"게임 시작"},"hud":{"hp":"체력: {hp}"}}"#);
 //!
-//! ```json
-//! {
-//!   "menu.start":  "Start Game",
-//!   "hud.hp":      "HP: {hp}",
-//!   "dialog.greet": "Hello, {name}!"
-//! }
-//! ```
+//! let mut locale = Locale::new(ko).with_fallback(en);
 //!
-//! # Quick start
-//! ```no_run
-//! use nene::locale::Locale;
-//!
-//! let mut locale = Locale::new("assets/locale", "en");
-//!
-//! assert_eq!(locale.t("menu.start"), "Start Game");
-//! assert_eq!(locale.t_with("hud.hp", &[("hp", "42")]), "HP: 42");
-//!
-//! // Switch language at runtime (e.g. from the settings screen).
-//! locale.set_language("ko");
 //! assert_eq!(locale.t("menu.start"), "게임 시작");
+//! assert_eq!(locale.t_with("hud.hp", &[("hp", "42")]), "체력: 42");
+//!
+//! // Switch language at runtime.
+//! locale.set(from_json(r#"{"menu":{"start":"Start Game"}}"#));
+//! assert_eq!(locale.t("menu.start"), "Start Game");
 //! ```
 
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 
 // ── Locale ────────────────────────────────────────────────────────────────────
 
 /// Runtime localization store.
 ///
-/// Holds the currently active language's translations and, optionally, a
-/// fallback language (default: `"en"`) used when a key is missing from the
-/// active language.
+/// Holds an active translation map and an optional fallback map.
+/// Key lookup checks the active map first, then the fallback, then returns
+/// the key itself as a visible placeholder.
 pub struct Locale {
-    dir: PathBuf,
-    language: String,
-    fallback: String,
-    /// Active language strings.
     active: HashMap<String, String>,
-    /// Fallback language strings (empty when active == fallback).
-    fallback_map: HashMap<String, String>,
+    fallback: HashMap<String, String>,
 }
 
 impl Locale {
-    /// Create a new `Locale`, loading `language` from `dir`.
-    ///
-    /// Falls back to `"en"` when a key is absent.  If `language == "en"` the
-    /// fallback map is not loaded separately.
-    ///
-    /// Missing files are silently treated as empty maps.
-    pub fn new(dir: impl AsRef<Path>, language: impl Into<String>) -> Self {
-        let dir = dir.as_ref().to_path_buf();
-        let language = language.into();
-        let fallback = "en".to_string();
-
-        let active = load_file(&dir, &language);
-        let fallback_map = if language != fallback {
-            load_file(&dir, &fallback)
-        } else {
-            HashMap::new()
-        };
-
+    /// Create a `Locale` from an active translation map with no fallback.
+    pub fn new(active: HashMap<String, String>) -> Self {
         Self {
-            dir,
-            language,
-            fallback,
             active,
-            fallback_map,
+            fallback: HashMap::new(),
         }
     }
 
-    /// Override the fallback language (default: `"en"`).
-    pub fn with_fallback(mut self, fallback: impl Into<String>) -> Self {
-        self.fallback = fallback.into();
-        self.reload_fallback();
+    /// Set a fallback map used when a key is absent from the active map.
+    pub fn with_fallback(mut self, fallback: HashMap<String, String>) -> Self {
+        self.fallback = fallback;
         self
     }
 
-    /// Switch to a different language, reloading translations from disk.
-    pub fn set_language(&mut self, language: impl Into<String>) {
-        self.language = language.into();
-        self.active = load_file(&self.dir, &self.language);
-        self.reload_fallback();
+    /// Replace the active translation map (e.g. on a language switch).
+    pub fn set(&mut self, active: HashMap<String, String>) {
+        self.active = active;
     }
 
-    /// Currently active language code (e.g. `"ko"`).
-    pub fn language(&self) -> &str {
-        &self.language
+    /// Replace the fallback translation map.
+    pub fn set_fallback(&mut self, fallback: HashMap<String, String>) {
+        self.fallback = fallback;
     }
 
     /// Look up a translation by key.
@@ -108,79 +66,43 @@ impl Locale {
     /// `Cow::Owned(key.to_owned())` as a visible placeholder when missing.
     ///
     /// Resolution order:
-    /// 1. Active language map
-    /// 2. Fallback language map
+    /// 1. Active map
+    /// 2. Fallback map
     /// 3. The key itself
     pub fn t(&self, key: &str) -> Cow<'_, str> {
         self.active
             .get(key)
-            .or_else(|| self.fallback_map.get(key))
+            .or_else(|| self.fallback.get(key))
             .map(|s| Cow::Borrowed(s.as_str()))
             .unwrap_or_else(|| Cow::Owned(key.to_owned()))
     }
 
     /// Look up a translation and substitute `{placeholder}` variables.
     ///
-    /// `vars` is a slice of `(placeholder_name, value)` pairs.  Any
-    /// `{name}` token in the translated string is replaced with the
-    /// corresponding value.  Unknown placeholders are left unchanged.
+    /// `vars` is a slice of `(placeholder_name, value)` pairs.
     ///
     /// ```no_run
-    /// # use nene::locale::Locale;
-    /// # let locale = Locale::new("assets/locale", "en");
+    /// # use nene::locale::{Locale, from_json};
+    /// # let locale = Locale::new(from_json("{}"));
     /// // "Hello, {name}! You have {n} messages."
     /// locale.t_with("inbox.greeting", &[("name", "Alice"), ("n", "3")]);
     /// // → "Hello, Alice! You have 3 messages."
     /// ```
     pub fn t_with(&self, key: &str, vars: &[(&str, &str)]) -> String {
-        let template = self.t(key);
-        substitute(&template, vars)
-    }
-
-    /// Returns all language codes found in the locale directory.
-    ///
-    /// Each `.json` file whose stem is a valid language code is included.
-    /// The list is sorted alphabetically.
-    pub fn available_languages(&self) -> Vec<String> {
-        let Ok(rd) = std::fs::read_dir(&self.dir) else {
-            return Vec::new();
-        };
-        let mut langs: Vec<String> = rd
-            .filter_map(|e| {
-                let e = e.ok()?;
-                let p = e.path();
-                if p.extension()?.to_str()? == "json" {
-                    Some(p.file_stem()?.to_str()?.to_owned())
-                } else {
-                    None
-                }
-            })
-            .collect();
-        langs.sort();
-        langs
-    }
-
-    // ── private ───────────────────────────────────────────────────────────────
-
-    fn reload_fallback(&mut self) {
-        self.fallback_map = if self.language != self.fallback {
-            load_file(&self.dir, &self.fallback)
-        } else {
-            HashMap::new()
-        };
+        substitute(&self.t(key), vars)
     }
 }
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+// ── JSON helper ───────────────────────────────────────────────────────────────
 
-/// Load `<dir>/<lang>.json` into a flat string map.  Returns an empty map on
-/// any I/O or parse error.
-fn load_file(dir: &Path, lang: &str) -> HashMap<String, String> {
-    let path = dir.join(format!("{lang}.json"));
-    let Ok(text) = std::fs::read_to_string(&path) else {
-        return HashMap::new();
-    };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+/// Parse a JSON locale string into a flat `key → value` map.
+///
+/// Nested objects are flattened with dot-separated keys:
+/// `{ "menu": { "start": "Start" } }` → `"menu.start" → "Start"`.
+///
+/// Returns an empty map on parse error.
+pub fn from_json(text: &str) -> HashMap<String, String> {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
         return HashMap::new();
     };
     let mut map = HashMap::new();
@@ -188,12 +110,8 @@ fn load_file(dir: &Path, lang: &str) -> HashMap<String, String> {
     map
 }
 
-/// Recursively flatten a JSON object into dot-separated keys.
-///
-/// ```json
-/// { "menu": { "start": "Start" } }
-/// ```
-/// becomes `"menu.start" → "Start"`.
+// ── private helpers ───────────────────────────────────────────────────────────
+
 fn flatten(value: &serde_json::Value, prefix: String, out: &mut HashMap<String, String>) {
     match value {
         serde_json::Value::Object(obj) => {
@@ -210,18 +128,15 @@ fn flatten(value: &serde_json::Value, prefix: String, out: &mut HashMap<String, 
             out.insert(prefix, s.clone());
         }
         other => {
-            // Numbers / bools / arrays: stringify so they are usable.
             out.insert(prefix, other.to_string());
         }
     }
 }
 
-/// Replace `{key}` tokens in `template` with values from `vars`.
 fn substitute(template: &str, vars: &[(&str, &str)]) -> String {
     let mut result = template.to_owned();
     for (name, value) in vars {
-        let token = format!("{{{name}}}");
-        result = result.replace(&token, value);
+        result = result.replace(&format!("{{{name}}}"), value);
     }
     result
 }
