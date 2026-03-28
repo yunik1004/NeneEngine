@@ -16,7 +16,7 @@ use crate::{
 };
 
 pub struct Config {
-    pub title: String,
+    pub title: &'static str,
     pub width: u32,
     pub height: u32,
 }
@@ -24,7 +24,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            title: "Nene".to_string(),
+            title: "Nene",
             width: 1280,
             height: 720,
         }
@@ -174,7 +174,7 @@ impl<S> ApplicationHandler for WindowRunner<S> {
             event_loop
                 .create_window(
                     WinitWindow::default_attributes()
-                        .with_title(&self.config.title)
+                        .with_title(self.config.title)
                         .with_inner_size(winit::dpi::LogicalSize::new(
                             self.config.width,
                             self.config.height,
@@ -296,7 +296,7 @@ impl<S> ApplicationHandler for WindowRunnerFixed<S> {
             event_loop
                 .create_window(
                     WinitWindow::default_attributes()
-                        .with_title(&self.config.title)
+                        .with_title(self.config.title)
                         .with_inner_size(winit::dpi::LogicalSize::new(
                             self.config.width,
                             self.config.height,

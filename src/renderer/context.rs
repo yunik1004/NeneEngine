@@ -2,6 +2,7 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
+use super::builtin::BuiltinPipeline;
 use super::shadow::{self, ShadowMap};
 use super::texture::{self, FilterMode, RenderTarget, Texture};
 use super::uniform;
@@ -472,6 +473,12 @@ impl HeadlessContext {
             .create_pipeline(desc, wgpu::TextureFormat::Rgba8UnormSrgb)
     }
 
+    /// Compile one of the engine's pre-built pipelines.
+    pub fn create_builtin_pipeline(&self, pipeline: BuiltinPipeline) -> Pipeline {
+        self.gpu
+            .create_pipeline(pipeline.descriptor(), wgpu::TextureFormat::Rgba8UnormSrgb)
+    }
+
     /// Render into an off-screen [`RenderTarget`].
     pub fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(
         &mut self,
@@ -742,6 +749,15 @@ impl Context {
     /// Compile a render pipeline targeting the swapchain surface format.
     pub fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
         self.gpu.create_pipeline(desc, self.surface_config.format)
+    }
+
+    /// Compile one of the engine's pre-built pipelines.
+    ///
+    /// See [`BuiltinPipeline`] for available variants and their required vertex /
+    /// uniform types.
+    pub fn create_builtin_pipeline(&self, pipeline: BuiltinPipeline) -> Pipeline {
+        self.gpu
+            .create_pipeline(pipeline.descriptor(), self.surface_config.format)
     }
 
     pub fn load_texture(&self, path: impl AsRef<std::path::Path>) -> Texture {

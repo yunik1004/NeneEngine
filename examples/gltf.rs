@@ -377,7 +377,7 @@ fn main() {
         }
     };
     Window::new(Config {
-        title: "glTF".to_string(),
+        title: "glTF",
         ..Config::default()
     })
     .run_with_update(

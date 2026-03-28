@@ -133,7 +133,7 @@ fn init(ctx: &mut Context) -> State {
 
 fn main() {
     Window::new(Config {
-        title: "Text demo — overlay + texture bake".to_string(),
+        title: "Text demo — overlay + texture bake",
         ..Config::default()
     })
     .run_with_update(

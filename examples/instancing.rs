@@ -230,9 +230,8 @@ fn init(ctx: &mut Context) -> State {
 }
 
 fn main() {
-    let n = (GRID * GRID) as usize;
     Window::new(Config {
-        title: format!("Instancing — {n} cubes, 1 draw call"),
+        title: "Instancing — 1 draw call",
         ..Config::default()
     })
     .run_with_update(

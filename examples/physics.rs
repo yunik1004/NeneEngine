@@ -258,7 +258,7 @@ struct State {
 
 fn main() {
     Window::new(Config {
-        title: "Physics demo  (Tab = switch 2D / 3D)".into(),
+        title: "Physics demo  (Tab = switch 2D / 3D)",
         ..Config::default()
     })
     .run_with_update(

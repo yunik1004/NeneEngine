@@ -1,4 +1,5 @@
 mod buffer;
+pub mod builtin;
 mod context;
 pub mod light;
 mod pass;
@@ -9,6 +10,7 @@ pub mod texture;
 mod uniform;
 
 pub use buffer::{IndexBuffer, InstanceBuffer, VertexBuffer};
+pub use builtin::{BuiltinPipeline, ColorUniform, Pos2, Pos2Uv, Pos3, TransformUniform};
 pub use context::{Context, HeadlessContext, RenderContext};
 pub use light::{
     AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight, POINT_LIGHT_WGSL,

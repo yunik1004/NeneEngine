@@ -181,7 +181,7 @@ fn init(ctx: &mut Context) -> State {
 
 fn main() {
     Window::new(Config {
-        title: "Pathfinding demo".into(),
+        title: "Pathfinding demo",
         width: W,
         height: H,
         ..Config::default()

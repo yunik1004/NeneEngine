@@ -11,7 +11,7 @@ fn default_config() {
 #[test]
 fn custom_config() {
     let config = Config {
-        title: "Test".to_string(),
+        title: "Test",
         width: 800,
         height: 600,
     };
@@ -23,7 +23,7 @@ fn custom_config() {
 #[test]
 fn partial_default_config() {
     let config = Config {
-        title: "MyGame".to_string(),
+        title: "MyGame",
         ..Config::default()
     };
     assert_eq!(config.title, "MyGame");
@@ -39,7 +39,7 @@ fn window_new() {
 #[test]
 fn window_new_custom() {
     let _window = Window::new(Config {
-        title: "Custom".to_string(),
+        title: "Custom",
         width: 1920,
         height: 1080,
     });

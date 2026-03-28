@@ -127,7 +127,7 @@ fn init(ctx: &mut Context) -> State {
 
 fn main() {
     Window::new(Config {
-        title: "Input + Event bus  (WASD=move  Z=attack  X=heal  R=reset)".to_string(),
+        title: "Input + Event bus  (WASD=move  Z=attack  X=heal  R=reset)",
         width: W,
         height: H,
         ..Config::default()

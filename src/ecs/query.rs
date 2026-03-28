@@ -52,6 +52,22 @@ impl<'w, T: Component> QueryBuilder<'w, T> {
         self
     }
 
+    /// Iterate over component values only, discarding the entity.
+    ///
+    /// Use this when you don't need to know which entity owns each component:
+    /// ```
+    /// # use nene::ecs::World;
+    /// # struct Health(f32);
+    /// # struct InRange;
+    /// # let world = World::new();
+    /// for hp in world.query::<Health>().with::<InRange>().values() {
+    ///     let _ = hp.0;
+    /// }
+    /// ```
+    pub fn values(self) -> impl Iterator<Item = &'w T> {
+        self.iter().map(|(_, v)| v)
+    }
+
     /// Materialise the query into a lazy iterator.
     pub fn iter(self) -> FilteredIter<'w, T> {
         let (ids, values) = match self.world.storage_ref::<T>() {
@@ -198,6 +214,22 @@ impl<'w, T: Component> QueryBuilderMut<'w, T> {
     pub fn without<F: Component>(mut self) -> Self {
         self.without_types.push(TypeId::of::<F>());
         self
+    }
+
+    /// Iterate over mutable component values only, discarding the entity.
+    ///
+    /// Use this when you need to mutate components but don't need the entity:
+    /// ```
+    /// # use nene::ecs::World;
+    /// # struct Health(f32);
+    /// # struct InRange;
+    /// # let mut world = World::new();
+    /// for hp in world.query_mut::<Health>().with::<InRange>().values_mut() {
+    ///     hp.0 -= 10.0;
+    /// }
+    /// ```
+    pub fn values_mut(self) -> impl Iterator<Item = &'w mut T> {
+        self.iter_mut().map(|(_, v)| v)
     }
 
     /// Materialise the query into an eager iterator of mutable references.

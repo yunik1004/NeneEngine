@@ -217,7 +217,7 @@ fn render(state: &mut State, pass: &mut RenderPass) {
 
 fn main() {
     Window::new(Config {
-        title: format!("Fixed Update — physics {FIXED_HZ} Hz / render uncapped"),
+        title: "Fixed Update",
         ..Config::default()
     })
     .run_with_fixed_update(FIXED_HZ, init, fixed_update, update, render);

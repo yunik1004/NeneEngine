@@ -124,7 +124,7 @@ fn init(ctx: &mut Context) -> State {
 
 fn main() {
     Window::new(Config {
-        title: "Sprite + Culling  (WASD=move  Q/E=rotate  +/-=zoom  LMB=tint)".into(),
+        title: "Sprite + Culling  (WASD=move  Q/E=rotate  +/-=zoom  LMB=tint)",
         width: W,
         height: H,
         ..Config::default()

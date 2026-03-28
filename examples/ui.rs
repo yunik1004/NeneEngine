@@ -124,7 +124,7 @@ fn init(ctx: &mut Context) -> State {
 
 fn main() {
     Window::new(Config {
-        title: "UI · Persistence · Locale  (L = cycle language)".to_string(),
+        title: "UI · Persistence · Locale  (L = cycle language)",
         width: W as u32,
         height: H as u32,
         ..Config::default()

@@ -85,7 +85,7 @@ fn init(ctx: &mut Context) -> State {
 
 fn main() {
     Window::new(Config {
-        title: "Multiplayer demo".into(),
+        title: "Multiplayer demo",
         width: W,
         height: H,
         ..Config::default()

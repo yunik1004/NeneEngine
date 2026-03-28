@@ -61,7 +61,7 @@ fn init(ctx: &mut Context) -> State {
 
 fn main() {
     Window::new(Config {
-        title: "Particles  [Space: spark burst]".to_string(),
+        title: "Particles  [Space: spark burst]",
         width: W as u32,
         height: H as u32,
         ..Config::default()

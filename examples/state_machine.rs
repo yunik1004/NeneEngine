@@ -370,7 +370,7 @@ fn init(ctx: &mut Context) -> State {
 
 fn main() {
     Window::new(Config {
-        title: "State Machine — idle | wave | thrash   [Space: next  Q/E: ease]".to_string(),
+        title: "State Machine — idle | wave | thrash   [Space: next  Q/E: ease]",
         ..Config::default()
     })
     .run_with_update(

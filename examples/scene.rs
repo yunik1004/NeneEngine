@@ -268,7 +268,7 @@ fn update(
 
 fn main() {
     Window::new(Config {
-        title: "Scene Graph — sun / planet / moon".to_string(),
+        title: "Scene Graph — sun / planet / moon",
         ..Config::default()
     })
     .run_with_update(

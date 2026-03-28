@@ -64,7 +64,7 @@ fn init(ctx: &mut Context) -> State {
 
 fn main() {
     Window::new(Config {
-        title: "Spatial Audio".into(),
+        title: "Spatial Audio",
         width: W,
         height: H,
         ..Config::default()
