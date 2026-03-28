@@ -22,7 +22,7 @@ impl Skeleton {
     /// Joints must be stored in topological order (parent before child), which
     /// glTF guarantees. The result can be uploaded directly via [`JointMatrices`].
     pub fn compute_joint_matrices(&self, poses: &[JointPose]) -> Vec<Mat4> {
-        let n = self.joints.len();
+        let n = self.joints.len().min(poses.len());
         let mut global = vec![Mat4::IDENTITY; n];
         let mut result = vec![Mat4::IDENTITY; n];
         for i in 0..n {
@@ -119,7 +119,8 @@ pub(super) fn find_interval(times: &[f32], t: f32) -> (usize, f32) {
         return (last.saturating_sub(1), 1.0);
     }
     let i = times.partition_point(|&x| x <= t).saturating_sub(1);
-    let alpha = (t - times[i]) / (times[i + 1] - times[i]);
+    let dt = times[i + 1] - times[i];
+    let alpha = if dt > 0.0 { (t - times[i]) / dt } else { 0.0 };
     (i, alpha)
 }
 
@@ -148,9 +149,21 @@ impl Clip {
         let mut poses = vec![JointPose::IDENTITY; num_joints];
         for channel in &self.channels {
             match channel {
-                AnimChannel::Translation(ch) => poses[ch.joint].translation = ch.sample(t),
-                AnimChannel::Rotation(ch) => poses[ch.joint].rotation = ch.sample(t),
-                AnimChannel::Scale(ch) => poses[ch.joint].scale = ch.sample(t),
+                AnimChannel::Translation(ch) => {
+                    if let Some(pose) = poses.get_mut(ch.joint) {
+                        pose.translation = ch.sample(t);
+                    }
+                }
+                AnimChannel::Rotation(ch) => {
+                    if let Some(pose) = poses.get_mut(ch.joint) {
+                        pose.rotation = ch.sample(t);
+                    }
+                }
+                AnimChannel::Scale(ch) => {
+                    if let Some(pose) = poses.get_mut(ch.joint) {
+                        pose.scale = ch.sample(t);
+                    }
+                }
             }
         }
         poses
