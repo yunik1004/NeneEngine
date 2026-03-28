@@ -13,7 +13,7 @@
 
 use nene::{
     camera::Camera,
-    culling::Frustum,
+    camera::Frustum,
     input::{Input, Key, MouseButton},
     math::{Vec2, Vec3},
     renderer::{Context, FilterMode, RenderPass, Texture},

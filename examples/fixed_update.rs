@@ -10,8 +10,8 @@
 use std::f32::consts::TAU;
 
 use nene::{
+    debug::Profiler,
     math::{Mat4, Vec3, Vec4},
-    profile::Profiler,
     renderer::{
         Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
     },

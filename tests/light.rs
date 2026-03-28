@@ -1,6 +1,6 @@
 use nene::{
-    light::{DirectionalLight, PointLight, PointLightArray},
     math::Vec3,
+    renderer::{DirectionalLight, PointLight, PointLightArray},
 };
 
 fn approx_eq(a: f32, b: f32) -> bool {

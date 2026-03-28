@@ -1,5 +1,5 @@
 use nene::math::{Vec2, Vec3};
-use nene::tween::{Ease, Lerp, Tween, TweenLoop};
+use nene::time::{Ease, Lerp, Tween, TweenLoop};
 
 fn approx(a: f32, b: f32) -> bool {
     (a - b).abs() < 1e-4

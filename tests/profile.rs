@@ -1,4 +1,4 @@
-use nene::profile::Profiler;
+use nene::debug::Profiler;
 use std::thread;
 use std::time::Duration;
 

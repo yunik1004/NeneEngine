@@ -1,6 +1,6 @@
 use encase::ShaderType;
 
-use crate::math::Vec3;
+use crate::math::{Mat4, Vec3};
 
 // ── WGSL snippets ─────────────────────────────────────────────────────────────
 
@@ -118,16 +118,11 @@ impl DirectionalLight {
     ///
     /// `scene_center` is the center of the scene to cover, `scene_radius` is the
     /// half-size of the orthographic frustum in world units.
-    pub fn light_view_proj(
-        &self,
-        scene_center: crate::math::Vec3,
-        scene_radius: f32,
-    ) -> crate::math::Mat4 {
-        use crate::math::Mat4;
-        let up = if self.direction.abs().dot(crate::math::Vec3::Y) > 0.99 {
-            crate::math::Vec3::Z
+    pub fn light_view_proj(&self, scene_center: Vec3, scene_radius: f32) -> Mat4 {
+        let up = if self.direction.abs().dot(Vec3::Y) > 0.99 {
+            Vec3::Z
         } else {
-            crate::math::Vec3::Y
+            Vec3::Y
         };
         let pos = scene_center - self.direction * scene_radius;
         let view = Mat4::look_at_rh(pos, scene_center, up);
@@ -187,7 +182,7 @@ impl Default for PointLight {
 ///
 /// # Example
 /// ```rust,no_run
-/// # use nene::light::{PointLight, PointLightArray};
+/// # use nene::renderer::{PointLight, PointLightArray};
 /// # use nene::math::Vec3;
 /// let a = PointLight::new(Vec3::new(1.0, 2.0, 0.0), Vec3::ONE, 1.0, 10.0);
 /// let b = PointLight::new(Vec3::new(-1.0, 2.0, 0.0), Vec3::ONE, 1.0, 10.0);

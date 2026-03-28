@@ -4,13 +4,13 @@
 /// (argument optional — defaults to a built-in cube)
 use nene::{
     camera::Camera,
-    light::{AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight},
     math::{Mat4, Vec3},
     mesh::{MeshVertex, Model},
     renderer::{
-        Context, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
+        AMBIENT_LIGHT_WGSL, AmbientLight, Context, DIRECTIONAL_LIGHT_WGSL, DirectionalLight,
+        FilterMode, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, SHADOW_WGSL, ShadowMap,
+        Texture, UniformBuffer, VertexBuffer,
     },
-    renderer::{FilterMode, SHADOW_WGSL, ShadowMap, Texture},
     uniform,
     window::{Config, Window},
 };

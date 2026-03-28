@@ -18,7 +18,7 @@
 //!     }
 //! }
 //! server.broadcast(b"hello everyone").unwrap();
-//! server.update(delta_time);
+//! server.update(1.0 / 60.0);
 //! ```
 //!
 //! # Quick start — client
@@ -36,7 +36,7 @@
 //!     }
 //! }
 //! client.send(b"ping").unwrap();
-//! client.update(delta_time);
+//! client.update(1.0 / 60.0);
 //! ```
 
 use std::collections::HashMap;

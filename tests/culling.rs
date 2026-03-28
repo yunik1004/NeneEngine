@@ -1,4 +1,4 @@
-use nene::culling::Frustum;
+use nene::camera::Frustum;
 use nene::math::{Mat4, Vec3};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
