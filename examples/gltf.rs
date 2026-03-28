@@ -3,220 +3,94 @@
 /// Usage: cargo run --example gltf -- path/to/model.gltf|glb
 /// (argument optional — defaults to a built-in cube)
 use nene::{
+    app::{App, WindowId, run},
     camera::Camera,
     math::{Mat4, Vec3},
-    mesh::{MeshVertex, Model},
-    renderer::{
-        AMBIENT_LIGHT_WGSL, AmbientLight, Context, DIRECTIONAL_LIGHT_WGSL, DirectionalLight,
-        FilterMode, IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, SHADOW_WGSL, ShadowMap,
-        Texture, UniformBuffer, VertexBuffer,
-    },
-    uniform,
-    window::{Config, Window},
+    mesh::{LitShadowedModel, Model},
+    renderer::{AmbientLight, Context, DirectionalLight, RenderPass, ShadowMap},
+    time::Time,
+    window::Config,
 };
 
-const SHADOW_SHADER: &str = r#"
-struct ShadowUniform {
-    light_vp: mat4x4<f32>,
-    model:    mat4x4<f32>,
-};
-@group(0) @binding(0) var<uniform> u: ShadowUniform;
-
-@vertex
-fn vs_main(@location(0) pos: vec3<f32>) -> @builtin(position) vec4<f32> {
-    return u.light_vp * u.model * vec4<f32>(pos, 1.0);
-}
-"#;
-
-fn make_main_shader() -> String {
-    format!(
-        r#"
-{SHADOW_WGSL}
-{AMBIENT_LIGHT_WGSL}
-{DIRECTIONAL_LIGHT_WGSL}
-
-struct SceneUniform {{
-    view_proj:   mat4x4<f32>,
-    model:       mat4x4<f32>,
-    light_vp:    mat4x4<f32>,
-    ambient:     AmbientLight,
-    directional: DirectionalLight,
-}};
-@group(0) @binding(0) var<uniform> scene: SceneUniform;
-@group(1) @binding(0) var tex:  texture_2d<f32>;
-@group(1) @binding(1) var samp: sampler;
-@group(2) @binding(0) var shadow_map:  texture_depth_2d;
-@group(2) @binding(1) var shadow_samp: sampler_comparison;
-
-struct VertexInput {{
-    @location(0) position: vec3<f32>,
-    @location(1) normal:   vec3<f32>,
-    @location(2) uv:       vec2<f32>,
-}};
-struct VertexOutput {{
-    @builtin(position) clip_pos:     vec4<f32>,
-    @location(0)       world_normal: vec3<f32>,
-    @location(1)       uv:           vec2<f32>,
-    @location(2)       light_space:  vec4<f32>,
-}};
-
-@vertex
-fn vs_main(in: VertexInput) -> VertexOutput {{
-    let world_pos = scene.model * vec4<f32>(in.position, 1.0);
-    var out: VertexOutput;
-    out.clip_pos     = scene.view_proj * world_pos;
-    out.world_normal = (scene.model * vec4<f32>(in.normal, 0.0)).xyz;
-    out.uv           = in.uv;
-    out.light_space  = scene.light_vp * world_pos;
-    return out;
-}}
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {{
-    let albedo  = textureSample(tex, samp, in.uv);
-    let shadow  = shadow_factor(shadow_map, shadow_samp, in.light_space, 0.0);
-    let diffuse = directional_light(scene.directional, in.world_normal) * shadow;
-    let ambient = ambient_light(scene.ambient);
-    return vec4<f32>(albedo.rgb * (ambient + diffuse), albedo.a);
-}}
-"#,
-        SHADOW_WGSL = SHADOW_WGSL,
-        AMBIENT_LIGHT_WGSL = AMBIENT_LIGHT_WGSL,
-        DIRECTIONAL_LIGHT_WGSL = DIRECTIONAL_LIGHT_WGSL,
-    )
+fn camera_view_proj(aspect: f32) -> Mat4 {
+    Camera::perspective(Vec3::new(0.0, 2.0, 6.0), 45.0, 0.1, 100.0).view_proj(aspect)
 }
 
-#[uniform]
-struct SceneUniform {
-    view_proj: Mat4,
-    model: Mat4,
-    light_vp: Mat4,
-    ambient: AmbientLight,
-    directional: DirectionalLight,
-}
-
-#[uniform]
-struct ShadowUniform {
-    light_vp: Mat4,
-    model: Mat4,
-}
-
-fn build_scene(
-    model: Mat4,
-    aspect: f32,
-    ambient: &AmbientLight,
-    directional: &DirectionalLight,
-) -> SceneUniform {
-    let camera = Camera::perspective(Vec3::new(0.0, 2.0, 6.0), 45.0, 0.1, 100.0);
-    let light_vp = directional.light_view_proj(Vec3::ZERO, 5.0);
-    SceneUniform {
-        view_proj: camera.view_proj(aspect),
-        model,
-        light_vp,
-        ambient: *ambient,
-        directional: *directional,
-    }
-}
-
-fn build_shadow(model: Mat4, directional: &DirectionalLight) -> ShadowUniform {
-    let light_vp = directional.light_view_proj(Vec3::ZERO, 5.0);
-    ShadowUniform { light_vp, model }
-}
-
-struct MeshGpu {
-    vertex_buffer: VertexBuffer,
-    index_buffer: IndexBuffer,
-    texture: Texture,
-    transform: Mat4,
-}
-
-struct State {
-    shadow_pipeline: Pipeline,
-    main_pipeline: Pipeline,
-    meshes: Vec<MeshGpu>,
-    scene_buffers: Vec<UniformBuffer>,
-    shadow_buffers: Vec<UniformBuffer>,
-    shadow_map: ShadowMap,
+struct GltfDemo {
+    model: Model,
     ambient: AmbientLight,
     directional: DirectionalLight,
     angle: f32,
+    renderer: Option<LitShadowedModel>,
+    shadow_map: Option<ShadowMap>,
 }
 
-fn white_texture(ctx: &mut Context) -> Texture {
-    ctx.create_texture_with(1, 1, &[255, 255, 255, 255], FilterMode::Nearest)
-}
-
-fn init(ctx: &mut Context, path: &str) -> State {
-    let model = Model::load(path).expect("failed to load model");
-
-    let ambient = AmbientLight::new(Vec3::ONE, 0.15);
-    let directional =
-        DirectionalLight::new(Vec3::new(1.0, -2.0, -1.0), Vec3::new(1.0, 0.95, 0.9), 1.0);
-
-    let shadow_map = ctx.create_shadow_map(1024);
-
-    let cfg = ctx.surface_config();
-    let aspect = cfg.width as f32 / cfg.height as f32;
-
-    let mut meshes = Vec::new();
-    let mut scene_buffers = Vec::new();
-    let mut shadow_buffers = Vec::new();
-
-    for mesh in &model.meshes {
-        let vertex_buffer = ctx.create_vertex_buffer(&mesh.vertices);
-        let index_buffer = ctx.create_index_buffer(&mesh.indices);
-        let texture = match &mesh.base_color {
-            Some(img) => {
-                ctx.create_texture_with(img.width, img.height, &img.data, FilterMode::Linear)
+impl App for GltfDemo {
+    fn new() -> Self {
+        let path = match std::env::args().nth(1) {
+            Some(p) => p,
+            None => {
+                let tmp = write_sample_gltf();
+                tmp.to_str().unwrap().to_string()
             }
-            None => white_texture(ctx),
         };
-        scene_buffers.push(ctx.create_uniform_buffer(&build_scene(
-            mesh.transform,
-            aspect,
-            &ambient,
-            &directional,
-        )));
-        shadow_buffers.push(ctx.create_uniform_buffer(&build_shadow(mesh.transform, &directional)));
-        meshes.push(MeshGpu {
-            vertex_buffer,
-            index_buffer,
-            texture,
-            transform: mesh.transform,
-        });
+        GltfDemo {
+            model: Model::load(&path).expect("failed to load model"),
+            ambient: AmbientLight::new(Vec3::ONE, 0.15),
+            directional: DirectionalLight::new(
+                Vec3::new(1.0, -2.0, -1.0),
+                Vec3::new(1.0, 0.95, 0.9),
+                1.0,
+            ),
+            angle: 0.0,
+            renderer: None,
+            shadow_map: None,
+        }
     }
 
-    let shadow_pipeline = ctx.create_pipeline(
-        PipelineDescriptor::new(SHADOW_SHADER, MeshVertex::layout())
-            .with_uniform()
-            .depth_only(),
-    );
-
-    let main_shader = make_main_shader();
-    let main_pipeline = ctx.create_pipeline(
-        PipelineDescriptor::new(&main_shader, MeshVertex::layout())
-            .with_uniform()
-            .with_texture()
-            .with_shadow_map()
-            .with_depth(),
-    );
-
-    State {
-        shadow_pipeline,
-        main_pipeline,
-        meshes,
-        scene_buffers,
-        shadow_buffers,
-        shadow_map,
-        ambient,
-        directional,
-        angle: 0.0,
+    fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
+        self.renderer = Some(LitShadowedModel::new(ctx, &self.model));
+        self.shadow_map = Some(ctx.create_shadow_map(1024));
     }
+
+    fn update(&mut self, _input: &nene::input::Input, time: &Time) {
+        self.angle += std::f32::consts::TAU * 0.1 * time.delta;
+    }
+
+    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &nene::input::Input) {
+        let (Some(renderer), Some(shadow_map)) = (&self.renderer, &self.shadow_map) else {
+            return;
+        };
+        let cfg = ctx.surface_config();
+        let aspect = cfg.width as f32 / cfg.height as f32;
+        let vp = camera_view_proj(aspect);
+        let light_vp = self.directional.light_view_proj(Vec3::ZERO, 5.0);
+        let transform = Mat4::from_rotation_y(self.angle);
+        renderer.prepare(ctx, vp, transform, light_vp, self.ambient, self.directional);
+        ctx.shadow_pass(shadow_map, |pass| renderer.shadow_draw(pass));
+    }
+
+    fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
+        let (Some(renderer), Some(shadow_map)) = (&self.renderer, &self.shadow_map) else {
+            return;
+        };
+        renderer.render(pass, shadow_map);
+    }
+
+    fn windows() -> Vec<Config> {
+        vec![Config {
+            title: "glTF",
+            ..Config::default()
+        }]
+    }
+}
+
+fn main() {
+    run::<GltfDemo>();
 }
 
 /// Write a minimal cube glTF (with positions, normals, uvs) to a temp file and return its path.
 fn write_sample_gltf() -> std::path::PathBuf {
-    // 24 vertices: position[3] + normal[3] + uv[2]
     let verts: &[[[f32; 3]; 2]; 24] = &[
         // +Z
         [[-0.5, -0.5, 0.5], [0., 0., 1.]],
@@ -283,7 +157,6 @@ fn write_sample_gltf() -> std::path::PathBuf {
         .collect();
 
     let mut buf: Vec<u8> = Vec::new();
-    // accessor 0: positions (VEC3 float)
     let pos_off = buf.len();
     for v in verts {
         for &f in &v[0] {
@@ -291,7 +164,6 @@ fn write_sample_gltf() -> std::path::PathBuf {
         }
     }
     let pos_len = buf.len() - pos_off;
-    // accessor 1: normals (VEC3 float)
     let nor_off = buf.len();
     for v in verts {
         for &f in &v[1] {
@@ -299,7 +171,6 @@ fn write_sample_gltf() -> std::path::PathBuf {
         }
     }
     let nor_len = buf.len() - nor_off;
-    // accessor 2: uvs (VEC2 float)
     let uv_off = buf.len();
     for uv in uvs {
         for &f in uv {
@@ -307,7 +178,6 @@ fn write_sample_gltf() -> std::path::PathBuf {
         }
     }
     let uv_len = buf.len() - uv_off;
-    // accessor 3: indices (SCALAR u32)
     let idx_off = buf.len();
     for &i in &indices {
         buf.extend_from_slice(&i.to_le_bytes());
@@ -365,59 +235,4 @@ fn base64_encode(data: &[u8]) -> String {
         });
     }
     out
-}
-
-fn main() {
-    let tmp;
-    let path = match std::env::args().nth(1) {
-        Some(p) => p,
-        None => {
-            tmp = write_sample_gltf();
-            tmp.to_str().unwrap().to_string()
-        }
-    };
-    Window::new(Config {
-        title: "glTF",
-        ..Config::default()
-    })
-    .run_with_update(
-        move |ctx| init(ctx, &path),
-        |state, ctx, _input, time| {
-            state.angle += std::f32::consts::TAU * 0.1 * time.delta;
-            let cfg = ctx.surface_config();
-            let aspect = cfg.width as f32 / cfg.height as f32;
-            let rotation = Mat4::from_rotation_y(state.angle);
-            for (i, mesh) in state.meshes.iter().enumerate() {
-                let model = rotation * mesh.transform;
-                ctx.update_uniform_buffer(
-                    &state.scene_buffers[i],
-                    &build_scene(model, aspect, &state.ambient, &state.directional),
-                );
-                ctx.update_uniform_buffer(
-                    &state.shadow_buffers[i],
-                    &build_shadow(model, &state.directional),
-                );
-            }
-        },
-        |state, ctx| {
-            ctx.shadow_pass(&state.shadow_map, |pass| {
-                pass.set_pipeline(&state.shadow_pipeline);
-                for (i, mesh) in state.meshes.iter().enumerate() {
-                    pass.set_uniform(0, &state.shadow_buffers[i]);
-                    pass.set_vertex_buffer(0, &mesh.vertex_buffer);
-                    pass.draw_indexed(&mesh.index_buffer);
-                }
-            });
-        },
-        |state, pass: &mut RenderPass| {
-            pass.set_pipeline(&state.main_pipeline);
-            for (i, mesh) in state.meshes.iter().enumerate() {
-                pass.set_uniform(0, &state.scene_buffers[i]);
-                pass.set_texture(1, &mesh.texture);
-                pass.set_shadow_map(2, &state.shadow_map);
-                pass.set_vertex_buffer(0, &mesh.vertex_buffer);
-                pass.draw_indexed(&mesh.index_buffer);
-            }
-        },
-    );
 }

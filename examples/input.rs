@@ -15,45 +15,18 @@
 //! R              — reset HP          (emits event → combat system)
 
 use nene::{
+    app::{App, WindowId, run},
     event::Events,
-    input::{GamepadAxis, Key, MouseButton},
+    input::{GamepadAxis, Input, Key, MouseButton},
     math::{Mat4, Vec2, Vec3, Vec4},
-    renderer::{Context, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer},
+    renderer::{
+        BuiltinPipeline, Context, Pipeline, Pos2, RenderPass, TransformUniform, UniformBuffer,
+        VertexBuffer,
+    },
+    time::Time,
     ui::Ui,
-    uniform, vertex,
-    window::{Config, Window},
+    window::Config,
 };
-
-// ── Shader ────────────────────────────────────────────────────────────────────
-
-const SHADER: &str = r#"
-struct Transform {
-    mvp:   mat4x4<f32>,
-    color: vec4<f32>,
-};
-@group(0) @binding(0) var<uniform> u: Transform;
-
-@vertex
-fn vs_main(@location(0) pos: vec2<f32>) -> @builtin(position) vec4<f32> {
-    return u.mvp * vec4<f32>(pos, 0.0, 1.0);
-}
-
-@fragment
-fn fs_main() -> @location(0) vec4<f32> {
-    return u.color;
-}
-"#;
-
-#[vertex]
-struct Vert {
-    pos: [f32; 2],
-}
-
-#[uniform]
-struct Transform {
-    mvp: Mat4,
-    color: Vec4,
-}
 
 // ── Event types ───────────────────────────────────────────────────────────────
 
@@ -67,184 +40,201 @@ enum GameEvent {
 
 // ── App state ─────────────────────────────────────────────────────────────────
 
-struct State {
-    // Direct-input rendering
-    pipeline: Pipeline,
-    vb: VertexBuffer,
-    uniform: UniformBuffer,
-    pos: Vec2,
-
-    // Event bus
-    events: Events<GameEvent>,
-    hp: i32,
-    log: Vec<String>,
-
-    ui: Ui,
-}
-
 const MAX_HP: i32 = 100;
 const LOG_MAX: usize = 8;
 const W: u32 = 860;
 const H: u32 = 480;
 
-const QUAD: &[Vert] = &[
-    Vert { pos: [-0.5, -0.5] },
-    Vert { pos: [0.5, -0.5] },
-    Vert { pos: [0.5, 0.5] },
-    Vert { pos: [-0.5, -0.5] },
-    Vert { pos: [0.5, 0.5] },
-    Vert { pos: [-0.5, 0.5] },
+const QUAD: &[Pos2] = &[
+    Pos2 { pos: [-0.5, -0.5] },
+    Pos2 { pos: [0.5, -0.5] },
+    Pos2 { pos: [0.5, 0.5] },
+    Pos2 { pos: [-0.5, -0.5] },
+    Pos2 { pos: [0.5, 0.5] },
+    Pos2 { pos: [-0.5, 0.5] },
 ];
 
-// Orthographic projection that maps roughly -8..8 x -4.5..4.5 in world space.
 fn ortho() -> Mat4 {
     Mat4::orthographic_rh(-8.0, 8.0, -4.5, 4.5, -1.0, 1.0)
 }
 
-fn build_transform(pos: Vec2, color: Vec4) -> Transform {
+fn build_transform(pos: Vec2, color: Vec4) -> TransformUniform {
     let mvp = ortho() * Mat4::from_translation(Vec3::new(pos.x, pos.y, 0.0));
-    Transform { mvp, color }
+    TransformUniform::new(mvp, color)
 }
 
-fn init(ctx: &mut Context) -> State {
-    let vb = ctx.create_vertex_buffer(QUAD);
-    let uniform =
-        ctx.create_uniform_buffer(&build_transform(Vec2::ZERO, Vec4::new(0.3, 0.6, 1.0, 1.0)));
-    let pipeline =
-        ctx.create_pipeline(PipelineDescriptor::new(SHADER, Vert::layout()).with_uniform());
+struct InputDemo {
+    // Direct-input state
+    pos: Vec2,
+    color: Vec4,
+    // Event bus
+    events: Events<GameEvent>,
+    hp: i32,
+    log: Vec<String>,
+    // GPU
+    pipeline: Option<Pipeline>,
+    vb: Option<VertexBuffer>,
+    uniform: Option<UniformBuffer>,
+    ui: Option<Ui>,
+}
 
-    State {
-        pipeline,
-        vb,
-        uniform,
-        pos: Vec2::ZERO,
-        events: Events::new(),
-        hp: MAX_HP,
-        log: vec!["Ready.".into()],
-        ui: Ui::new(ctx),
+impl App for InputDemo {
+    fn new() -> Self {
+        InputDemo {
+            pos: Vec2::ZERO,
+            color: Vec4::new(0.3, 0.6, 1.0, 1.0),
+            events: Events::new(),
+            hp: MAX_HP,
+            log: vec!["Ready.".into()],
+            pipeline: None,
+            vb: None,
+            uniform: None,
+            ui: None,
+        }
+    }
+
+    fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
+        let vb = ctx.create_vertex_buffer(QUAD);
+        let uniform =
+            ctx.create_uniform_buffer(&build_transform(Vec2::ZERO, Vec4::new(0.3, 0.6, 1.0, 1.0)));
+        let pipeline = ctx.create_builtin_pipeline(BuiltinPipeline::Transform2d);
+        self.vb = Some(vb);
+        self.uniform = Some(uniform);
+        self.pipeline = Some(pipeline);
+        self.ui = Some(Ui::new(ctx));
+    }
+
+    fn update(&mut self, input: &Input, time: &Time) {
+        // ── advance event buffers ────────────────────────────────────────
+        self.events.update();
+
+        // ── combat system ────────────────────────────────────────────────
+        let mut secondary: Vec<GameEvent> = Vec::new();
+        for ev in self.events.read() {
+            match ev {
+                GameEvent::Attack(dmg) => {
+                    self.hp = (self.hp - dmg).max(0);
+                    push_log(&mut self.log, format!("Attack -{dmg}  HP={}", self.hp));
+                    if self.hp == 0 {
+                        secondary.push(GameEvent::Died);
+                    }
+                }
+                GameEvent::Heal(amt) => {
+                    self.hp = (self.hp + amt).min(MAX_HP);
+                    push_log(&mut self.log, format!("Heal  +{amt}  HP={}", self.hp));
+                }
+                GameEvent::Reset => {
+                    self.hp = MAX_HP;
+                    push_log(&mut self.log, "Reset → HP=100".into());
+                }
+                GameEvent::Died => {
+                    push_log(&mut self.log, "*** DIED ***".into());
+                }
+            }
+        }
+        for ev in secondary {
+            self.events.emit(ev);
+        }
+
+        // ── movement ─────────────────────────────────────────────────────
+        let speed = 5.0 * time.delta;
+        let mut dir = Vec2::ZERO;
+        if input.key_down(Key::KeyW) || input.key_down(Key::ArrowUp) {
+            dir.y += 1.0;
+        }
+        if input.key_down(Key::KeyS) || input.key_down(Key::ArrowDown) {
+            dir.y -= 1.0;
+        }
+        if input.key_down(Key::KeyA) || input.key_down(Key::ArrowLeft) {
+            dir.x -= 1.0;
+        }
+        if input.key_down(Key::KeyD) || input.key_down(Key::ArrowRight) {
+            dir.x += 1.0;
+        }
+        if let Some((id, _)) = input.gamepads().next() {
+            dir.x += input.gamepad_axis(id, GamepadAxis::LeftStickX);
+            dir.y += input.gamepad_axis(id, GamepadAxis::LeftStickY);
+        }
+        if dir != Vec2::ZERO {
+            self.pos += dir.normalize() * speed;
+        }
+        if input.key_pressed(Key::Space) {
+            println!("pos = {:?}", self.pos);
+        }
+
+        self.color = if input.mouse_down(MouseButton::Left) {
+            Vec4::new(1.0, 0.2, 0.2, 1.0)
+        } else {
+            Vec4::new(0.3, 0.6, 1.0, 1.0)
+        };
+
+        // ── event emitters ────────────────────────────────────────────────
+        if input.key_pressed(Key::KeyZ) {
+            self.events.emit(GameEvent::Attack(10));
+        }
+        if input.key_pressed(Key::KeyX) {
+            self.events.emit(GameEvent::Heal(15));
+        }
+        if input.key_pressed(Key::KeyR) {
+            self.events.emit(GameEvent::Reset);
+        }
+    }
+
+    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
+        if let Some(uniform) = &self.uniform {
+            ctx.update_uniform_buffer(uniform, &build_transform(self.pos, self.color));
+        }
+
+        let Some(ui) = &mut self.ui else { return };
+        ui.begin_frame(input, W as f32, H as f32);
+
+        ui.begin_panel("Status", 20.0, 20.0, 200.0);
+        ui.label("Event Bus");
+        ui.separator();
+        let bar = hp_bar(self.hp, MAX_HP);
+        ui.label_dim(&format!("HP  {bar} {}/{MAX_HP}", self.hp));
+        ui.separator();
+        ui.label_dim("Z  attack  -10");
+        ui.label_dim("X  heal   +15");
+        ui.label_dim("R  reset");
+        ui.end_panel();
+
+        ui.begin_panel("Log", 240.0, 20.0, 220.0);
+        ui.label("Event log");
+        ui.separator();
+        for line in &self.log {
+            ui.label_dim(line);
+        }
+        ui.end_panel();
+
+        ui.end_frame(ctx);
+    }
+
+    fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
+        if let (Some(pipeline), Some(uniform), Some(vb)) = (&self.pipeline, &self.uniform, &self.vb)
+        {
+            pass.set_pipeline(pipeline);
+            pass.set_uniform(0, uniform);
+            pass.set_vertex_buffer(0, vb);
+            pass.draw(0..6);
+        }
+        if let Some(ui) = &self.ui {
+            ui.render(pass);
+        }
+    }
+
+    fn windows() -> Vec<Config> {
+        vec![Config {
+            title: "Input + Event bus  (WASD=move  Z=attack  X=heal  R=reset)",
+            width: W,
+            height: H,
+            ..Config::default()
+        }]
     }
 }
 
 fn main() {
-    Window::new(Config {
-        title: "Input + Event bus  (WASD=move  Z=attack  X=heal  R=reset)",
-        width: W,
-        height: H,
-        ..Config::default()
-    })
-    .run_with_update(
-        init,
-        |state, ctx, input, time| {
-            // ── advance event buffers ────────────────────────────────────────
-            state.events.update();
-
-            // ── combat system (reads previous frame's events) ────────────────
-            let mut secondary: Vec<GameEvent> = Vec::new();
-            for ev in state.events.read() {
-                match ev {
-                    GameEvent::Attack(dmg) => {
-                        state.hp = (state.hp - dmg).max(0);
-                        push_log(&mut state.log, format!("Attack -{dmg}  HP={}", state.hp));
-                        if state.hp == 0 {
-                            secondary.push(GameEvent::Died);
-                        }
-                    }
-                    GameEvent::Heal(amt) => {
-                        state.hp = (state.hp + amt).min(MAX_HP);
-                        push_log(&mut state.log, format!("Heal  +{amt}  HP={}", state.hp));
-                    }
-                    GameEvent::Reset => {
-                        state.hp = MAX_HP;
-                        push_log(&mut state.log, "Reset → HP=100".into());
-                    }
-                    GameEvent::Died => {
-                        push_log(&mut state.log, "*** DIED ***".into());
-                    }
-                }
-            }
-            for ev in secondary {
-                state.events.emit(ev);
-            }
-
-            // ── input system: direct queries ─────────────────────────────────
-            let speed = 5.0 * time.delta;
-            let mut dir = Vec2::ZERO;
-            if input.key_down(Key::KeyW) || input.key_down(Key::ArrowUp) {
-                dir.y += 1.0;
-            }
-            if input.key_down(Key::KeyS) || input.key_down(Key::ArrowDown) {
-                dir.y -= 1.0;
-            }
-            if input.key_down(Key::KeyA) || input.key_down(Key::ArrowLeft) {
-                dir.x -= 1.0;
-            }
-            if input.key_down(Key::KeyD) || input.key_down(Key::ArrowRight) {
-                dir.x += 1.0;
-            }
-            if let Some((id, _)) = input.gamepads().next() {
-                dir.x += input.gamepad_axis(id, GamepadAxis::LeftStickX);
-                dir.y += input.gamepad_axis(id, GamepadAxis::LeftStickY);
-            }
-            if dir != Vec2::ZERO {
-                state.pos += dir.normalize() * speed;
-            }
-            if input.key_pressed(Key::Space) {
-                println!("pos = {:?}", state.pos);
-            }
-
-            let color = if input.mouse_down(MouseButton::Left) {
-                Vec4::new(1.0, 0.2, 0.2, 1.0)
-            } else {
-                Vec4::new(0.3, 0.6, 1.0, 1.0)
-            };
-            ctx.update_uniform_buffer(&state.uniform, &build_transform(state.pos, color));
-
-            // ── input system: event emitters ─────────────────────────────────
-            if input.key_pressed(Key::KeyZ) {
-                state.events.emit(GameEvent::Attack(10));
-            }
-            if input.key_pressed(Key::KeyX) {
-                state.events.emit(GameEvent::Heal(15));
-            }
-            if input.key_pressed(Key::KeyR) {
-                state.events.emit(GameEvent::Reset);
-            }
-
-            // ── UI ───────────────────────────────────────────────────────────
-            state.ui.begin_frame(input, W as f32, H as f32);
-
-            state.ui.begin_panel("Status", 20.0, 20.0, 200.0);
-            state.ui.label("Event Bus");
-            state.ui.separator();
-            let bar = hp_bar(state.hp, MAX_HP);
-            state
-                .ui
-                .label_dim(&format!("HP  {bar} {}/{MAX_HP}", state.hp));
-            state.ui.separator();
-            state.ui.label_dim("Z  attack  -10");
-            state.ui.label_dim("X  heal   +15");
-            state.ui.label_dim("R  reset");
-            state.ui.end_panel();
-
-            state.ui.begin_panel("Log", 240.0, 20.0, 220.0);
-            state.ui.label("Event log");
-            state.ui.separator();
-            for line in &state.log {
-                state.ui.label_dim(line);
-            }
-            state.ui.end_panel();
-
-            state.ui.end_frame(ctx);
-        },
-        |_, _| {},
-        |state, pass: &mut RenderPass| {
-            pass.set_pipeline(&state.pipeline);
-            pass.set_uniform(0, &state.uniform);
-            pass.set_vertex_buffer(0, &state.vb);
-            pass.draw(0..6);
-            state.ui.render(pass);
-        },
-    );
+    run::<InputDemo>();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

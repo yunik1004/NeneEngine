@@ -2,11 +2,11 @@ pub struct Pipeline {
     pub(crate) inner: wgpu::RenderPipeline,
 }
 
-pub struct PipelineDescriptor<'a> {
-    pub shader: &'a str,
+pub struct PipelineDescriptor {
+    pub shader: String,
     pub vertex_layout: VertexLayout,
-    pub vertex_entry: &'a str,
-    pub fragment_entry: &'a str,
+    pub vertex_entry: &'static str,
+    pub fragment_entry: &'static str,
     pub use_texture: bool,
     /// Number of uniform buffer bind groups (each occupies one group slot).
     pub uniform_count: u32,
@@ -26,10 +26,10 @@ pub struct PipelineDescriptor<'a> {
     pub instance_layout: Option<VertexLayout>,
 }
 
-impl<'a> PipelineDescriptor<'a> {
-    pub fn new(shader: &'a str, vertex_layout: VertexLayout) -> Self {
+impl PipelineDescriptor {
+    pub fn new(shader: impl Into<String>, vertex_layout: VertexLayout) -> Self {
         Self {
-            shader,
+            shader: shader.into(),
             vertex_layout,
             vertex_entry: "vs_main",
             fragment_entry: "fs_main",
@@ -49,9 +49,9 @@ impl<'a> PipelineDescriptor<'a> {
     /// Fullscreen-triangle pass (no vertex buffers, no depth stencil).
     /// The vertex shader uses `@builtin(vertex_index)` to cover NDC space.
     /// Call [`RenderPass::draw`]`(0..3)` to issue the draw.
-    pub fn fullscreen_pass(shader: &'a str) -> Self {
+    pub fn fullscreen_pass(shader: impl Into<String>) -> Self {
         Self {
-            shader,
+            shader: shader.into(),
             vertex_layout: VertexLayout {
                 stride: 0,
                 attributes: vec![],
@@ -78,7 +78,7 @@ impl<'a> PipelineDescriptor<'a> {
     ///
     /// ```no_run
     /// # use nene::renderer::{PipelineDescriptor, VertexLayout};
-    /// # fn demo(vl: VertexLayout, il: VertexLayout) -> PipelineDescriptor<'static> {
+    /// # fn demo(vl: VertexLayout, il: VertexLayout) -> PipelineDescriptor {
     /// PipelineDescriptor::new("/* shader */", vl)
     ///     .with_instance_layout(il.at_locations(2))
     /// # }

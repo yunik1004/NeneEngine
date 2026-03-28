@@ -70,6 +70,19 @@ impl Sound {
         }
     }
 
+    /// Generate a sine-wave tone entirely in memory — no file I/O.
+    pub fn sine_wave(freq: f32, duration: f32, sample_rate: u32) -> Self {
+        let n = (sample_rate as f32 * duration) as usize;
+        let samples = (0..n)
+            .map(|i| (i as f32 / sample_rate as f32 * freq * std::f32::consts::TAU).sin())
+            .collect();
+        Self {
+            samples,
+            channels: 1,
+            sample_rate,
+        }
+    }
+
     pub fn channels(&self) -> usize {
         self.channels
     }

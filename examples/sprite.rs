@@ -12,14 +12,15 @@
 //! LMB (held)    — tint player red
 
 use nene::{
-    camera::Camera,
-    camera::Frustum,
+    app::{App, WindowId, run},
+    camera::{Camera, Frustum},
     input::{Input, Key, MouseButton},
     math::{Vec2, Vec3},
-    renderer::{Context, FilterMode, RenderPass, Texture},
+    renderer::{Context, FilterMode, RenderPass},
     sprite::{Sprite, SpriteBatch, UvRect},
+    time::Time,
     ui::Ui,
-    window::{Config, Window},
+    window::Config,
 };
 
 const W: u32 = 960;
@@ -28,38 +29,9 @@ const OBJECT_COUNT: usize = 2000;
 const WORLD_SIZE: f32 = 200.0;
 const SPRITE_SIZE: f32 = 1.5;
 
-// ── 5-tile atlas: 4 world colours + 1 white player tile ──────────────────────
-
 const ATLAS_W: u32 = 80;
 const ATLAS_H: u32 = 16;
 const TILE_PX: u32 = 16;
-
-fn make_texture(ctx: &mut Context) -> Texture {
-    let colors: [[u8; 3]; 5] = [
-        [220, 80, 80],   // red
-        [80, 200, 80],   // green
-        [80, 120, 220],  // blue
-        [220, 180, 60],  // yellow
-        [240, 240, 240], // white (player)
-    ];
-    let mut px = vec![0u8; (ATLAS_W * ATLAS_H * 4) as usize];
-    for tile in 0..5u32 {
-        let bx = tile * TILE_PX;
-        let [r, g, b] = colors[tile as usize];
-        for py in 0..ATLAS_H {
-            for tx in 0..TILE_PX {
-                let edge = tx == 0 || tx == TILE_PX - 1 || py == 0 || py == ATLAS_H - 1;
-                let f = if edge { 0.6f32 } else { 1.0 };
-                let i = ((py * ATLAS_W + bx + tx) * 4) as usize;
-                px[i] = (r as f32 * f) as u8;
-                px[i + 1] = (g as f32 * f) as u8;
-                px[i + 2] = (b as f32 * f) as u8;
-                px[i + 3] = 255;
-            }
-        }
-    }
-    ctx.create_texture_with(ATLAS_W, ATLAS_H, &px, FilterMode::Nearest)
-}
 
 fn tile_uv(i: usize) -> UvRect {
     let uw = TILE_PX as f32 / ATLAS_W as f32;
@@ -70,8 +42,6 @@ fn tile_uv(i: usize) -> UvRect {
         h: 1.0,
     }
 }
-
-// ── World objects ─────────────────────────────────────────────────────────────
 
 struct Object {
     pos: Vec2,
@@ -94,149 +64,189 @@ fn spawn_objects() -> Vec<Object> {
         .collect()
 }
 
-// ── App state ─────────────────────────────────────────────────────────────────
-
-struct State {
-    batch: SpriteBatch,
-    texture: Texture,
+struct SpriteDemo {
     objects: Vec<Object>,
     player_pos: Vec2,
     player_angle: f32,
     camera: Camera,
     ortho_width: f32,
-    ui: Ui,
     visible_count: usize,
+    batch: Option<SpriteBatch>,
+    texture: Option<nene::renderer::Texture>,
+    ui: Option<Ui>,
 }
 
-fn init(ctx: &mut Context) -> State {
-    State {
-        batch: SpriteBatch::new(ctx, OBJECT_COUNT + 1),
-        texture: make_texture(ctx),
-        objects: spawn_objects(),
-        player_pos: Vec2::ZERO,
-        player_angle: 0.0,
-        camera: Camera::orthographic(Vec3::new(0.0, 0.0, 1.0), 40.0, 0.1, 100.0),
-        ortho_width: 40.0,
-        ui: Ui::new(ctx),
-        visible_count: 0,
+impl App for SpriteDemo {
+    fn new() -> Self {
+        SpriteDemo {
+            objects: spawn_objects(),
+            player_pos: Vec2::ZERO,
+            player_angle: 0.0,
+            camera: Camera::orthographic(Vec3::new(0.0, 0.0, 1.0), 40.0, 0.1, 100.0),
+            ortho_width: 40.0,
+            visible_count: 0,
+            batch: None,
+            texture: None,
+            ui: None,
+        }
+    }
+
+    fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
+        self.batch = Some(SpriteBatch::new(ctx, OBJECT_COUNT + 1));
+        self.texture = Some(make_texture(ctx));
+        self.ui = Some(Ui::new(ctx));
+    }
+
+    fn update(&mut self, input: &Input, time: &Time) {
+        let dt = time.delta;
+
+        // Player movement
+        let mut dir = Vec2::ZERO;
+        if input.key_down(Key::KeyW) || input.key_down(Key::ArrowUp) {
+            dir.y += 1.0;
+        }
+        if input.key_down(Key::KeyS) || input.key_down(Key::ArrowDown) {
+            dir.y -= 1.0;
+        }
+        if input.key_down(Key::KeyA) || input.key_down(Key::ArrowLeft) {
+            dir.x -= 1.0;
+        }
+        if input.key_down(Key::KeyD) || input.key_down(Key::ArrowRight) {
+            dir.x += 1.0;
+        }
+        if dir != Vec2::ZERO {
+            self.player_pos += dir.normalize() * 8.0 * dt;
+        }
+        if input.key_down(Key::KeyQ) {
+            self.player_angle += 2.0 * dt;
+        }
+        if input.key_down(Key::KeyE) {
+            self.player_angle -= 2.0 * dt;
+        }
+
+        // Zoom + camera follows player
+        if input.key_down(Key::Equal) {
+            self.ortho_width = (self.ortho_width * (1.0 - dt * 2.0)).max(5.0);
+        }
+        if input.key_down(Key::Minus) {
+            self.ortho_width = (self.ortho_width * (1.0 + dt * 2.0)).min(200.0);
+        }
+        let (px, py) = (self.player_pos.x, self.player_pos.y);
+        self.camera.position = Vec3::new(px, py, 1.0);
+        self.camera.target = Vec3::new(px, py, 0.0);
+        self.camera.projection = nene::camera::Projection::Orthographic {
+            width: self.ortho_width,
+            near: 0.1,
+            far: 100.0,
+        };
+
+        // Frustum culling
+        let aspect = W as f32 / H as f32;
+        let vp = self.camera.view_proj(aspect);
+        let frustum = Frustum::from_view_proj(vp);
+
+        let Some(batch) = &mut self.batch else { return };
+        batch.clear();
+        let hs = SPRITE_SIZE * 0.5;
+        let mut visible = 0usize;
+        for obj in &self.objects {
+            let min = Vec3::new(obj.pos.x - hs, obj.pos.y - hs, -0.1);
+            let max = Vec3::new(obj.pos.x + hs, obj.pos.y + hs, 0.1);
+            if frustum.test_aabb(min, max) {
+                batch.queue(&Sprite {
+                    position: obj.pos,
+                    size: Vec2::splat(SPRITE_SIZE),
+                    uv: obj.uv,
+                    ..Sprite::default()
+                });
+                visible += 1;
+            }
+        }
+        self.visible_count = visible;
+
+        let tint = if input.mouse_down(MouseButton::Left) {
+            [1.0, 0.3, 0.3, 1.0]
+        } else {
+            [1.0, 1.0, 1.0, 1.0]
+        };
+        batch.queue(&Sprite {
+            position: self.player_pos,
+            size: Vec2::splat(1.0),
+            rotation: self.player_angle,
+            uv: tile_uv(4),
+            color: tint,
+        });
+
+        // UI
+        let Some(ui) = &mut self.ui else { return };
+        ui.begin_frame(input, W as f32, H as f32);
+        ui.begin_panel("Culling", 16.0, 16.0, 180.0);
+        ui.label_dim(&format!("visible  {}", self.visible_count));
+        ui.label_dim(&format!("culled   {}", OBJECT_COUNT - self.visible_count));
+        ui.label_dim(&format!("total    {OBJECT_COUNT}"));
+        ui.label_dim(&format!(
+            "draw%    {:.1}",
+            self.visible_count as f32 / OBJECT_COUNT as f32 * 100.0
+        ));
+        ui.end_panel();
+    }
+
+    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
+        let aspect = W as f32 / H as f32;
+        if let Some(batch) = &mut self.batch {
+            batch.prepare(ctx, &self.camera, aspect);
+        }
+        if let Some(ui) = &mut self.ui {
+            ui.end_frame(ctx);
+        }
+    }
+
+    fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
+        if let (Some(batch), Some(texture)) = (&self.batch, &self.texture) {
+            batch.render(pass, texture);
+        }
+        if let Some(ui) = &self.ui {
+            ui.render(pass);
+        }
+    }
+
+    fn windows() -> Vec<Config> {
+        vec![Config {
+            title: "Sprite + Culling  (WASD=move  Q/E=rotate  +/-=zoom  LMB=tint)",
+            width: W,
+            height: H,
+            ..Config::default()
+        }]
     }
 }
 
 fn main() {
-    Window::new(Config {
-        title: "Sprite + Culling  (WASD=move  Q/E=rotate  +/-=zoom  LMB=tint)",
-        width: W,
-        height: H,
-        ..Config::default()
-    })
-    .run_with_update(
-        init,
-        |state, ctx, input, time| {
-            let dt = time.delta;
-
-            // ── player movement ────────────────────────────────────────────────
-            let mut dir = Vec2::ZERO;
-            if input.key_down(Key::KeyW) || input.key_down(Key::ArrowUp) {
-                dir.y += 1.0;
-            }
-            if input.key_down(Key::KeyS) || input.key_down(Key::ArrowDown) {
-                dir.y -= 1.0;
-            }
-            if input.key_down(Key::KeyA) || input.key_down(Key::ArrowLeft) {
-                dir.x -= 1.0;
-            }
-            if input.key_down(Key::KeyD) || input.key_down(Key::ArrowRight) {
-                dir.x += 1.0;
-            }
-            if dir != Vec2::ZERO {
-                state.player_pos += dir.normalize() * 8.0 * dt;
-            }
-            if input.key_down(Key::KeyQ) {
-                state.player_angle += 2.0 * dt;
-            }
-            if input.key_down(Key::KeyE) {
-                state.player_angle -= 2.0 * dt;
-            }
-
-            // ── zoom + camera follows player ───────────────────────────────────
-            apply_zoom(&mut state.ortho_width, input, dt);
-            let px = state.player_pos.x;
-            let py = state.player_pos.y;
-            state.camera.position = Vec3::new(px, py, 1.0);
-            state.camera.target = Vec3::new(px, py, 0.0);
-            state.camera.projection = nene::camera::Projection::Orthographic {
-                width: state.ortho_width,
-                near: 0.1,
-                far: 100.0,
-            };
-
-            // ── frustum culling ────────────────────────────────────────────────
-            let aspect = W as f32 / H as f32;
-            let vp = state.camera.view_proj(aspect);
-            let frustum = Frustum::from_view_proj(vp);
-
-            state.batch.clear();
-            let hs = SPRITE_SIZE * 0.5;
-            let mut visible = 0usize;
-            for obj in &state.objects {
-                let min = Vec3::new(obj.pos.x - hs, obj.pos.y - hs, -0.1);
-                let max = Vec3::new(obj.pos.x + hs, obj.pos.y + hs, 0.1);
-                if frustum.test_aabb(min, max) {
-                    state.batch.queue(&Sprite {
-                        position: obj.pos,
-                        size: Vec2::splat(SPRITE_SIZE),
-                        uv: obj.uv,
-                        ..Sprite::default()
-                    });
-                    visible += 1;
-                }
-            }
-            state.visible_count = visible;
-
-            // Player sprite (white tile, tinted red on LMB)
-            let tint = if input.mouse_down(MouseButton::Left) {
-                [1.0, 0.3, 0.3, 1.0]
-            } else {
-                [1.0, 1.0, 1.0, 1.0]
-            };
-            state.batch.queue(&Sprite {
-                position: state.player_pos,
-                size: Vec2::splat(1.0),
-                rotation: state.player_angle,
-                uv: tile_uv(4),
-                color: tint,
-            });
-
-            state.batch.prepare(ctx, &state.camera, aspect);
-
-            // ── UI ─────────────────────────────────────────────────────────────
-            state.ui.begin_frame(input, W as f32, H as f32);
-            state.ui.begin_panel("Culling", 16.0, 16.0, 180.0);
-            state
-                .ui
-                .label_dim(&format!("visible  {}", state.visible_count));
-            state
-                .ui
-                .label_dim(&format!("culled   {}", OBJECT_COUNT - state.visible_count));
-            state.ui.label_dim(&format!("total    {OBJECT_COUNT}"));
-            let pct = state.visible_count as f32 / OBJECT_COUNT as f32 * 100.0;
-            state.ui.label_dim(&format!("draw%    {:.1}", pct));
-            state.ui.end_panel();
-            state.ui.end_frame(ctx);
-        },
-        |_, _| {},
-        |state, pass: &mut RenderPass| {
-            state.batch.render(pass, &state.texture);
-            state.ui.render(pass);
-        },
-    );
+    run::<SpriteDemo>();
 }
 
-fn apply_zoom(width: &mut f32, input: &Input, dt: f32) {
-    if input.key_down(Key::Equal) {
-        *width = (*width * (1.0 - dt * 2.0)).max(5.0);
+fn make_texture(ctx: &mut Context) -> nene::renderer::Texture {
+    let colors: [[u8; 3]; 5] = [
+        [220, 80, 80],
+        [80, 200, 80],
+        [80, 120, 220],
+        [220, 180, 60],
+        [240, 240, 240],
+    ];
+    let mut px = vec![0u8; (ATLAS_W * ATLAS_H * 4) as usize];
+    for tile in 0..5u32 {
+        let bx = tile * TILE_PX;
+        let [r, g, b] = colors[tile as usize];
+        for py in 0..ATLAS_H {
+            for tx in 0..TILE_PX {
+                let edge = tx == 0 || tx == TILE_PX - 1 || py == 0 || py == ATLAS_H - 1;
+                let f = if edge { 0.6f32 } else { 1.0 };
+                let i = ((py * ATLAS_W + bx + tx) * 4) as usize;
+                px[i] = (r as f32 * f) as u8;
+                px[i + 1] = (g as f32 * f) as u8;
+                px[i + 2] = (b as f32 * f) as u8;
+                px[i + 3] = 255;
+            }
+        }
     }
-    if input.key_down(Key::Minus) {
-        *width = (*width * (1.0 + dt * 2.0)).min(200.0);
-    }
+    ctx.create_texture_with(ATLAS_W, ATLAS_H, &px, FilterMode::Nearest)
 }

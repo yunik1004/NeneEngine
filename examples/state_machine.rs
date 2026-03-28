@@ -17,21 +17,18 @@ use std::f32::consts::{PI, TAU};
 
 use nene::{
     animation::{
-        AnimChannel, AnimState, Channel, Clip, Joint, JointMatrices, Skeleton, SkinnedMesh,
-        SkinnedVertex, StateMachine, skinning_wgsl,
+        AnimChannel, AnimState, Channel, Clip, Joint, JointMatrices, Skeleton, SkinnedMaterial,
+        SkinnedMaterialBuilder, SkinnedMesh, SkinnedVertex, StateMachine,
     },
+    app::{App, WindowId, run},
     camera::Camera,
-    input::Key,
+    input::{Input, Key},
     math::{Mat4, Quat, Vec3, Vec4},
     mesh::Model,
-    renderer::{
-        AMBIENT_LIGHT_WGSL, AmbientLight, Context, DIRECTIONAL_LIGHT_WGSL, DirectionalLight,
-        IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexBuffer,
-    },
-    time::{Ease, Tween},
+    renderer::{AmbientLight, Context, DirectionalLight, IndexBuffer, RenderPass, VertexBuffer},
+    time::{Ease, Time, Tween},
     ui::Ui,
-    uniform,
-    window::{Config, Window},
+    window::Config,
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -39,12 +36,11 @@ use nene::{
 const NUM_JOINTS: usize = 7;
 const MAX_JOINTS: usize = 8;
 const SIDES: usize = 14;
-const RINGS: usize = (NUM_JOINTS - 1) * 2 + 1; // 13
+const RINGS: usize = (NUM_JOINTS - 1) * 2 + 1;
 
 const STATES: &[&str] = &["idle", "wave", "thrash"];
 const BLEND_DURATION: f32 = 0.6;
 
-// Easing options the user can cycle through for the crossfade.
 const EASES: &[(Ease, &str)] = &[
     (Ease::Linear, "Linear"),
     (Ease::SineInOut, "SineInOut"),
@@ -53,89 +49,6 @@ const EASES: &[(Ease, &str)] = &[
     (Ease::ElasticOut, "ElasticOut"),
     (Ease::BounceOut, "BounceOut"),
 ];
-
-// ── Shader ────────────────────────────────────────────────────────────────────
-
-fn make_shader() -> String {
-    format!(
-        r#"
-{skinning}
-{ambient}
-{directional}
-
-struct SceneUniform {{
-    view_proj:   mat4x4<f32>,
-    model:       mat4x4<f32>,
-    camera_pos:  vec4<f32>,
-    ambient:     AmbientLight,
-    directional: DirectionalLight,
-}};
-@group(0) @binding(0) var<uniform> scene: SceneUniform;
-@group(1) @binding(0) var<uniform> joint_mats: JointMatrices;
-
-struct VIn {{
-    @location(0) position: vec3<f32>,
-    @location(1) normal:   vec3<f32>,
-    @location(2) uv:       vec2<f32>,
-    @location(3) joints:   vec4<u32>,
-    @location(4) weights:  vec4<f32>,
-}};
-struct VOut {{
-    @builtin(position) clip_pos:     vec4<f32>,
-    @location(0)       world_pos:    vec3<f32>,
-    @location(1)       world_normal: vec3<f32>,
-    @location(2)       uv:           vec2<f32>,
-}};
-
-@vertex
-fn vs_main(in: VIn) -> VOut {{
-    let skin =
-          in.weights.x * joint_mats.mats[in.joints.x]
-        + in.weights.y * joint_mats.mats[in.joints.y]
-        + in.weights.z * joint_mats.mats[in.joints.z]
-        + in.weights.w * joint_mats.mats[in.joints.w];
-    let world = scene.model * skin * vec4<f32>(in.position, 1.0);
-    var out: VOut;
-    out.clip_pos     = scene.view_proj * world;
-    out.world_pos    = world.xyz;
-    out.world_normal = normalize((scene.model * skin * vec4<f32>(in.normal, 0.0)).xyz);
-    out.uv           = in.uv;
-    return out;
-}}
-
-@fragment
-fn fs_main(in: VOut) -> @location(0) vec4<f32> {{
-    let t = clamp(in.uv.y, 0.0, 1.0);
-    let c0 = vec3<f32>(1.0,  0.28, 0.0);
-    let c1 = vec3<f32>(0.18, 1.0,  0.3);
-    let c2 = vec3<f32>(0.0,  0.75, 1.0);
-    let albedo = select(
-        mix(c0, c1, t * 2.0),
-        mix(c1, c2, t * 2.0 - 1.0),
-        t >= 0.5
-    );
-    let diffuse = directional_light(scene.directional, in.world_normal);
-    let ambient_c = ambient_light(scene.ambient);
-    let view_dir = normalize(scene.camera_pos.xyz - in.world_pos);
-    let rim = pow(1.0 - max(dot(in.world_normal, view_dir), 0.0), 5.0) * 0.85;
-    let rim_color = mix(albedo, vec3<f32>(0.6, 0.9, 1.0), 0.5) * rim;
-    return vec4<f32>(albedo * (ambient_c + diffuse) + rim_color, 1.0);
-}}
-"#,
-        skinning = skinning_wgsl(MAX_JOINTS),
-        ambient = AMBIENT_LIGHT_WGSL,
-        directional = DIRECTIONAL_LIGHT_WGSL,
-    )
-}
-
-#[uniform]
-struct SceneUniform {
-    view_proj: Mat4,
-    model: Mat4,
-    camera_pos: Vec4,
-    ambient: AmbientLight,
-    directional: DirectionalLight,
-}
 
 // ── Procedural skeleton / mesh ────────────────────────────────────────────────
 
@@ -281,201 +194,189 @@ fn build_model() -> Model {
 
 // ── App state ─────────────────────────────────────────────────────────────────
 
-struct State {
-    pipeline: Pipeline,
-    vbuf: VertexBuffer,
-    ibuf: IndexBuffer,
-    scene_buf: UniformBuffer,
-    joint_buf: UniformBuffer,
+struct StateMachineDemo {
     model: Model,
     sm: StateMachine,
     camera_angle: f32,
     ambient: AmbientLight,
     directional: DirectionalLight,
     next_state: usize,
-
-    // Tween drives the crossfade blend weight with a selectable easing curve.
     blend_tween: Option<Tween<f32>>,
     ease_idx: usize,
-
-    ui: Ui,
+    // GPU
+    mat: Option<SkinnedMaterial<MAX_JOINTS>>,
+    vbuf: Option<VertexBuffer>,
+    ibuf: Option<IndexBuffer>,
+    ui: Option<Ui>,
 }
 
-fn init(ctx: &mut Context) -> State {
-    let model = build_model();
-    let ambient = AmbientLight::new(Vec3::new(0.7, 0.75, 1.0), 0.18);
-    let directional = DirectionalLight::new(
-        Vec3::new(-1.0, -1.5, -0.8).normalize(),
-        Vec3::new(1.0, 0.92, 0.8),
-        1.1,
-    );
+impl App for StateMachineDemo {
+    fn new() -> Self {
+        let model = build_model();
+        let mut sm = StateMachine::new();
+        for name in STATES {
+            let clip_index = STATES.iter().position(|&s| s == *name).unwrap();
+            sm.add_state(AnimState {
+                name: name.to_string(),
+                clip_index,
+                looping: true,
+                speed: 1.0,
+            });
+        }
+        sm.current = 0;
 
-    let mut sm = StateMachine::new();
-    for name in STATES {
-        let clip_index = STATES.iter().position(|&s| s == *name).unwrap();
-        sm.add_state(AnimState {
-            name: name.to_string(),
-            clip_index,
-            looping: true,
-            speed: 1.0,
-        });
+        StateMachineDemo {
+            model,
+            sm,
+            camera_angle: 0.0,
+            ambient: AmbientLight::new(Vec3::new(0.7, 0.75, 1.0), 0.18),
+            directional: DirectionalLight::new(
+                Vec3::new(-1.0, -1.5, -0.8).normalize(),
+                Vec3::new(1.0, 0.92, 0.8),
+                1.1,
+            ),
+            next_state: 1,
+            blend_tween: None,
+            ease_idx: 0,
+            mat: None,
+            vbuf: None,
+            ibuf: None,
+            ui: None,
+        }
     }
-    sm.current = 0;
 
-    let joint_mats: JointMatrices<MAX_JOINTS> = sm.joint_buffer(&model.clips, &model.skeleton);
-    let cam_pos = Vec3::new(9.0, 3.0, 0.0);
-    let mut camera = Camera::perspective(cam_pos, 44.0, 0.1, 100.0);
-    camera.target = Vec3::new(0.0, 3.0, 0.0);
+    fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
+        let cam_pos = Vec3::new(9.0, 3.0, 0.0);
+        let mut camera = Camera::perspective(cam_pos, 44.0, 0.1, 100.0);
+        camera.target = Vec3::new(0.0, 3.0, 0.0);
 
-    let cfg = ctx.surface_config();
-    let aspect = cfg.width as f32 / cfg.height as f32;
-    let scene_buf = ctx.create_uniform_buffer(&SceneUniform {
-        view_proj: camera.view_proj(aspect),
-        model: Mat4::IDENTITY,
-        camera_pos: cam_pos.extend(1.0),
-        ambient,
-        directional,
-    });
-    let joint_buf = ctx.create_uniform_buffer(&joint_mats);
+        let (width, height) = {
+            let cfg = ctx.surface_config();
+            (cfg.width, cfg.height)
+        };
+        let aspect = width as f32 / height as f32;
 
-    let mesh = &model.skinned_meshes[0];
-    let vbuf = ctx.create_vertex_buffer(&mesh.vertices);
-    let ibuf = ctx.create_index_buffer(&mesh.indices);
+        let mesh = &self.model.skinned_meshes[0];
+        self.vbuf = Some(ctx.create_vertex_buffer(&mesh.vertices));
+        self.ibuf = Some(ctx.create_index_buffer(&mesh.indices));
 
-    let shader = make_shader();
-    let pipeline = ctx.create_pipeline(
-        PipelineDescriptor::new(&shader, SkinnedVertex::layout())
-            .with_uniform()
-            .with_uniform()
-            .with_depth(),
-    );
+        let mut mat = SkinnedMaterialBuilder::<MAX_JOINTS>::new()
+            .ambient()
+            .directional()
+            .rim()
+            .build(ctx);
+        mat.uniform.color = Vec4::new(0.9, 0.6, 0.2, 1.0);
+        mat.uniform.rim_color = Vec4::new(0.6, 0.9, 1.0, 1.0);
+        mat.uniform.view_proj = camera.view_proj(aspect);
+        mat.uniform.camera_pos = cam_pos.extend(1.0);
+        mat.uniform.ambient = self.ambient;
+        mat.uniform.directional = self.directional;
+        mat.flush(ctx);
+        self.mat = Some(mat);
 
-    State {
-        pipeline,
-        vbuf,
-        ibuf,
-        scene_buf,
-        joint_buf,
-        model,
-        sm,
-        camera_angle: 0.0,
-        ambient,
-        directional,
-        next_state: 1,
-        blend_tween: None,
-        ease_idx: 0,
-        ui: Ui::new(ctx),
+        self.ui = Some(Ui::new(ctx));
+    }
+
+    fn update(&mut self, input: &Input, time: &Time) {
+        let n_eases = EASES.len();
+        if input.key_pressed(Key::KeyE) {
+            self.ease_idx = (self.ease_idx + 1) % n_eases;
+        }
+        if input.key_pressed(Key::KeyQ) {
+            self.ease_idx = (self.ease_idx + n_eases - 1) % n_eases;
+        }
+
+        if input.key_pressed(Key::Space) {
+            let name = STATES[self.next_state];
+            self.sm.trigger(name, BLEND_DURATION);
+            self.next_state = (self.next_state + 1) % STATES.len();
+            self.blend_tween =
+                Some(Tween::new(0.0f32, 1.0, BLEND_DURATION).with_ease(EASES[self.ease_idx].0));
+        }
+
+        if let Some(ref mut t) = self.blend_tween {
+            t.update(time.delta);
+            if t.is_done() {
+                self.blend_tween = None;
+            }
+        }
+
+        self.sm.update(time.delta, &self.model.clips);
+        self.camera_angle += time.delta * 0.4;
+    }
+
+    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
+        let joint_mats: JointMatrices<MAX_JOINTS> = self
+            .sm
+            .joint_buffer(&self.model.clips, &self.model.skeleton);
+        if let Some(mat) = &self.mat {
+            mat.update_joints(ctx, &joint_mats);
+        }
+
+        let r = 9.0;
+        let cam_pos = Vec3::new(
+            r * self.camera_angle.cos(),
+            3.0,
+            r * self.camera_angle.sin(),
+        );
+        let mut camera = Camera::perspective(cam_pos, 44.0, 0.1, 100.0);
+        camera.target = Vec3::new(0.0, 3.0, 0.0);
+
+        let (width, height) = {
+            let cfg = ctx.surface_config();
+            (cfg.width, cfg.height)
+        };
+        let aspect = width as f32 / height as f32;
+
+        if let Some(mat) = &mut self.mat {
+            mat.uniform.view_proj = camera.view_proj(aspect);
+            mat.uniform.camera_pos = cam_pos.extend(1.0);
+            mat.flush(ctx);
+        }
+
+        let blend_progress = self.blend_tween.as_ref().map_or(1.0, |t| t.value());
+        let cur_name = STATES[(self.next_state + STATES.len() - 1) % STATES.len()];
+        let ease_name = EASES[self.ease_idx].1;
+        let bar = tween_bar(blend_progress);
+
+        let Some(ui) = &mut self.ui else { return };
+        ui.begin_frame(input, width as f32, height as f32);
+        ui.begin_panel("Animation", 16.0, 16.0, 200.0);
+        ui.label(cur_name);
+        ui.separator();
+        ui.label_dim(&format!("ease: {ease_name}"));
+        ui.label_dim(&bar);
+        ui.separator();
+        ui.label_dim("Space  next state");
+        ui.label_dim("Q / E  cycle ease");
+        ui.end_panel();
+        ui.end_frame(ctx);
+    }
+
+    fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
+        let (Some(mat), Some(vbuf), Some(ibuf)) = (&self.mat, &self.vbuf, &self.ibuf) else {
+            return;
+        };
+        mat.render(pass, vbuf, ibuf);
+        if let Some(ui) = &self.ui {
+            ui.render(pass);
+        }
+    }
+
+    fn windows() -> Vec<Config> {
+        vec![Config {
+            title: "State Machine — idle | wave | thrash   [Space: next  Q/E: ease]",
+            ..Config::default()
+        }]
     }
 }
 
 fn main() {
-    Window::new(Config {
-        title: "State Machine — idle | wave | thrash   [Space: next  Q/E: ease]",
-        ..Config::default()
-    })
-    .run_with_update(
-        init,
-        |state, ctx, input, time| {
-            // ── Cycle easing function ─────────────────────────────────────────
-            let n_eases = EASES.len();
-            if input.key_pressed(Key::KeyE) {
-                state.ease_idx = (state.ease_idx + 1) % n_eases;
-            }
-            if input.key_pressed(Key::KeyQ) {
-                state.ease_idx = (state.ease_idx + n_eases - 1) % n_eases;
-            }
-
-            // ── Trigger next state ────────────────────────────────────────────
-            if input.key_pressed(Key::Space) {
-                let name = STATES[state.next_state];
-                state.sm.trigger(name, BLEND_DURATION);
-                state.next_state = (state.next_state + 1) % STATES.len();
-                // Start a tween with the selected ease to track blend progress.
-                state.blend_tween = Some(
-                    Tween::new(0.0f32, 1.0, BLEND_DURATION).with_ease(EASES[state.ease_idx].0),
-                );
-            }
-
-            // ── Advance tween ─────────────────────────────────────────────────
-            let blend_progress = if let Some(ref mut t) = state.blend_tween {
-                t.update(time.delta);
-                let v = t.value();
-                if t.is_done() {
-                    state.blend_tween = None;
-                }
-                v
-            } else {
-                1.0
-            };
-
-            // ── Animation update ──────────────────────────────────────────────
-            state.sm.update(time.delta, &state.model.clips);
-            let joint_mats: JointMatrices<MAX_JOINTS> = state
-                .sm
-                .joint_buffer(&state.model.clips, &state.model.skeleton);
-            ctx.update_uniform_buffer(&state.joint_buf, &joint_mats);
-
-            // ── Camera orbit ──────────────────────────────────────────────────
-            state.camera_angle += time.delta * 0.4;
-            let r = 9.0;
-            let cam_pos = Vec3::new(
-                r * state.camera_angle.cos(),
-                3.0,
-                r * state.camera_angle.sin(),
-            );
-            let mut camera = Camera::perspective(cam_pos, 44.0, 0.1, 100.0);
-            camera.target = Vec3::new(0.0, 3.0, 0.0);
-
-            let cfg = ctx.surface_config();
-            let aspect = cfg.width as f32 / cfg.height as f32;
-            ctx.update_uniform_buffer(
-                &state.scene_buf,
-                &SceneUniform {
-                    view_proj: camera.view_proj(aspect),
-                    model: Mat4::IDENTITY,
-                    camera_pos: cam_pos.extend(1.0),
-                    ambient: state.ambient,
-                    directional: state.directional,
-                },
-            );
-
-            // ── UI: state + blend tween progress ─────────────────────────────
-            let cur_name = STATES[(state.next_state + STATES.len() - 1) % STATES.len()];
-            let ease_name = EASES[state.ease_idx].1;
-            let bar = tween_bar(blend_progress);
-
-            state
-                .ui
-                .begin_frame(input, cfg.width as f32, cfg.height as f32);
-            state.ui.begin_panel("Animation", 16.0, 16.0, 200.0);
-            state.ui.label(cur_name);
-            state.ui.separator();
-            state.ui.label_dim(&format!("ease: {ease_name}"));
-            state.ui.label_dim(&bar);
-            state.ui.separator();
-            state.ui.label_dim("Space  next state");
-            state.ui.label_dim("Q / E  cycle ease");
-            state.ui.end_panel();
-            state.ui.end_frame(ctx);
-        },
-        |_, _| {},
-        |state, pass: &mut RenderPass| {
-            pass.set_pipeline(&state.pipeline);
-            pass.set_uniform(0, &state.scene_buf);
-            pass.set_uniform(1, &state.joint_buf);
-            pass.set_vertex_buffer(0, &state.vbuf);
-            pass.draw_indexed_count(
-                &state.ibuf,
-                state.model.skinned_meshes[0].indices.len() as u32,
-            );
-            state.ui.render(pass);
-        },
-    );
+    run::<StateMachineDemo>();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/// Render blend progress as a text bar driven by the tween value.
 fn tween_bar(t: f32) -> String {
     let filled = (t.clamp(0.0, 1.0) * 12.0) as usize;
     let empty = 12 - filled;

@@ -15,9 +15,9 @@
 
 use nene::{
     app::{App, WindowId, run},
-    draw2d::Draw2d,
     ecs::{Entity, World},
     input::{Input, Key},
+    mesh::{ColorVertex, Renderer, circle},
     renderer::{Context, RenderPass},
     time::Time,
     ui::Ui,
@@ -62,7 +62,7 @@ struct InRange;
 struct EcsDemo {
     world: World,
     player: Entity,
-    draw: Option<Draw2d>,
+    draw: Option<Renderer<ColorVertex>>,
     ui: Option<Ui>,
 }
 
@@ -125,7 +125,7 @@ impl App for EcsDemo {
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        self.draw = Some(Draw2d::new(ctx, W, H));
+        self.draw = Some(Renderer::<ColorVertex>::new(ctx));
         self.ui = Some(Ui::new(ctx));
     }
 
@@ -237,17 +237,6 @@ impl App for EcsDemo {
             w.despawn(e);
         }
 
-        // Draw
-        let Some(draw) = &mut self.draw else { return };
-        draw.clear();
-        for (e, pos) in w.query::<Position>().iter() {
-            let Some(r) = w.get::<Radius>(e) else {
-                continue;
-            };
-            let Some(c) = w.get::<Color>(e) else { continue };
-            draw.circle(pos.x, pos.y, r.0, [c.r, c.g, c.b, 1.0]);
-        }
-
         // UI
         let Some(ui) = &mut self.ui else { return };
         ui.begin_frame(input, W, H);
@@ -268,7 +257,20 @@ impl App for EcsDemo {
 
     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
         if let Some(draw) = &mut self.draw {
-            draw.flush(ctx);
+            let ortho = glam::Mat4::orthographic_rh(0.0, W, H, 0.0, -1.0, 1.0);
+            draw.set_transform(ctx, ortho);
+            let verts: Vec<_> = self
+                .world
+                .query::<Position>()
+                .iter()
+                .filter_map(|(e, pos)| {
+                    let r = self.world.get::<Radius>(e)?;
+                    let c = self.world.get::<Color>(e)?;
+                    Some(circle(pos.x, pos.y, r.0, [c.r, c.g, c.b, 1.0]))
+                })
+                .flatten()
+                .collect();
+            draw.set_geometry(ctx, &verts);
         }
         if let Some(ui) = &mut self.ui {
             ui.end_frame(ctx);
