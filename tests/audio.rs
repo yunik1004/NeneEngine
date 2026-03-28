@@ -51,7 +51,7 @@ fn sound_load_mono() {
         .collect();
     let path = write_temp_wav("nene_test_mono.wav", 44100, 1, &samples);
 
-    let sound = Sound::load(&path);
+    let sound = Sound::load(&path).unwrap();
     assert_eq!(sound.channels(), 1);
     assert_eq!(sound.sample_rate(), 44100);
     assert_eq!(sound.sample_count(), samples.len());
@@ -62,7 +62,7 @@ fn sound_load_stereo() {
     let samples: Vec<i16> = vec![0i16; 44100 * 2];
     let path = write_temp_wav("nene_test_stereo.wav", 44100, 2, &samples);
 
-    let sound = Sound::load(&path);
+    let sound = Sound::load(&path).unwrap();
     assert_eq!(sound.channels(), 2);
     assert_eq!(sound.sample_rate(), 44100);
     assert_eq!(sound.sample_count(), samples.len() / 2); // 프레임 기준
@@ -73,7 +73,7 @@ fn sound_load_different_sample_rate() {
     let samples: Vec<i16> = vec![0i16; 22050];
     let path = write_temp_wav("nene_test_22050.wav", 22050, 1, &samples);
 
-    let sound = Sound::load(&path);
+    let sound = Sound::load(&path).unwrap();
     assert_eq!(sound.sample_rate(), 22050);
 }
 
@@ -88,7 +88,7 @@ fn play_does_not_panic() {
     let path = write_temp_wav("nene_test_play.wav", 44100, 1, &samples);
 
     let device = AudioDevice::new();
-    let sound = Arc::new(Sound::load(&path));
+    let sound = Arc::new(Sound::load(&path).unwrap());
     device.play(&sound);
 }
 
@@ -98,7 +98,7 @@ fn play_same_sound_simultaneously() {
     let path = write_temp_wav("nene_test_simultaneous.wav", 44100, 1, &samples);
 
     let device = AudioDevice::new();
-    let sound = Arc::new(Sound::load(&path));
+    let sound = Arc::new(Sound::load(&path).unwrap());
     device.play(&sound);
     device.play(&sound);
     device.play(&sound);
@@ -120,7 +120,7 @@ fn play_stereo() {
     let path = write_temp_wav("nene_test_stereo_play.wav", 44100, 2, &samples);
 
     let device = AudioDevice::new();
-    let sound = Arc::new(Sound::load(&path));
+    let sound = Arc::new(Sound::load(&path).unwrap());
     assert_eq!(sound.channels(), 2);
     device.play(&sound);
 }
@@ -132,7 +132,7 @@ fn play_with_volume_does_not_panic() {
     let samples: Vec<i16> = vec![0i16; 4410];
     let path = write_temp_wav("nene_test_volume.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
-    let sound = Arc::new(Sound::load(&path));
+    let sound = Arc::new(Sound::load(&path).unwrap());
     device.play_with(
         &sound,
         PlayOptions {
@@ -147,7 +147,7 @@ fn play_with_pan_left_does_not_panic() {
     let samples: Vec<i16> = vec![0i16; 4410];
     let path = write_temp_wav("nene_test_pan_l.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
-    let sound = Arc::new(Sound::load(&path));
+    let sound = Arc::new(Sound::load(&path).unwrap());
     device.play_with(
         &sound,
         PlayOptions {
@@ -162,7 +162,7 @@ fn play_with_pan_right_does_not_panic() {
     let samples: Vec<i16> = vec![0i16; 4410];
     let path = write_temp_wav("nene_test_pan_r.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
-    let sound = Arc::new(Sound::load(&path));
+    let sound = Arc::new(Sound::load(&path).unwrap());
     device.play_with(
         &sound,
         PlayOptions {
@@ -177,7 +177,7 @@ fn play_with_looping_does_not_panic() {
     let samples: Vec<i16> = vec![0i16; 4410];
     let path = write_temp_wav("nene_test_loop.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
-    let sound = Arc::new(Sound::load(&path));
+    let sound = Arc::new(Sound::load(&path).unwrap());
     let handle = device.play_with(
         &sound,
         PlayOptions {
@@ -195,7 +195,7 @@ fn play_handle_stop_signals_finished() {
     let samples: Vec<i16> = vec![0i16; 44100]; // 1 second
     let path = write_temp_wav("nene_test_stop.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
-    let sound = Arc::new(Sound::load(&path));
+    let sound = Arc::new(Sound::load(&path).unwrap());
     let handle = device.play(&sound);
     assert!(
         !handle.is_finished(),
@@ -210,7 +210,7 @@ fn play_handle_stop_is_idempotent() {
     let samples: Vec<i16> = vec![0i16; 44100];
     let path = write_temp_wav("nene_test_stop2.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
-    let sound = Arc::new(Sound::load(&path));
+    let sound = Arc::new(Sound::load(&path).unwrap());
     let handle = device.play(&sound);
     handle.stop();
     handle.stop(); // must not panic
@@ -222,7 +222,7 @@ fn volume_out_of_range_is_clamped() {
     let samples: Vec<i16> = vec![0i16; 4410];
     let path = write_temp_wav("nene_test_vol_clamp.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
-    let sound = Arc::new(Sound::load(&path));
+    let sound = Arc::new(Sound::load(&path).unwrap());
     device.play_with(
         &sound,
         PlayOptions {
@@ -237,7 +237,7 @@ fn pan_out_of_range_is_clamped() {
     let samples: Vec<i16> = vec![0i16; 4410];
     let path = write_temp_wav("nene_test_pan_clamp.wav", 44100, 1, &samples);
     let device = AudioDevice::new();
-    let sound = Arc::new(Sound::load(&path));
+    let sound = Arc::new(Sound::load(&path).unwrap());
     device.play_with(
         &sound,
         PlayOptions {
@@ -256,8 +256,8 @@ fn play_mono_and_stereo_simultaneously() {
     let stereo_path = write_temp_wav("nene_test_mix_stereo.wav", 44100, 2, &stereo_samples);
 
     let device = AudioDevice::new();
-    let mono = Arc::new(Sound::load(&mono_path));
-    let stereo = Arc::new(Sound::load(&stereo_path));
+    let mono = Arc::new(Sound::load(&mono_path).unwrap());
+    let stereo = Arc::new(Sound::load(&stereo_path).unwrap());
 
     device.play(&mono);
     device.play(&stereo);

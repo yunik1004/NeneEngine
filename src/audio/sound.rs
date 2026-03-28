@@ -15,9 +15,9 @@ pub struct Sound {
 impl Sound {
     /// Load an audio file from disk. Supports any format supported by Symphonia
     /// (mp3, ogg, flac, wav, …).
-    pub fn load(path: impl AsRef<Path>) -> Self {
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let path = path.as_ref();
-        let file = std::fs::File::open(path).expect("Failed to open audio file");
+        let file = std::fs::File::open(path)?;
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
 
         let mut hint = Hint::new();
@@ -32,21 +32,24 @@ impl Sound {
                 &FormatOptions::default(),
                 &MetadataOptions::default(),
             )
-            .expect("Failed to probe audio format");
+            .map_err(|e| format!("Failed to probe audio format: {e}"))?;
 
         let mut format = probed.format;
-        let track = format.default_track().expect("No audio track found");
+        let track = format.default_track().ok_or("No audio track found")?;
         let track_id = track.id;
-        let sample_rate = track.codec_params.sample_rate.expect("Unknown sample rate");
+        let sample_rate = track
+            .codec_params
+            .sample_rate
+            .ok_or("Unknown sample rate")?;
         let channels = track
             .codec_params
             .channels
-            .expect("Unknown channel count")
+            .ok_or("Unknown channel count")?
             .count();
 
         let mut decoder = symphonia::default::get_codecs()
             .make(&track.codec_params, &DecoderOptions::default())
-            .expect("Failed to create decoder");
+            .map_err(|e| format!("Failed to create decoder: {e}"))?;
 
         let mut samples = Vec::new();
         while let Ok(packet) = format.next_packet() {
@@ -63,11 +66,11 @@ impl Sound {
             samples.extend_from_slice(buf.samples());
         }
 
-        Self {
+        Ok(Self {
             samples,
             channels,
             sample_rate,
-        }
+        })
     }
 
     /// Generate a sine-wave tone entirely in memory — no file I/O.

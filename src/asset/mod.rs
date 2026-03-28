@@ -2,12 +2,38 @@
 //!
 //! [`Assets`] keeps a path-keyed cache of every loaded resource. The first
 //! call to e.g. [`Assets::texture`] decodes the file and uploads it to the
-//! GPU; every subsequent call with the same path returns a clone of the
+//! GPU; every subsequent call with the same `path` returns a clone of the
 //! existing [`Handle`] without any I/O.
 //!
 //! A [`Handle<T>`] is a thin `Arc<T>` wrapper. Cloning it is cheap and the
 //! underlying resource is freed only when *all* handles and the cache entry
 //! are dropped.
+//!
+//! # Background preloading
+//!
+//! To avoid blocking the game loop on first access, pre-load assets on a
+//! background thread with `preload_*`, then call [`Assets::poll_preloads`]
+//! each frame. Once a preload completes, the next `texture/model/sound` call
+//! returns instantly from cache.
+//!
+//! ```no_run
+//! # fn demo(ctx: &mut nene::renderer::Context) {
+//! use nene::asset::Assets;
+//! use nene::renderer::FilterMode;
+//!
+//! let mut assets = Assets::new();
+//!
+//! // Loading screen: kick off background loads.
+//! assets.preload_texture("assets/hero.png", FilterMode::Linear);
+//! assets.preload_model("assets/level.glb");
+//!
+//! // Each frame: drain completed loads, upload textures to GPU.
+//! assets.poll_preloads(ctx);
+//!
+//! // In-game: always a cache hit, no I/O.
+//! let tex = assets.texture(ctx, "assets/hero.png", FilterMode::Linear).unwrap();
+//! # }
+//! ```
 //!
 //! # Hot reload (debug builds only)
 //!
@@ -17,34 +43,49 @@
 //! was reloaded so you can re-fetch new handles.
 //!
 //! Both methods compile to no-ops in release builds.
-//!
-//! # Example
-//! ```no_run
-//! use nene::asset::Assets;
-//! use nene::renderer::FilterMode;
-//! # fn demo(ctx: &mut nene::renderer::Context) {
-//! let mut assets = Assets::new();
-//! assets.enable_hot_reload();
-//!
-//! // First call: loads from disk and uploads to GPU.
-//! let mut tex = assets.texture(ctx, "assets/hero.png", FilterMode::Linear);
-//!
-//! // Each frame:
-//! let changed = assets.poll_changes(ctx);
-//! if changed.iter().any(|p| p.ends_with("hero.png")) {
-//!     tex = assets.texture(ctx, "assets/hero.png", FilterMode::Linear);
-//! }
-//! # }
-//! ```
 
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver};
 
 use crate::audio::Sound;
 use crate::mesh::Model;
 use crate::renderer::{Context, FilterMode, Texture};
+
+// ── AssetError ────────────────────────────────────────────────────────────────
+
+/// Error returned when an asset cannot be loaded or decoded.
+#[derive(Debug)]
+pub enum AssetError {
+    Io(std::io::Error),
+    Decode(String),
+}
+
+impl std::fmt::Display for AssetError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(e) => write!(f, "I/O error: {e}"),
+            Self::Decode(msg) => write!(f, "decode error: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for AssetError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(e) => Some(e),
+            Self::Decode(_) => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for AssetError {
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
+    }
+}
 
 // ── Handle ────────────────────────────────────────────────────────────────────
 
@@ -127,6 +168,24 @@ impl HotReloader {
     }
 }
 
+// ── Pending loads ─────────────────────────────────────────────────────────────
+
+struct PendingTexture {
+    path: PathBuf,
+    filter: FilterMode,
+    rx: Receiver<Result<image::RgbaImage, AssetError>>,
+}
+
+struct PendingModel {
+    path: PathBuf,
+    rx: Receiver<Result<Model, AssetError>>,
+}
+
+struct PendingSound {
+    path: PathBuf,
+    rx: Receiver<Result<Sound, AssetError>>,
+}
+
 // ── Assets ────────────────────────────────────────────────────────────────────
 
 /// Centralised asset cache.
@@ -136,6 +195,11 @@ pub struct Assets {
     textures: HashMap<(PathBuf, u8), Handle<Texture>>,
     models: HashMap<PathBuf, Handle<Model>>,
     sounds: HashMap<PathBuf, Handle<Sound>>,
+
+    pending_textures: Vec<PendingTexture>,
+    pending_models: Vec<PendingModel>,
+    pending_sounds: Vec<PendingSound>,
+
     #[cfg(debug_assertions)]
     hot: Option<HotReloader>,
     /// Tracks filter mode per path so poll_changes can reload correctly.
@@ -150,6 +214,9 @@ impl Assets {
             textures: HashMap::new(),
             models: HashMap::new(),
             sounds: HashMap::new(),
+            pending_textures: Vec::new(),
+            pending_models: Vec::new(),
+            pending_sounds: Vec::new(),
             #[cfg(debug_assertions)]
             hot: None,
             #[cfg(debug_assertions)]
@@ -188,22 +255,216 @@ impl Assets {
             for path in changed {
                 if let Some(filter) = self.texture_filters.get(&path).copied() {
                     self.textures.remove(&(path.clone(), filter_key(filter)));
-                    self.load_texture(ctx, &path, filter);
-                    reloaded.push(path);
+                    match self.load_texture(ctx, &path, filter) {
+                        Ok(_) => reloaded.push(path),
+                        Err(e) => {
+                            eprintln!("[nene] hot reload failed for '{}': {e}", path.display())
+                        }
+                    }
                 } else if self.models.contains_key(&path) {
                     self.models.remove(&path);
-                    self.load_model(&path);
-                    reloaded.push(path);
+                    match self.load_model(&path) {
+                        Ok(_) => reloaded.push(path),
+                        Err(e) => {
+                            eprintln!("[nene] hot reload failed for '{}': {e}", path.display())
+                        }
+                    }
                 } else if self.sounds.contains_key(&path) {
                     self.sounds.remove(&path);
-                    self.load_sound(&path);
-                    reloaded.push(path);
+                    match self.load_sound(&path) {
+                        Ok(_) => reloaded.push(path),
+                        Err(e) => {
+                            eprintln!("[nene] hot reload failed for '{}': {e}", path.display())
+                        }
+                    }
                 }
             }
             reloaded
         }
         #[cfg(not(debug_assertions))]
         Vec::new()
+    }
+
+    // ── Background preloading ─────────────────────────────────────────────────
+
+    /// Begin loading a texture from disk on a background thread.
+    ///
+    /// Call [`poll_preloads`](Self::poll_preloads) each frame to upload
+    /// completed loads to the GPU. Silently skips paths already cached or
+    /// already pending.
+    pub fn preload_texture(&mut self, path: impl AsRef<Path>, filter: FilterMode) {
+        let path = path.as_ref().to_owned();
+        if self
+            .textures
+            .contains_key(&(path.clone(), filter_key(filter)))
+        {
+            return;
+        }
+        if self
+            .pending_textures
+            .iter()
+            .any(|p| p.path == path && filter_key(p.filter) == filter_key(filter))
+        {
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let path_clone = path.clone();
+        std::thread::spawn(move || {
+            let result = image::open(&path_clone)
+                .map(|img| img.into_rgba8())
+                .map_err(|e| AssetError::Decode(e.to_string()));
+            let _ = tx.send(result);
+        });
+        self.pending_textures
+            .push(PendingTexture { path, filter, rx });
+    }
+
+    /// Begin loading a model from disk on a background thread.
+    ///
+    /// Call [`poll_preloads`](Self::poll_preloads) each frame to insert
+    /// completed loads into the cache. Silently skips paths already cached or
+    /// already pending.
+    pub fn preload_model(&mut self, path: impl AsRef<Path>) {
+        let path = path.as_ref().to_owned();
+        if self.models.contains_key(&path) {
+            return;
+        }
+        if self.pending_models.iter().any(|p| p.path == path) {
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let path_clone = path.clone();
+        std::thread::spawn(move || {
+            let result = Model::load(&path_clone).map_err(|e| AssetError::Decode(e.to_string()));
+            let _ = tx.send(result);
+        });
+        self.pending_models.push(PendingModel { path, rx });
+    }
+
+    /// Begin loading a sound from disk on a background thread.
+    ///
+    /// Call [`poll_preloads`](Self::poll_preloads) each frame to insert
+    /// completed loads into the cache. Silently skips paths already cached or
+    /// already pending.
+    pub fn preload_sound(&mut self, path: impl AsRef<Path>) {
+        let path = path.as_ref().to_owned();
+        if self.sounds.contains_key(&path) {
+            return;
+        }
+        if self.pending_sounds.iter().any(|p| p.path == path) {
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let path_clone = path.clone();
+        std::thread::spawn(move || {
+            let result = Sound::load(&path_clone).map_err(|e| AssetError::Decode(e.to_string()));
+            let _ = tx.send(result);
+        });
+        self.pending_sounds.push(PendingSound { path, rx });
+    }
+
+    /// Drain background loads that have finished and insert them into the cache.
+    ///
+    /// Textures require a GPU upload via `ctx`; models and sounds are inserted
+    /// directly. Call once per frame during a loading screen or any time
+    /// [`preload_*`](Self::preload_texture) is used.
+    pub fn poll_preloads(&mut self, ctx: &mut Context) {
+        // Textures: CPU decode is done on background thread; GPU upload here.
+        let pending = std::mem::take(&mut self.pending_textures);
+        for p in pending {
+            match p.rx.try_recv() {
+                Ok(Ok(img)) => {
+                    let texture =
+                        ctx.create_texture_with(img.width(), img.height(), &img, p.filter);
+                    let handle = Handle::new(texture);
+                    self.textures
+                        .insert((p.path.clone(), filter_key(p.filter)), handle);
+                    #[cfg(debug_assertions)]
+                    {
+                        self.texture_filters.insert(p.path.clone(), p.filter);
+                        if let Some(ref mut hot) = self.hot {
+                            hot.watch(&p.path);
+                        }
+                    }
+                }
+                Ok(Err(e)) => {
+                    eprintln!("[nene] preload failed for '{}': {e}", p.path.display());
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    self.pending_textures.push(p);
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    eprintln!(
+                        "[nene] preload thread for '{}' disconnected",
+                        p.path.display()
+                    );
+                }
+            }
+        }
+
+        // Models
+        let pending = std::mem::take(&mut self.pending_models);
+        for p in pending {
+            match p.rx.try_recv() {
+                Ok(Ok(model)) => {
+                    let handle = Handle::new(model);
+                    self.models.insert(p.path.clone(), handle);
+                    #[cfg(debug_assertions)]
+                    if let Some(ref mut hot) = self.hot {
+                        hot.watch(&p.path);
+                    }
+                }
+                Ok(Err(e)) => {
+                    eprintln!("[nene] preload failed for '{}': {e}", p.path.display());
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    self.pending_models.push(p);
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    eprintln!(
+                        "[nene] preload thread for '{}' disconnected",
+                        p.path.display()
+                    );
+                }
+            }
+        }
+
+        // Sounds
+        let pending = std::mem::take(&mut self.pending_sounds);
+        for p in pending {
+            match p.rx.try_recv() {
+                Ok(Ok(sound)) => {
+                    let handle = Handle::new(sound);
+                    self.sounds.insert(p.path.clone(), handle);
+                    #[cfg(debug_assertions)]
+                    if let Some(ref mut hot) = self.hot {
+                        hot.watch(&p.path);
+                    }
+                }
+                Ok(Err(e)) => {
+                    eprintln!("[nene] preload failed for '{}': {e}", p.path.display());
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    self.pending_sounds.push(p);
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    eprintln!(
+                        "[nene] preload thread for '{}' disconnected",
+                        p.path.display()
+                    );
+                }
+            }
+        }
+    }
+
+    /// Number of asset loads still in progress (not yet inserted into the cache).
+    pub fn pending_count(&self) -> usize {
+        self.pending_textures.len() + self.pending_models.len() + self.pending_sounds.len()
+    }
+
+    /// `true` when all previously requested preloads have finished.
+    pub fn is_ready(&self) -> bool {
+        self.pending_count() == 0
     }
 
     // ── Textures ──────────────────────────────────────────────────────────────
@@ -214,17 +475,16 @@ impl Assets {
     /// Subsequent calls with the same `path` **and** `filter` return the cached
     /// handle immediately.
     ///
-    /// # Panics
-    /// Panics if the file cannot be opened or decoded as an image.
+    /// Returns an error if the file cannot be opened or decoded as an image.
     pub fn texture(
         &mut self,
         ctx: &mut Context,
         path: impl AsRef<Path>,
         filter: FilterMode,
-    ) -> Handle<Texture> {
+    ) -> Result<Handle<Texture>, AssetError> {
         let key = (path.as_ref().to_owned(), filter_key(filter));
         if let Some(h) = self.textures.get(&key) {
-            return h.clone();
+            return Ok(h.clone());
         }
         self.load_texture(ctx, path.as_ref(), filter)
     }
@@ -234,9 +494,9 @@ impl Assets {
         ctx: &mut Context,
         path: &Path,
         filter: FilterMode,
-    ) -> Handle<Texture> {
+    ) -> Result<Handle<Texture>, AssetError> {
         let img = image::open(path)
-            .unwrap_or_else(|e| panic!("failed to load texture '{}': {e}", path.display()))
+            .map_err(|e| AssetError::Decode(e.to_string()))?
             .into_rgba8();
         let texture = ctx.create_texture_with(img.width(), img.height(), &img, filter);
         let handle = Handle::new(texture);
@@ -249,7 +509,7 @@ impl Assets {
                 hot.watch(path);
             }
         }
-        handle
+        Ok(handle)
     }
 
     /// Remove the cached texture entry for `path` + `filter`.
@@ -263,27 +523,26 @@ impl Assets {
 
     // ── Models ────────────────────────────────────────────────────────────────
 
-    /// Load (or return cached) a [`Model`] from an OBJ file.
+    /// Load (or return cached) a [`Model`] from an OBJ or glTF file.
     ///
-    /// # Panics
-    /// Panics if the file cannot be read or parsed.
-    pub fn model(&mut self, path: impl AsRef<Path>) -> Handle<Model> {
+    /// Returns an error if the file cannot be read or parsed.
+    pub fn model(&mut self, path: impl AsRef<Path>) -> Result<Handle<Model>, AssetError> {
         let key = path.as_ref().to_owned();
         if let Some(h) = self.models.get(&key) {
-            return h.clone();
+            return Ok(h.clone());
         }
         self.load_model(path.as_ref())
     }
 
-    fn load_model(&mut self, path: &Path) -> Handle<Model> {
-        let model = Model::load(path).expect("failed to load model");
+    fn load_model(&mut self, path: &Path) -> Result<Handle<Model>, AssetError> {
+        let model = Model::load(path).map_err(|e| AssetError::Decode(e.to_string()))?;
         let handle = Handle::new(model);
         self.models.insert(path.to_owned(), handle.clone());
         #[cfg(debug_assertions)]
         if let Some(ref mut hot) = self.hot {
             hot.watch(path);
         }
-        handle
+        Ok(handle)
     }
 
     /// Remove the cached model entry for `path`.
@@ -295,25 +554,24 @@ impl Assets {
 
     /// Load (or return cached) a [`Sound`] from an audio file (MP3, WAV, OGG, …).
     ///
-    /// # Panics
-    /// Panics if the file cannot be opened or decoded.
-    pub fn sound(&mut self, path: impl AsRef<Path>) -> Handle<Sound> {
+    /// Returns an error if the file cannot be opened or decoded.
+    pub fn sound(&mut self, path: impl AsRef<Path>) -> Result<Handle<Sound>, AssetError> {
         let key = path.as_ref().to_owned();
         if let Some(h) = self.sounds.get(&key) {
-            return h.clone();
+            return Ok(h.clone());
         }
         self.load_sound(path.as_ref())
     }
 
-    fn load_sound(&mut self, path: &Path) -> Handle<Sound> {
-        let sound = Sound::load(path);
+    fn load_sound(&mut self, path: &Path) -> Result<Handle<Sound>, AssetError> {
+        let sound = Sound::load(path).map_err(|e| AssetError::Decode(e.to_string()))?;
         let handle = Handle::new(sound);
         self.sounds.insert(path.to_owned(), handle.clone());
         #[cfg(debug_assertions)]
         if let Some(ref mut hot) = self.hot {
             hot.watch(path);
         }
-        handle
+        Ok(handle)
     }
 
     /// Remove the cached sound entry for `path`.
