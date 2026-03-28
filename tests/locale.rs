@@ -63,7 +63,7 @@ fn switch_language() {
 
 #[test]
 fn switch_language_substitution() {
-    let mut locale = Locale::new(ko());
+    let locale = Locale::new(ko());
     assert_eq!(locale.t_with("hud.hp", &[("hp", "10")]), "체력: 10");
 }
 

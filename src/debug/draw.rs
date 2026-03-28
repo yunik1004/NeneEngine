@@ -1,12 +1,16 @@
 use std::f32::consts::TAU;
 
-use encase::ShaderType;
-
 use crate::math::{Mat4, Vec3};
+
+#[cfg(debug_assertions)]
 use crate::renderer::{
     Context, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexAttribute,
     VertexBuffer, VertexFormat, VertexLayout,
 };
+#[cfg(not(debug_assertions))]
+use crate::renderer::{Context, RenderPass};
+#[cfg(debug_assertions)]
+use encase::ShaderType;
 
 // ── Color constants ───────────────────────────────────────────────────────────
 
@@ -50,12 +54,10 @@ impl DebugBuffer {
         }
     }
 
-    /// Number of line endpoints accumulated since the last clear.
     pub fn vertex_count(&self) -> usize {
         self.verts.len()
     }
 
-    /// Draw a line segment from `a` to `b`.
     pub fn line(&mut self, a: Vec3, b: Vec3, color: Vec3) {
         let col = color.to_array();
         self.verts.push(DebugVertex {
@@ -68,19 +70,16 @@ impl DebugBuffer {
         });
     }
 
-    /// Draw a ray: `origin` in direction `dir` (normalised) for `length` units.
     pub fn ray(&mut self, origin: Vec3, dir: Vec3, length: f32, color: Vec3) {
         self.line(origin, origin + dir * length, color);
     }
 
-    /// Draw three axis lines (X=red, Y=green, Z=blue) at `origin`.
     pub fn axes(&mut self, origin: Vec3, size: f32) {
         self.line(origin, origin + Vec3::X * size, color::RED);
         self.line(origin, origin + Vec3::Y * size, color::GREEN);
         self.line(origin, origin + Vec3::Z * size, color::BLUE);
     }
 
-    /// Draw a wireframe axis-aligned bounding box.
     pub fn aabb(&mut self, min: Vec3, max: Vec3, color: Vec3) {
         let c = [
             Vec3::new(min.x, min.y, min.z),
@@ -106,14 +105,12 @@ impl DebugBuffer {
         self.line(c[3], c[7], color);
     }
 
-    /// Draw a wireframe sphere (3 great circles) centred at `center`.
     pub fn sphere(&mut self, center: Vec3, radius: f32, color: Vec3) {
         self.circle(center, Vec3::X, radius, color);
         self.circle(center, Vec3::Y, radius, color);
         self.circle(center, Vec3::Z, radius, color);
     }
 
-    /// Draw a circle in the plane whose normal is `normal`.
     pub fn circle(&mut self, center: Vec3, normal: Vec3, radius: f32, color: Vec3) {
         const SEGS: usize = 24;
         let t = if normal.x.abs() < 0.9 {
@@ -131,7 +128,6 @@ impl DebugBuffer {
         }
     }
 
-    /// Draw a wireframe cylinder between `a` and `b` with the given radius.
     pub fn cylinder(&mut self, a: Vec3, b: Vec3, radius: f32, color: Vec3) {
         const SEGS: usize = 16;
         let axis = (b - a).normalize();
@@ -169,11 +165,12 @@ impl Default for DebugBuffer {
     }
 }
 
-// ── GPU internals ─────────────────────────────────────────────────────────────
+// ── GPU internals (debug builds only) ────────────────────────────────────────
 
 /// Maximum number of line endpoints (vertices) per frame.
 pub const MAX_DEBUG_VERTS: usize = 65536;
 
+#[cfg(debug_assertions)]
 const SHADER: &str = r#"
 struct Uniform { view_proj: mat4x4<f32> }
 @group(0) @binding(0) var<uniform> u: Uniform;
@@ -193,6 +190,7 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) col: vec3<f32> }
 }
 "#;
 
+#[cfg(debug_assertions)]
 fn vertex_layout() -> VertexLayout {
     VertexLayout {
         stride: std::mem::size_of::<DebugVertex>() as u64,
@@ -211,6 +209,7 @@ fn vertex_layout() -> VertexLayout {
     }
 }
 
+#[cfg(debug_assertions)]
 #[derive(ShaderType)]
 struct DebugUniform {
     view_proj: Mat4,
@@ -220,101 +219,140 @@ struct DebugUniform {
 
 /// GPU-backed immediate-mode wireframe renderer.
 ///
-/// Create once with [`DebugDraw::new`], call primitive methods each frame,
-/// then [`flush`](Self::flush) at end of `update` and [`draw`](Self::draw)
-/// inside the render callback.
+/// All methods are no-ops in release builds — zero GPU allocation, zero draw calls.
 pub struct DebugDraw {
+    #[cfg(debug_assertions)]
     buf: DebugBuffer,
+    #[cfg(debug_assertions)]
     pipeline: Pipeline,
+    #[cfg(debug_assertions)]
     vbuf: VertexBuffer,
+    #[cfg(debug_assertions)]
     uniform_buf: UniformBuffer,
+    #[cfg(debug_assertions)]
     draw_count: u32,
 }
 
 impl DebugDraw {
     pub fn new(ctx: &Context) -> Self {
-        let pipeline = ctx.create_pipeline(
-            PipelineDescriptor::new(SHADER, vertex_layout())
-                .with_uniform()
-                .with_lines()
-                .with_depth(),
-        );
-        let placeholder = vec![
-            DebugVertex {
-                pos: [0.0; 3],
-                col: [0.0; 3]
-            };
-            MAX_DEBUG_VERTS
-        ];
-        let vbuf = ctx.create_vertex_buffer(&placeholder);
-        let uniform_buf = ctx.create_uniform_buffer(&DebugUniform {
-            view_proj: Mat4::IDENTITY,
-        });
-
-        Self {
-            buf: DebugBuffer::new(),
-            pipeline,
-            vbuf,
-            uniform_buf,
-            draw_count: 0,
+        #[cfg(debug_assertions)]
+        {
+            let pipeline = ctx.create_pipeline(
+                PipelineDescriptor::new(SHADER, vertex_layout())
+                    .with_uniform()
+                    .with_lines()
+                    .with_depth(),
+            );
+            let placeholder = vec![
+                DebugVertex {
+                    pos: [0.0; 3],
+                    col: [0.0; 3]
+                };
+                MAX_DEBUG_VERTS
+            ];
+            let vbuf = ctx.create_vertex_buffer(&placeholder);
+            let uniform_buf = ctx.create_uniform_buffer(&DebugUniform {
+                view_proj: Mat4::IDENTITY,
+            });
+            Self {
+                buf: DebugBuffer::new(),
+                pipeline,
+                vbuf,
+                uniform_buf,
+                draw_count: 0,
+            }
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = ctx;
+            Self {}
         }
     }
 
-    // ── Primitive forwarding ──────────────────────────────────────────────────
-
     pub fn line(&mut self, a: Vec3, b: Vec3, color: Vec3) {
+        #[cfg(debug_assertions)]
         self.buf.line(a, b, color);
+        #[cfg(not(debug_assertions))]
+        let _ = (a, b, color);
     }
 
     pub fn ray(&mut self, origin: Vec3, dir: Vec3, length: f32, color: Vec3) {
+        #[cfg(debug_assertions)]
         self.buf.ray(origin, dir, length, color);
+        #[cfg(not(debug_assertions))]
+        let _ = (origin, dir, length, color);
     }
 
     pub fn axes(&mut self, origin: Vec3, size: f32) {
+        #[cfg(debug_assertions)]
         self.buf.axes(origin, size);
+        #[cfg(not(debug_assertions))]
+        let _ = (origin, size);
     }
 
     pub fn aabb(&mut self, min: Vec3, max: Vec3, color: Vec3) {
+        #[cfg(debug_assertions)]
         self.buf.aabb(min, max, color);
+        #[cfg(not(debug_assertions))]
+        let _ = (min, max, color);
     }
 
     pub fn sphere(&mut self, center: Vec3, radius: f32, color: Vec3) {
+        #[cfg(debug_assertions)]
         self.buf.sphere(center, radius, color);
+        #[cfg(not(debug_assertions))]
+        let _ = (center, radius, color);
     }
 
     pub fn circle(&mut self, center: Vec3, normal: Vec3, radius: f32, color: Vec3) {
+        #[cfg(debug_assertions)]
         self.buf.circle(center, normal, radius, color);
+        #[cfg(not(debug_assertions))]
+        let _ = (center, normal, radius, color);
     }
 
     pub fn cylinder(&mut self, a: Vec3, b: Vec3, radius: f32, color: Vec3) {
+        #[cfg(debug_assertions)]
         self.buf.cylinder(a, b, radius, color);
+        #[cfg(not(debug_assertions))]
+        let _ = (a, b, radius, color);
     }
-
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     /// Upload accumulated lines to the GPU, then clear the CPU buffer.
-    ///
-    /// Call once per frame in `update` after adding all primitives.
+    /// No-op in release builds.
     pub fn flush(&mut self, ctx: &Context, view_proj: Mat4) {
-        ctx.update_uniform_buffer(&self.uniform_buf, &DebugUniform { view_proj });
-        let count = self.buf.verts.len().min(MAX_DEBUG_VERTS);
-        if count > 0 {
-            ctx.update_vertex_buffer(&self.vbuf, &self.buf.verts[..count]);
+        #[cfg(debug_assertions)]
+        {
+            ctx.update_uniform_buffer(&self.uniform_buf, &DebugUniform { view_proj });
+            let count = self.buf.verts.len().min(MAX_DEBUG_VERTS);
+            if count > 0 {
+                ctx.update_vertex_buffer(&self.vbuf, &self.buf.verts[..count]);
+            }
+            self.draw_count = count as u32;
+            self.buf.clear();
         }
-        self.draw_count = count as u32;
-        self.buf.clear();
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = (ctx, view_proj);
+        }
     }
 
-    /// Issue a single draw call for all lines from the last [`flush`](Self::flush).
-    ///
-    /// Call inside the render callback.
+    /// Issue draw calls for all lines from the last [`flush`](Self::flush).
+    /// No-op in release builds.
     pub fn draw(&self, pass: &mut RenderPass) {
-        if self.draw_count == 0 {
-            return;
+        #[cfg(debug_assertions)]
+        {
+            if self.draw_count == 0 {
+                return;
+            }
+            pass.set_pipeline(&self.pipeline);
+            pass.set_uniform(0, &self.uniform_buf);
+            pass.set_vertex_buffer(0, &self.vbuf);
+            pass.draw(0..self.draw_count);
         }
-        pass.set_pipeline(&self.pipeline);
-        pass.set_uniform(0, &self.uniform_buf);
-        pass.set_vertex_buffer(0, &self.vbuf);
-        pass.draw(0..self.draw_count);
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = pass;
+        }
     }
 }
