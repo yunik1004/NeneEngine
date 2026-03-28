@@ -1,4 +1,4 @@
-use nene::tilemap::{TileLayer, TileMap, TileSet};
+use nene::tilemap::{TileLayer, TileMap};
 
 // ── TileSet UV ────────────────────────────────────────────────────────────────
 

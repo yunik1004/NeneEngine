@@ -1,4 +1,4 @@
-use nene::save::Settings;
+use nene::persist::Settings;
 use nene::{Deserialize, Serialize};
 
 fn tmp(name: &str) -> Settings {

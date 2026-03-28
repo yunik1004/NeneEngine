@@ -14,8 +14,8 @@
 use nene::{
     input::Key,
     locale::Locale,
+    persist::{SaveStore, Settings},
     renderer::{Context, RenderPass},
-    save::{SaveStore, Settings},
     ui::Ui,
     window::{Config, Window},
 };

@@ -157,19 +157,12 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
 /// Off-screen post-processing stack.
 ///
 /// # Usage
-/// ```ignore
-/// // init
-/// let pp = PostProcessStack::new(&mut ctx, width, height);
 ///
-/// // pre_render: render scene into the internal target
-/// pp.scene_pass(&mut ctx, |pass| {
-///     pass.set_pipeline(&my_pipeline);
-///     // ... draw scene ...
-/// });
-///
-/// // render: apply effects to the swapchain pass
-/// pp.apply(pass);
-/// ```
+/// 1. Call [`PostProcessStack::new`] once with the render context and viewport size.
+/// 2. Each frame, call [`scene_pass`](Self::scene_pass) to render the scene into
+///    the internal off-screen target.
+/// 3. In the final swapchain pass, call [`apply`](Self::apply) to blit the result
+///    with tone-mapping, vignette, and other effects applied.
 pub struct PostProcessStack {
     pub settings: PostProcessSettings,
     scene: RenderTarget,

@@ -5,7 +5,7 @@
 //!
 //! # Quick start
 //! ```no_run
-//! use nene::save::SaveStore;
+//! use nene::persist::SaveStore;
 //! use serde::{Serialize, Deserialize};
 //!
 //! #[derive(Serialize, Deserialize)]
@@ -231,7 +231,7 @@ impl std::error::Error for SaveError {}
 ///
 /// # Quick start
 /// ```no_run
-/// use nene::save::Settings;
+/// use nene::persist::Settings;
 ///
 /// let mut s = Settings::new("saves/settings.json");
 ///

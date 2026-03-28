@@ -1,4 +1,4 @@
-use nene::save::SaveStore;
+use nene::persist::SaveStore;
 use nene::{Deserialize, Serialize};
 use std::path::PathBuf;
 
