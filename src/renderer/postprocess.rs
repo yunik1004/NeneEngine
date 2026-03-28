@@ -135,15 +135,15 @@ fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
         default: {}
     }
 
-    // Gamma correction
-    c = pow(max(c, vec3<f32>(0.0)), vec3<f32>(1.0 / u.gamma));
-
     // Saturation
     let lum = dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
     c = mix(vec3<f32>(lum), c, u.saturation);
 
     // Contrast
     c = clamp((c - 0.5) * u.contrast + 0.5, vec3<f32>(0.0), vec3<f32>(1.0));
+
+    // Gamma correction
+    c = pow(max(c, vec3<f32>(0.0)), vec3<f32>(1.0 / u.gamma));
 
     // Vignette
     let uv = in.uv - vec2<f32>(0.5);

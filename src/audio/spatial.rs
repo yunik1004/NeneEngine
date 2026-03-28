@@ -59,7 +59,11 @@ impl SpatialAudio {
         let dy = emitter_pos.y - self.listener.y;
         let dist = (dx * dx + dy * dy).sqrt();
         let volume = (1.0 - dist / self.max_distance).clamp(0.0, 1.0);
-        let pan = (dx / self.max_distance).clamp(-1.0, 1.0);
+        let pan = if dist > f32::EPSILON {
+            (dx / dist).clamp(-1.0, 1.0)
+        } else {
+            0.0
+        };
         (volume, pan)
     }
 }

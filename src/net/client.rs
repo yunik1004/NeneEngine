@@ -74,8 +74,8 @@ impl Client {
                 }
                 match buf[0] {
                     KIND_CONNECT_ACK => {
-                        connected_recv.store(true, Ordering::Relaxed);
-                        if tx.send(ClientEvent::Connected).is_err() {
+                        let was_connected = connected_recv.swap(true, Ordering::Relaxed);
+                        if !was_connected && tx.send(ClientEvent::Connected).is_err() {
                             break;
                         }
                     }

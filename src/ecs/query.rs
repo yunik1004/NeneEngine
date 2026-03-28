@@ -76,12 +76,15 @@ impl<'w, T: Component> QueryBuilder<'w, T> {
         };
 
         // If any `with` type has no storage at all, result is always empty.
-        let with_storages: Vec<&'w dyn ErasedStorage> = self
+        let with_storages: Vec<&'w dyn ErasedStorage> = match self
             .with_types
             .iter()
             .map(|tid| self.world.storages.get(tid).map(|s| s.as_ref()))
             .collect::<Option<Vec<_>>>()
-            .unwrap_or_default();
+        {
+            Some(v) => v,
+            None => return FilteredIter::empty(&self.world.meta),
+        };
 
         // `without` types that don't exist in storages can be skipped (trivially satisfied).
         let without_storages: Vec<&'w dyn ErasedStorage> = self
