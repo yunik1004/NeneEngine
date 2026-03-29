@@ -16,16 +16,15 @@
 use std::f32::consts::{PI, TAU};
 
 use nene::{
-    animation::{
-        AnimChannel, AnimState, Channel, Clip, Joint, Mesh, Skeleton, SkinnedMaterial,
-        SkinnedMaterialBuilder, StateMachine,
-    },
+    animation::{AnimChannel, AnimState, Channel, Clip, Joint, Mesh, Skeleton, StateMachine},
     app::{App, Config, WindowId, run},
     camera::Camera,
     input::{Input, Key},
     math::{Mat4, Quat, Vec2, Vec3, Vec4},
     mesh::{Model, Vertex},
-    renderer::{AmbientLight, Context, DirectionalLight, GpuMesh, RenderPass},
+    renderer::{
+        AmbientLight, Context, DirectionalLight, GpuMesh, Material, MaterialBuilder, RenderPass,
+    },
     time::{Ease, Time, Tween},
     ui::Ui,
 };
@@ -201,7 +200,7 @@ struct StateMachineDemo {
     next_state: usize,
     blend_tween: Option<Tween<f32>>,
     ease_idx: usize,
-    mat: Option<SkinnedMaterial>,
+    mat: Option<Material>,
     ui: Option<Ui>,
 }
 
@@ -252,11 +251,12 @@ impl App for StateMachineDemo {
 
         self.gpu_mesh = Some(GpuMesh::from_mesh(ctx, &self.model.meshes[0]));
 
-        let mut mat = SkinnedMaterialBuilder::new()
+        let mut mat = MaterialBuilder::new()
             .ambient()
             .directional()
             .rim()
-            .build(ctx, self.model.skeleton.joints.len());
+            .skinned(self.model.skeleton.joints.len())
+            .build(ctx);
         mat.uniform.color = Vec4::new(0.9, 0.6, 0.2, 1.0);
         mat.uniform.rim_color = Vec4::new(0.6, 0.9, 1.0, 1.0);
         mat.uniform.view_proj = camera.view_proj(aspect);
@@ -347,7 +347,7 @@ impl App for StateMachineDemo {
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
         if let (Some(mat), Some(mesh)) = (&self.mat, &self.gpu_mesh) {
-            mat.render(pass, mesh, None);
+            mat.render(pass, mesh);
         }
         if let Some(ui) = &self.ui {
             ui.render(pass);

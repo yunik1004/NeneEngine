@@ -222,16 +222,16 @@ impl GpuDevice {
                 bgl.push(Some(u));
             }
         }
+        if let Some(t) = &texture_layout {
+            bgl.push(Some(t));
+        }
+        if let Some(sh) = &shadow_layout {
+            bgl.push(Some(sh));
+        }
         if let Some(s) = &storage_layout {
             for _ in 0..desc.storage_count {
                 bgl.push(Some(s));
             }
-        }
-        if let Some(t) = &texture_layout {
-            bgl.push(Some(t));
-        }
-        if let Some(s) = &shadow_layout {
-            bgl.push(Some(s));
         }
 
         let layout = self

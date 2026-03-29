@@ -72,6 +72,7 @@ use super::{
     mesh::GpuMesh,
     shadow::{SHADOW_WGSL, ShadowMap},
     texture::Texture,
+    uniform::StorageBuffer,
 };
 
 // ── Texture / shadow marker types ─────────────────────────────────────────────
@@ -100,6 +101,10 @@ pub struct MaterialUniform {
     pub light_vp: glam::Mat4,
     /// Tint / flat color (used when no texture is bound).
     pub color: glam::Vec4,
+    /// Rim light tint. Used when the material is built with `.rim()`.
+    pub rim_color: glam::Vec4,
+    /// World-space camera position. Required for rim lighting (`.rim()`).
+    pub camera_pos: glam::Vec4,
     pub ambient: AmbientLight,
     pub directional: DirectionalLight,
 }
@@ -111,6 +116,8 @@ impl Default for MaterialUniform {
             model: glam::Mat4::IDENTITY,
             light_vp: glam::Mat4::IDENTITY,
             color: glam::Vec4::ONE,
+            rim_color: glam::Vec4::ONE,
+            camera_pos: glam::Vec4::ZERO,
             ambient: AmbientLight::default(),
             directional: DirectionalLight::default(),
         }
@@ -189,6 +196,8 @@ pub(crate) struct Features {
     pub(crate) casts_shadow: bool,
     pub(crate) instanced: bool,
     pub(crate) vertex_color: bool,
+    pub(crate) skinned: bool,
+    pub(crate) rim: bool,
 }
 
 // ── MaterialBuilder ───────────────────────────────────────────────────────────
@@ -205,6 +214,7 @@ pub struct MaterialBuilder<T = NoTexture, S = NoShadow> {
     feat: Features,
     init: MaterialUniform,
     custom_wgsl: Option<String>,
+    joint_count: Option<usize>,
     _phantom: PhantomData<(T, S)>,
 }
 
@@ -214,6 +224,7 @@ impl Default for MaterialBuilder {
             feat: Features::default(),
             init: MaterialUniform::default(),
             custom_wgsl: None,
+            joint_count: None,
             _phantom: PhantomData,
         }
     }
@@ -266,6 +277,25 @@ impl<T, S> MaterialBuilder<T, S> {
         self
     }
 
+    /// Enable skeletal animation skinning.
+    ///
+    /// Reads `joints` (`@location(4)`) and `weights` (`@location(5)`) from each
+    /// vertex and applies the blend of `joint_count` joint matrices uploaded via
+    /// [`Material::update_joints`] each frame.
+    pub fn skinned(mut self, joint_count: usize) -> Self {
+        self.feat.skinned = true;
+        self.joint_count = Some(joint_count);
+        self
+    }
+
+    /// Add rim lighting.
+    ///
+    /// Set [`MaterialUniform::camera_pos`] and [`MaterialUniform::rim_color`] each frame.
+    pub fn rim(mut self) -> Self {
+        self.feat.rim = true;
+        self
+    }
+
     /// Override the auto-generated WGSL with a custom shader.
     pub fn shader(mut self, wgsl: impl Into<String>) -> Self {
         self.custom_wgsl = Some(wgsl.into());
@@ -284,6 +314,7 @@ impl<T, S> MaterialBuilder<T, S> {
             },
             init: self.init,
             custom_wgsl: self.custom_wgsl,
+            joint_count: self.joint_count,
             _phantom: PhantomData,
         }
     }
@@ -301,6 +332,7 @@ impl<T, S> MaterialBuilder<T, S> {
             },
             init: self.init,
             custom_wgsl: self.custom_wgsl,
+            joint_count: self.joint_count,
             _phantom: PhantomData,
         }
     }
@@ -317,33 +349,41 @@ impl<T, S> MaterialBuilder<T, S> {
         if self.feat.shadow {
             desc = desc.with_shadow_map();
         }
+        if self.feat.skinned {
+            desc = desc.with_storage();
+        }
         if self.feat.instanced {
             desc = desc.with_instance_layout(InstanceData::layout());
         }
         let pipeline = ctx.create_pipeline(desc);
 
         let shadow_pipeline = if self.feat.casts_shadow {
-            let sdesc = PipelineDescriptor::new(
-                gen_shadow_wgsl(self.feat.instanced),
-                crate::mesh::Vertex::layout(),
-            )
-            .with_uniform()
-            .depth_only();
-            let sdesc = if self.feat.instanced {
-                sdesc.with_instance_layout(InstanceData::layout())
-            } else {
-                sdesc
-            };
+            let mut sdesc =
+                PipelineDescriptor::new(gen_shadow_wgsl(self.feat), crate::mesh::Vertex::layout())
+                    .with_uniform()
+                    .depth_only();
+            if self.feat.skinned {
+                sdesc = sdesc.with_storage();
+            }
+            if self.feat.instanced {
+                sdesc = sdesc.with_instance_layout(InstanceData::layout());
+            }
             Some(ctx.create_pipeline(sdesc))
         } else {
             None
         };
 
         let ubuf = ctx.create_uniform_buffer(&self.init);
+        let joint_buf = self.feat.skinned.then(|| {
+            let n = self.joint_count.unwrap_or(0);
+            let identity_mats: Vec<glam::Mat4> = vec![glam::Mat4::IDENTITY; n];
+            ctx.create_storage_buffer(bytemuck::cast_slice(&identity_mats))
+        });
         Material {
             pipeline,
             shadow_pipeline,
             ubuf,
+            joint_buf,
             uniform: self.init,
             _phantom: PhantomData,
         }
@@ -370,6 +410,7 @@ pub struct Material<T = NoTexture, S = NoShadow> {
     pipeline: Pipeline,
     shadow_pipeline: Option<Pipeline>,
     ubuf: UniformBuffer,
+    joint_buf: Option<StorageBuffer>,
     /// CPU-side copy of the uniform. Mutate fields freely; call
     /// [`flush`](Material::flush) to upload changes to the GPU.
     pub uniform: MaterialUniform,
@@ -385,6 +426,16 @@ impl<T, S> Material<T, S> {
         ctx.update_uniform_buffer(&self.ubuf, &self.uniform);
     }
 
+    /// Upload joint matrices for skeletal animation. Call once per frame after
+    /// computing the pose. No-op if the material was not built with `.skinned()`.
+    ///
+    /// `joints` is typically the return value of [`Animator::joint_matrices`](crate::animation::Animator::joint_matrices).
+    pub fn update_joints(&self, ctx: &mut Context, joints: &[glam::Mat4]) {
+        if let Some(buf) = &self.joint_buf {
+            ctx.update_storage_buffer(buf, bytemuck::cast_slice(joints));
+        }
+    }
+
     /// Depth-only draw for the shadow pass. Call inside [`Context::shadow_pass`].
     /// No-op if the material was not built with `.casts_shadow()` or `.shadow()`.
     pub fn shadow_draw(&self, pass: &mut RenderPass, mesh: &GpuMesh) {
@@ -393,6 +444,10 @@ impl<T, S> Material<T, S> {
         };
         pass.set_pipeline(sp);
         pass.set_uniform(0, &self.ubuf);
+        // Shadow pipeline layout: uniform(0) [→ storage(1) if skinned]
+        if let Some(jbuf) = &self.joint_buf {
+            pass.set_storage(1, jbuf);
+        }
         mesh.draw(pass);
     }
 
@@ -418,6 +473,10 @@ impl<T, S> Material<T, S> {
         }
         if let Some(sm) = shadow_map {
             pass.set_shadow_map(2, sm);
+        }
+        // Main pipeline layout: uniform(0) [→ texture(1)] [→ shadow(2)] [→ storage(3) if skinned]
+        if let Some(jbuf) = &self.joint_buf {
+            pass.set_storage(3, jbuf);
         }
         mesh.draw(pass);
     }
@@ -469,6 +528,8 @@ struct MaterialU {
     model:       mat4x4<f32>,
     light_vp:    mat4x4<f32>,
     color:       vec4<f32>,
+    rim_color:   vec4<f32>,
+    camera_pos:  vec4<f32>,
     ambient:     AmbientLight,
     directional: DirectionalLight,
 }
@@ -476,7 +537,7 @@ struct MaterialU {
 ";
 
 pub(crate) fn gen_main_wgsl(feat: Features) -> String {
-    let needs_normal = feat.ambient || feat.directional || feat.shadow;
+    let needs_normal = feat.ambient || feat.directional || feat.shadow || feat.rim;
 
     // Assign VOut locations in order
     let mut loc = 0u32;
@@ -488,7 +549,8 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
     let normal_loc = needs_normal.then(&mut next);
     let uv_loc = feat.texture.then(&mut next);
     let lspace_loc = feat.shadow.then(&mut next);
-    let color_loc = (feat.instanced || feat.vertex_color).then(next);
+    let color_loc = (feat.instanced || feat.vertex_color).then(&mut next);
+    let world_pos_loc = feat.rim.then(next);
 
     let mut s = String::new();
 
@@ -511,6 +573,9 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
              @group(2) @binding(1) var shadow_samp: sampler_comparison;\n",
         );
     }
+    if feat.skinned {
+        s.push_str("@group(3) @binding(0) var<storage, read> joint_mats: array<mat4x4<f32>>;\n");
+    }
 
     // VOut struct
     s.push_str("struct VOut {\n    @builtin(position) clip: vec4<f32>,\n");
@@ -526,6 +591,9 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
     if let Some(l) = color_loc {
         s.push_str(&format!("    @location({l}) color: vec4<f32>,\n"));
     }
+    if let Some(l) = world_pos_loc {
+        s.push_str(&format!("    @location({l}) world_pos: vec3<f32>,\n"));
+    }
     s.push_str("}\n");
 
     // Vertex shader inputs
@@ -538,8 +606,13 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
     if feat.vertex_color {
         s.push_str("\t@location(3) v_color: vec4<f32>,\n");
     }
+    if feat.skinned {
+        s.push_str(
+            "\t@location(4) joints:  vec4<u32>,\n\
+             \t@location(5) weights: vec4<f32>,\n",
+        );
+    }
     if feat.instanced {
-        // Instance attributes start at location 6 (after Vertex's 0–5).
         s.push_str(
             "\t@location(6)  i_col0:  vec4<f32>,\n\
              \t@location(7)  i_col1:  vec4<f32>,\n\
@@ -551,16 +624,30 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
     s.push_str(") -> VOut {\n\tvar o: VOut;\n");
 
     // Model matrix and world position
+    if feat.skinned {
+        s.push_str(
+            "\tlet skin =\n\
+             \t\t  weights.x * joint_mats[joints.x]\n\
+             \t\t+ weights.y * joint_mats[joints.y]\n\
+             \t\t+ weights.z * joint_mats[joints.z]\n\
+             \t\t+ weights.w * joint_mats[joints.w];\n",
+        );
+    }
     if feat.instanced {
         s.push_str("\tlet model = mat4x4<f32>(i_col0, i_col1, i_col2, i_col3);\n");
     }
     let model = if feat.instanced { "model" } else { "u.model" };
-    s.push_str(&format!("\tlet world = {model} * vec4(pos, 1.0);\n"));
+    let transform = if feat.skinned {
+        format!("{model} * skin")
+    } else {
+        model.to_string()
+    };
+    s.push_str(&format!("\tlet world = {transform} * vec4(pos, 1.0);\n"));
     s.push_str("\to.clip = u.view_proj * world;\n");
 
     if normal_loc.is_some() {
         s.push_str(&format!(
-            "\to.normal = normalize(({model} * vec4(nor, 0.0)).xyz);\n"
+            "\to.normal = normalize(({transform} * vec4(nor, 0.0)).xyz);\n"
         ));
     }
     if uv_loc.is_some() {
@@ -575,6 +662,9 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
         } else {
             s.push_str("\to.color = i_color;\n");
         }
+    }
+    if world_pos_loc.is_some() {
+        s.push_str("\to.world_pos = world.xyz;\n");
     }
     s.push_str("\treturn o;\n}\n");
 
@@ -611,15 +701,27 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
         s.push_str("\trgb = rgb * light;\n");
     }
 
+    if feat.rim {
+        s.push_str(
+            "\tlet view_dir = normalize(u.camera_pos.xyz - v.world_pos);\n\
+             \tlet rim = pow(1.0 - max(dot(v.normal, view_dir), 0.0), 5.0) * 0.85;\n\
+             \trgb += mix(rgb, u.rim_color.rgb, 0.5) * rim;\n",
+        );
+    }
+
     s.push_str("\treturn vec4(rgb, alpha);\n}\n");
     s
 }
 
-pub(crate) fn gen_shadow_wgsl(instanced: bool) -> String {
+pub(crate) fn gen_shadow_wgsl(feat: Features) -> String {
     let mut s = String::new();
     s.push_str(AMBIENT_LIGHT_WGSL);
     s.push_str(DIRECTIONAL_LIGHT_WGSL);
     s.push_str(MATERIAL_U_WGSL);
+    // Shadow pipeline layout: uniform(0) [→ storage(1) if skinned]
+    if feat.skinned {
+        s.push_str("@group(1) @binding(0) var<storage, read> joint_mats: array<mat4x4<f32>>;\n");
+    }
 
     s.push_str(
         "@vertex\nfn vs_main(\n\
@@ -627,7 +729,13 @@ pub(crate) fn gen_shadow_wgsl(instanced: bool) -> String {
          \t@location(1) _n:  vec3<f32>,\n\
          \t@location(2) _uv: vec2<f32>,\n",
     );
-    if instanced {
+    if feat.skinned {
+        s.push_str(
+            "\t@location(4) joints:  vec4<u32>,\n\
+             \t@location(5) weights: vec4<f32>,\n",
+        );
+    }
+    if feat.instanced {
         s.push_str(
             "\t@location(6)  i_col0:   vec4<f32>,\n\
              \t@location(7)  i_col1:   vec4<f32>,\n\
@@ -637,14 +745,27 @@ pub(crate) fn gen_shadow_wgsl(instanced: bool) -> String {
         );
     }
     s.push_str(") -> @builtin(position) vec4<f32> {\n");
-    if instanced {
+    if feat.skinned {
         s.push_str(
-            "\tlet model = mat4x4<f32>(i_col0, i_col1, i_col2, i_col3);\n\
-             \treturn u.light_vp * model * vec4(pos, 1.0);\n",
+            "\tlet skin =\n\
+             \t\t  weights.x * joint_mats[joints.x]\n\
+             \t\t+ weights.y * joint_mats[joints.y]\n\
+             \t\t+ weights.z * joint_mats[joints.z]\n\
+             \t\t+ weights.w * joint_mats[joints.w];\n",
         );
-    } else {
-        s.push_str("\treturn u.light_vp * u.model * vec4(pos, 1.0);\n");
     }
+    if feat.instanced {
+        s.push_str("\tlet model = mat4x4<f32>(i_col0, i_col1, i_col2, i_col3);\n");
+    }
+    let model = if feat.instanced { "model" } else { "u.model" };
+    let transform = if feat.skinned {
+        format!("{model} * skin")
+    } else {
+        model.to_string()
+    };
+    s.push_str(&format!(
+        "\treturn u.light_vp * {transform} * vec4(pos, 1.0);\n"
+    ));
     s.push_str("}\n");
     s
 }
