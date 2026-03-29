@@ -8,12 +8,8 @@ use super::Vertex;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-fn colored(x: f32, y: f32, z: f32, color: [f32; 4]) -> Vertex {
-    Vertex {
-        position: Vec3::new(x, y, z),
-        color: Vec4::from(color),
-        ..Vertex::default()
-    }
+fn colored(x: f32, y: f32, z: f32, color: Vec4) -> Vertex {
+    Vertex { position: Vec3::new(x, y, z), color, ..Vertex::default() }
 }
 
 fn textured(position: [f32; 3], normal: [f32; 3], uv: [f32; 2]) -> Vertex {
@@ -28,7 +24,7 @@ fn textured(position: [f32; 3], normal: [f32; 3], uv: [f32; 2]) -> Vertex {
 // ── Flat primitives ───────────────────────────────────────────────────────────
 
 /// Filled axis-aligned rectangle.
-pub fn rect(x: f32, y: f32, w: f32, h: f32, color: [f32; 4]) -> Vec<Vertex> {
+pub fn rect(x: f32, y: f32, w: f32, h: f32, color: Vec4) -> Vec<Vertex> {
     let (x1, y1, x2, y2) = (x, y, x + w, y + h);
     vec![
         colored(x1, y1, 0.0, color),
@@ -41,18 +37,12 @@ pub fn rect(x: f32, y: f32, w: f32, h: f32, color: [f32; 4]) -> Vec<Vertex> {
 }
 
 /// Filled circle with 32 segments.
-pub fn circle(cx: f32, cy: f32, radius: f32, color: [f32; 4]) -> Vec<Vertex> {
+pub fn circle(cx: f32, cy: f32, radius: f32, color: Vec4) -> Vec<Vertex> {
     circle_segments(cx, cy, radius, color, 32)
 }
 
 /// Filled circle with explicit segment count.
-pub fn circle_segments(
-    cx: f32,
-    cy: f32,
-    radius: f32,
-    color: [f32; 4],
-    segments: u32,
-) -> Vec<Vertex> {
+pub fn circle_segments(cx: f32, cy: f32, radius: f32, color: Vec4, segments: u32) -> Vec<Vertex> {
     let n = segments.max(3) as usize;
     let mut out = Vec::with_capacity(n * 3);
     for i in 0..n {
@@ -76,16 +66,16 @@ pub fn circle_segments(
 }
 
 /// Filled triangle.
-pub fn triangle(a: [f32; 2], b: [f32; 2], c: [f32; 2], color: [f32; 4]) -> Vec<Vertex> {
+pub fn triangle(a: Vec2, b: Vec2, c: Vec2, color: Vec4) -> Vec<Vertex> {
     vec![
-        colored(a[0], a[1], 0.0, color),
-        colored(b[0], b[1], 0.0, color),
-        colored(c[0], c[1], 0.0, color),
+        colored(a.x, a.y, 0.0, color),
+        colored(b.x, b.y, 0.0, color),
+        colored(c.x, c.y, 0.0, color),
     ]
 }
 
 /// Thick line.
-pub fn line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: [f32; 4]) -> Vec<Vertex> {
+pub fn line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: Vec4) -> Vec<Vertex> {
     let (dx, dy) = (x2 - x1, y2 - y1);
     let len = (dx * dx + dy * dy).sqrt().max(f32::EPSILON);
     let (nx, ny) = (-dy / len * thickness * 0.5, dx / len * thickness * 0.5);
@@ -100,14 +90,7 @@ pub fn line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: [f32; 4])
 }
 
 /// Rectangle outline (four lines).
-pub fn rect_outline(
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-    thickness: f32,
-    color: [f32; 4],
-) -> Vec<Vertex> {
+pub fn rect_outline(x: f32, y: f32, w: f32, h: f32, thickness: f32, color: Vec4) -> Vec<Vertex> {
     let mut out = Vec::new();
     out.extend(line(x, y, x + w, y, thickness, color));
     out.extend(line(x + w, y, x + w, y + h, thickness, color));
@@ -125,7 +108,7 @@ pub struct QuadBuilder {
 }
 
 impl QuadBuilder {
-    pub fn color(self, color: [f32; 4]) -> Vec<Vertex> {
+    pub fn color(self, color: Vec4) -> Vec<Vertex> {
         let (hw, hh) = (self.w * 0.5, self.h * 0.5);
         rect(-hw, -hh, self.w, self.h, color)
     }
@@ -150,7 +133,7 @@ pub struct CubeBuilder {
 }
 
 impl CubeBuilder {
-    pub fn color(self, color: [f32; 4]) -> Vec<Vertex> {
+    pub fn color(self, color: Vec4) -> Vec<Vertex> {
         let (hx, hy, hz) = (self.sx * 0.5, self.sy * 0.5, self.sz * 0.5);
         let tris: [[[f32; 3]; 3]; 12] = [
             [[-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz]],
@@ -240,11 +223,11 @@ pub struct SphereBuilder {
 }
 
 impl SphereBuilder {
-    pub fn color(self, color: [f32; 4]) -> Vec<Vertex> {
+    pub fn color(self, color: Vec4) -> Vec<Vertex> {
         let stacks = self.stacks.max(2) as usize;
         let slices = self.slices.max(3) as usize;
         let row = slices + 1;
-        let mut pts: Vec<[f32; 3]> = Vec::with_capacity(row * (stacks + 1));
+        let mut pts: Vec<Vec3> = Vec::with_capacity(row * (stacks + 1));
         for i in 0..=stacks {
             let phi = PI * i as f32 / stacks as f32;
             for j in 0..=slices {
@@ -252,22 +235,22 @@ impl SphereBuilder {
                 let nx = phi.sin() * theta.cos();
                 let ny = phi.cos();
                 let nz = phi.sin() * theta.sin();
-                pts.push([nx * self.radius, ny * self.radius, nz * self.radius]);
+                pts.push(Vec3::new(nx * self.radius, ny * self.radius, nz * self.radius));
             }
         }
         let mut out = Vec::new();
         for i in 0..stacks {
             for j in 0..slices {
-                let [ax, ay, az] = pts[i * row + j];
-                let [bx, by, bz] = pts[i * row + j + 1];
-                let [cx, cy, cz] = pts[(i + 1) * row + j];
-                let [dx, dy, dz] = pts[(i + 1) * row + j + 1];
-                out.push(colored(ax, ay, az, color));
-                out.push(colored(cx, cy, cz, color));
-                out.push(colored(bx, by, bz, color));
-                out.push(colored(bx, by, bz, color));
-                out.push(colored(cx, cy, cz, color));
-                out.push(colored(dx, dy, dz, color));
+                let a = pts[i * row + j];
+                let b = pts[i * row + j + 1];
+                let c = pts[(i + 1) * row + j];
+                let d = pts[(i + 1) * row + j + 1];
+                out.push(colored(a.x, a.y, a.z, color));
+                out.push(colored(c.x, c.y, c.z, color));
+                out.push(colored(b.x, b.y, b.z, color));
+                out.push(colored(b.x, b.y, b.z, color));
+                out.push(colored(c.x, c.y, c.z, color));
+                out.push(colored(d.x, d.y, d.z, color));
             }
         }
         out
@@ -314,7 +297,7 @@ pub struct CylinderBuilder {
 }
 
 impl CylinderBuilder {
-    pub fn color(self, color: [f32; 4]) -> Vec<Vertex> {
+    pub fn color(self, color: Vec4) -> Vec<Vertex> {
         let slices = self.slices.max(3) as usize;
         let hh = self.height * 0.5;
         let mut out = Vec::new();
