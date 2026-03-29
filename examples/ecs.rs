@@ -14,14 +14,14 @@
 //! Space             — spawn 10 more enemies
 
 use nene::{
-    app::{App, Config, WindowId, run},
+    app::{App, Config, WindowEvent, WindowId, run},
     ecs::{Entity, World},
     input::{ActionMap, Input, Key},
     math::{Vec2, Vec4},
     mesh::circle,
     renderer::{Context, GpuMesh, Material, MaterialBuilder, RenderPass},
     time::Time,
-    ui::Ui,
+    ui::EguiUi,
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ struct EcsDemo {
     bindings: ActionMap<Action>,
     mat: Option<Material>,
     mesh: Option<GpuMesh>,
-    ui: Option<Ui>,
+    egui: Option<EguiUi>,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -146,14 +146,20 @@ impl App for EcsDemo {
             bindings,
             mat: None,
             mesh: None,
-            ui: None,
+            egui: None,
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.mat = Some(MaterialBuilder::new().vertex_color().build(ctx));
         self.mesh = Some(GpuMesh::new(ctx, &[], &[]));
-        self.ui = Some(Ui::new(ctx));
+        self.egui = Some(EguiUi::new(ctx));
+    }
+
+    fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
+        if let Some(e) = &mut self.egui {
+            e.handle_event(event);
+        }
     }
 
     fn update(&mut self, input: &Input, time: &Time) {
@@ -263,23 +269,6 @@ impl App for EcsDemo {
         for e in dead {
             w.despawn(e);
         }
-
-        // UI
-        let Some(ui) = &mut self.ui else { return };
-        ui.begin_frame(input, W, H);
-        ui.begin_panel("ECS", 10.0, 10.0, 210.0);
-        ui.label("Queries");
-        ui.separator();
-        let total = w.query::<Position>().iter().count();
-        let enemies = w.query::<Health>().with::<Enemy>().iter().count();
-        let in_range = w.query::<Health>().with::<InRange>().iter().count();
-        ui.label_dim(&format!("total entities  {total}"));
-        ui.label_dim(&format!("enemies         {enemies}"));
-        ui.label_dim(&format!("in range        {in_range}"));
-        ui.separator();
-        ui.label_dim("WASD   move player");
-        ui.label_dim("Space  +10 enemies");
-        ui.end_panel();
     }
 
     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
@@ -306,17 +295,43 @@ impl App for EcsDemo {
             mat.uniform.view_proj = ortho;
             mat.flush(ctx);
         }
-        if let Some(ui) = &mut self.ui {
-            ui.end_frame(ctx);
-        }
+
+        let Some(egui) = &mut self.egui else { return };
+        let ui_ctx = egui.begin_frame();
+
+        let total = self.world.query::<Position>().iter().count();
+        let enemies = self.world.query::<Health>().with::<Enemy>().iter().count();
+        let in_range = self
+            .world
+            .query::<Health>()
+            .with::<InRange>()
+            .iter()
+            .count();
+
+        egui::Window::new("ECS")
+            .default_pos(egui::pos2(10.0, 10.0))
+            .default_width(210.0)
+            .resizable(false)
+            .show(&ui_ctx, |ui| {
+                ui.label("Queries");
+                ui.separator();
+                ui.label(egui::RichText::new(format!("total entities  {total}")).weak());
+                ui.label(egui::RichText::new(format!("enemies         {enemies}")).weak());
+                ui.label(egui::RichText::new(format!("in range        {in_range}")).weak());
+                ui.separator();
+                ui.label(egui::RichText::new("WASD   move player").weak());
+                ui.label(egui::RichText::new("Space  +10 enemies").weak());
+            });
+
+        egui.end_frame(ctx);
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
         if let (Some(mat), Some(mesh)) = (&self.mat, &self.mesh) {
             mat.render(pass, mesh);
         }
-        if let Some(ui) = &self.ui {
-            ui.render(pass);
+        if let Some(e) = &self.egui {
+            e.render(pass);
         }
     }
 

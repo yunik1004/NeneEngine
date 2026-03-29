@@ -12,14 +12,14 @@
 //! LMB (held)    — tint player red
 
 use nene::{
-    app::{App, Config, WindowId, run},
+    app::{App, Config, WindowEvent, WindowId, run},
     camera::{Camera, Frustum},
     input::{ActionMap, Input, Key, MouseButton},
     math::{Vec2, Vec3},
     renderer::{Context, FilterMode, RenderPass},
     sprite::{Sprite, SpriteBatch, UvRect},
     time::Time,
-    ui::Ui,
+    ui::EguiUi,
 };
 
 const W: u32 = 960;
@@ -86,7 +86,7 @@ struct SpriteDemo {
     bindings: ActionMap<Action>,
     batch: Option<SpriteBatch>,
     texture: Option<nene::renderer::Texture>,
-    ui: Option<Ui>,
+    egui: Option<EguiUi>,
 }
 
 impl App for SpriteDemo {
@@ -116,20 +116,25 @@ impl App for SpriteDemo {
             bindings,
             batch: None,
             texture: None,
-            ui: None,
+            egui: None,
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.batch = Some(SpriteBatch::new(ctx, OBJECT_COUNT + 1));
         self.texture = Some(make_texture(ctx));
-        self.ui = Some(Ui::new(ctx));
+        self.egui = Some(EguiUi::new(ctx));
+    }
+
+    fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
+        if let Some(e) = &mut self.egui {
+            e.handle_event(event);
+        }
     }
 
     fn update(&mut self, input: &Input, time: &Time) {
         let dt = time.delta;
 
-        // Player movement
         let mut dir = Vec2::ZERO;
         if self.bindings.down(input, &Action::MoveUp) {
             dir.y += 1.0;
@@ -153,7 +158,6 @@ impl App for SpriteDemo {
             self.player_angle -= 2.0 * dt;
         }
 
-        // Zoom + camera follows player
         if self.bindings.down(input, &Action::ZoomIn) {
             self.ortho_width = (self.ortho_width * (1.0 - dt * 2.0)).max(5.0);
         }
@@ -169,7 +173,6 @@ impl App for SpriteDemo {
             far: 100.0,
         };
 
-        // Frustum culling
         let aspect = W as f32 / H as f32;
         let vp = self.camera.view_proj(aspect);
         let frustum = Frustum::from_view_proj(vp);
@@ -205,19 +208,6 @@ impl App for SpriteDemo {
             uv: tile_uv(4),
             color: tint,
         });
-
-        // UI
-        let Some(ui) = &mut self.ui else { return };
-        ui.begin_frame(input, W as f32, H as f32);
-        ui.begin_panel("Culling", 16.0, 16.0, 180.0);
-        ui.label_dim(&format!("visible  {}", self.visible_count));
-        ui.label_dim(&format!("culled   {}", OBJECT_COUNT - self.visible_count));
-        ui.label_dim(&format!("total    {OBJECT_COUNT}"));
-        ui.label_dim(&format!(
-            "draw%    {:.1}",
-            self.visible_count as f32 / OBJECT_COUNT as f32 * 100.0
-        ));
-        ui.end_panel();
     }
 
     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
@@ -225,17 +215,39 @@ impl App for SpriteDemo {
         if let Some(batch) = &mut self.batch {
             batch.prepare(ctx, &self.camera, aspect);
         }
-        if let Some(ui) = &mut self.ui {
-            ui.end_frame(ctx);
-        }
+
+        let Some(egui) = &mut self.egui else { return };
+        let ui_ctx = egui.begin_frame();
+
+        egui::Window::new("Culling")
+            .default_pos(egui::pos2(16.0, 16.0))
+            .default_width(180.0)
+            .resizable(false)
+            .show(&ui_ctx, |ui| {
+                ui.label(egui::RichText::new(format!("visible  {}", self.visible_count)).weak());
+                ui.label(
+                    egui::RichText::new(format!("culled   {}", OBJECT_COUNT - self.visible_count))
+                        .weak(),
+                );
+                ui.label(egui::RichText::new(format!("total    {OBJECT_COUNT}")).weak());
+                ui.label(
+                    egui::RichText::new(format!(
+                        "draw%    {:.1}",
+                        self.visible_count as f32 / OBJECT_COUNT as f32 * 100.0
+                    ))
+                    .weak(),
+                );
+            });
+
+        egui.end_frame(ctx);
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
         if let (Some(batch), Some(texture)) = (&self.batch, &self.texture) {
             batch.render(pass, texture);
         }
-        if let Some(ui) = &self.ui {
-            ui.render(pass);
+        if let Some(e) = &self.egui {
+            e.render(pass);
         }
     }
 

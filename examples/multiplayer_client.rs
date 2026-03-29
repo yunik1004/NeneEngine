@@ -10,7 +10,7 @@
 //! Other players appear as colored squares.
 
 use nene::{
-    app::{App, Config, WindowId, run},
+    app::{App, Config, WindowEvent, WindowId, run},
     camera::Camera,
     debug::DebugDraw,
     input::{ActionMap, Input, Key},
@@ -18,7 +18,7 @@ use nene::{
     net::{Client, ClientEvent},
     renderer::{Context, RenderPass},
     time::Time,
-    ui::Ui,
+    ui::EguiUi,
 };
 use std::collections::HashMap;
 
@@ -68,9 +68,8 @@ struct MultiplayerClientDemo {
     send_timer: f32,
     status: String,
     bindings: ActionMap<Action>,
-    // GPU
     debug: Option<DebugDraw>,
-    ui: Option<Ui>,
+    egui: Option<EguiUi>,
 }
 
 impl App for MultiplayerClientDemo {
@@ -96,19 +95,24 @@ impl App for MultiplayerClientDemo {
             status: "Connecting…".into(),
             bindings,
             debug: None,
-            ui: None,
+            egui: None,
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.debug = Some(DebugDraw::new(ctx));
-        self.ui = Some(Ui::new(ctx));
+        self.egui = Some(EguiUi::new(ctx));
+    }
+
+    fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
+        if let Some(e) = &mut self.egui {
+            e.handle_event(event);
+        }
     }
 
     fn update(&mut self, input: &Input, time: &Time) {
         let dt = time.delta;
 
-        // ── network events ────────────────────────────────────────────────
         for ev in self.client.poll() {
             match &ev {
                 ClientEvent::Connected => {
@@ -140,7 +144,6 @@ impl App for MultiplayerClientDemo {
             }
         }
 
-        // ── movement ──────────────────────────────────────────────────────
         if self.client.is_connected() {
             let mut dx = 0.0f32;
             let mut dy = 0.0f32;
@@ -161,7 +164,6 @@ impl App for MultiplayerClientDemo {
             self.y += dy / len * SPEED * dt;
         }
 
-        // ── send position ~20 times/sec ───────────────────────────────────
         self.send_timer += dt;
         if self.send_timer >= 0.05 && self.client.is_connected() {
             self.send_timer = 0.0;
@@ -175,14 +177,12 @@ impl App for MultiplayerClientDemo {
 
         self.client.update(dt);
 
-        // ── interpolate remote players ────────────────────────────────────
         let alpha = (15.0 * dt).min(1.0);
         for r in self.others.values_mut() {
             r.rx += (r.tx - r.rx) * alpha;
             r.ry += (r.ty - r.ry) * alpha;
         }
 
-        // ── queue debug draws ─────────────────────────────────────────────
         let Some(debug) = &mut self.debug else { return };
         let hs = PLAYER_SIZE * 0.5;
         debug.aabb(
@@ -200,28 +200,37 @@ impl App for MultiplayerClientDemo {
         }
     }
 
-    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
+    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
         let aspect = W as f32 / H as f32;
         let vp = self.camera.view_proj(aspect);
         if let Some(debug) = &mut self.debug {
             debug.flush(ctx, vp);
         }
-        let Some(ui) = &mut self.ui else { return };
-        ui.begin_frame(input, W as f32, H as f32);
-        ui.begin_panel("Net", 10.0, 10.0, 240.0);
-        ui.label_dim(&self.status);
-        ui.label_dim(&format!("pos  ({:.1}, {:.1})", self.x, self.y));
-        ui.label_dim(&format!("others: {}", self.others.len()));
-        ui.end_panel();
-        ui.end_frame(ctx);
+
+        let Some(egui) = &mut self.egui else { return };
+        let ui_ctx = egui.begin_frame();
+
+        egui::Window::new("Net")
+            .default_pos(egui::pos2(10.0, 10.0))
+            .default_width(240.0)
+            .resizable(false)
+            .show(&ui_ctx, |ui| {
+                ui.label(egui::RichText::new(&self.status).weak());
+                ui.label(
+                    egui::RichText::new(format!("pos  ({:.1}, {:.1})", self.x, self.y)).weak(),
+                );
+                ui.label(egui::RichText::new(format!("others: {}", self.others.len())).weak());
+            });
+
+        egui.end_frame(ctx);
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
         if let Some(debug) = &self.debug {
             debug.draw(pass);
         }
-        if let Some(ui) = &self.ui {
-            ui.render(pass);
+        if let Some(e) = &self.egui {
+            e.render(pass);
         }
     }
 

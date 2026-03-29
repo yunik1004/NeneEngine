@@ -8,14 +8,14 @@
 //! rendering stays fluid.
 
 use nene::{
-    app::{App, Config, FixedApp, WindowId, run_fixed},
+    app::{App, Config, FixedApp, WindowEvent, WindowId, run_fixed},
     debug::Profiler,
     input::Input,
     math::{Mat4, Vec2, Vec4},
     mesh::{Vertex, circle_segments},
     renderer::{Context, GpuMesh, Material, MaterialBuilder, RenderPass},
     time::{FixedTime, Time},
-    ui::Ui,
+    ui::EguiUi,
 };
 
 const FIXED_HZ: f32 = 60.0;
@@ -48,7 +48,7 @@ struct FixedUpdateDemo {
     profiler: Profiler,
     mat: Option<Material>,
     mesh: Option<GpuMesh>,
-    ui: Option<Ui>,
+    egui: Option<EguiUi>,
 }
 
 impl App for FixedUpdateDemo {
@@ -68,21 +68,27 @@ impl App for FixedUpdateDemo {
             profiler: Profiler::new(),
             mat: None,
             mesh: None,
-            ui: None,
+            egui: None,
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.mat = Some(MaterialBuilder::new().vertex_color().build(ctx));
         self.mesh = Some(GpuMesh::new(ctx, &[], &[]));
-        self.ui = Some(Ui::new(ctx));
+        self.egui = Some(EguiUi::new(ctx));
+    }
+
+    fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
+        if let Some(e) = &mut self.egui {
+            e.handle_event(event);
+        }
     }
 
     fn update(&mut self, _input: &Input, _time: &Time) {
         self.profiler.begin_frame();
     }
 
-    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
+    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
         let _s = self.profiler.scope("update");
 
         let mut verts: Vec<Vertex> = Vec::new();
@@ -103,11 +109,10 @@ impl App for FixedUpdateDemo {
         }
         drop(_s);
 
-        let cfg = ctx.surface_config();
-        if let Some(ui) = &mut self.ui {
-            ui.begin_frame(input, cfg.width as f32, cfg.height as f32);
-            self.profiler.draw_overlay(ui, 16.0, 16.0);
-            ui.end_frame(ctx);
+        if let Some(egui) = &mut self.egui {
+            let ui_ctx = egui.begin_frame();
+            self.profiler.draw_overlay(&ui_ctx, 16.0, 16.0);
+            egui.end_frame(ctx);
         }
         self.profiler.end_frame();
     }
@@ -116,8 +121,8 @@ impl App for FixedUpdateDemo {
         if let (Some(mat), Some(mesh)) = (&self.mat, &self.mesh) {
             mat.render(pass, mesh);
         }
-        if let Some(ui) = &self.ui {
-            ui.render(pass);
+        if let Some(e) = &self.egui {
+            e.render(pass);
         }
     }
 

@@ -12,12 +12,12 @@
 
 use nene::{
     ai::pathfinding::{TileMapGraph, find_path},
-    app::{App, Config, WindowId, run},
+    app::{App, Config, WindowEvent, WindowId, run},
     input::{ActionMap, Input, Key, MouseButton},
     renderer::{Context, FilterMode, RenderPass, Texture},
     tilemap::{TileMap, TileMapRenderer, TileSet},
     time::Time,
-    ui::Ui,
+    ui::EguiUi,
 };
 
 const COLS: u32 = 20;
@@ -132,11 +132,10 @@ struct PathfindingDemo {
     diagonal: bool,
     path: Option<Vec<(u32, u32)>>,
     bindings: ActionMap<Action>,
-    // GPU
     tileset: Option<TileSet>,
     renderer: Option<TileMapRenderer>,
     overlay_renderer: Option<TileMapRenderer>,
-    ui: Option<Ui>,
+    egui: Option<EguiUi>,
 }
 
 impl App for PathfindingDemo {
@@ -172,7 +171,7 @@ impl App for PathfindingDemo {
             tileset: None,
             renderer: None,
             overlay_renderer: None,
-            ui: None,
+            egui: None,
         }
     }
 
@@ -181,7 +180,13 @@ impl App for PathfindingDemo {
         self.tileset = Some(TileSet::new(texture, 48, 16, 16, 16));
         self.renderer = Some(TileMapRenderer::new(ctx, TILE));
         self.overlay_renderer = Some(TileMapRenderer::new(ctx, TILE));
-        self.ui = Some(Ui::new(ctx));
+        self.egui = Some(EguiUi::new(ctx));
+    }
+
+    fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
+        if let Some(e) = &mut self.egui {
+            e.handle_event(event);
+        }
     }
 
     fn update(&mut self, input: &Input, _time: &Time) {
@@ -228,7 +233,7 @@ impl App for PathfindingDemo {
         }
     }
 
-    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
+    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
         let aspect = W as f32 / H as f32;
         let (Some(renderer), Some(overlay_renderer), Some(tileset)) = (
             &mut self.renderer,
@@ -241,28 +246,42 @@ impl App for PathfindingDemo {
         renderer.prepare(ctx, &self.map, tileset, &self.camera, aspect);
         overlay_renderer.prepare(ctx, &self.overlay, tileset, &self.camera, aspect);
 
-        let Some(ui) = &mut self.ui else { return };
-        ui.begin_frame(input, W as f32, H as f32);
-        ui.begin_panel("Info", 10.0, 10.0, 200.0);
-        ui.label("Pathfinding");
-        ui.separator();
-        ui.label_dim(&format!("start  ({}, {})", self.start.0, self.start.1));
-        ui.label_dim(&format!("goal   ({}, {})", self.goal.0, self.goal.1));
-        ui.separator();
-        let mode = if self.diagonal { "8-dir" } else { "4-dir" };
-        ui.label_dim(&format!("mode   {mode}  [D]"));
+        let Some(egui) = &mut self.egui else { return };
+        let ui_ctx = egui.begin_frame();
+
         let steps = self.path.as_ref().map_or(0, |p| p.len());
-        if self.path.is_some() {
-            ui.label_dim(&format!("path   {steps} tiles"));
+        let path_text = if self.path.is_some() {
+            format!("path   {steps} tiles")
         } else {
-            ui.label_dim("path   none");
-        }
-        ui.separator();
-        ui.label_dim("LMB  set start");
-        ui.label_dim("RMB  set goal");
-        ui.label_dim("R    new walls");
-        ui.end_panel();
-        ui.end_frame(ctx);
+            "path   none".to_owned()
+        };
+        let mode = if self.diagonal { "8-dir" } else { "4-dir" };
+
+        egui::Window::new("Info")
+            .default_pos(egui::pos2(10.0, 10.0))
+            .default_width(200.0)
+            .resizable(false)
+            .show(&ui_ctx, |ui| {
+                ui.label("Pathfinding");
+                ui.separator();
+                ui.label(
+                    egui::RichText::new(format!("start  ({}, {})", self.start.0, self.start.1))
+                        .weak(),
+                );
+                ui.label(
+                    egui::RichText::new(format!("goal   ({}, {})", self.goal.0, self.goal.1))
+                        .weak(),
+                );
+                ui.separator();
+                ui.label(egui::RichText::new(format!("mode   {mode}  [D]")).weak());
+                ui.label(egui::RichText::new(&path_text).weak());
+                ui.separator();
+                ui.label(egui::RichText::new("LMB  set start").weak());
+                ui.label(egui::RichText::new("RMB  set goal").weak());
+                ui.label(egui::RichText::new("R    new walls").weak());
+            });
+
+        egui.end_frame(ctx);
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
@@ -273,8 +292,8 @@ impl App for PathfindingDemo {
         };
         renderer.render(pass, tileset);
         overlay_renderer.render(pass, tileset);
-        if let Some(ui) = &self.ui {
-            ui.render(pass);
+        if let Some(e) = &self.egui {
+            e.render(pass);
         }
     }
 

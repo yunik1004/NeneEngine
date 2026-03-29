@@ -16,7 +16,6 @@ mod uniform;
 // Internal re-exports (pub(crate)) — used by engine subsystems (sprite, text, particle, etc.)
 pub(crate) use buffer::{IndexBuffer, InstanceBuffer, VertexBuffer};
 pub(crate) use builtin::{BuiltinPipeline, TransformUniform};
-pub(crate) use context::RenderContext;
 pub use context::{Context, HeadlessContext};
 pub use flat_object::FlatObject;
 pub(crate) use gpu_batch::GpuBatch;

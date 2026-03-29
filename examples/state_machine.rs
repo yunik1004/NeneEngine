@@ -17,14 +17,14 @@ use std::f32::consts::{PI, TAU};
 
 use nene::{
     animation::{AnimChannel, AnimState, Channel, Clip, Joint, Mesh, Skeleton, StateMachine},
-    app::{App, Config, WindowId, run},
+    app::{App, Config, WindowEvent, WindowId, run},
     camera::Camera,
     input::{ActionMap, Input, Key},
     math::{Mat4, Quat, Vec2, Vec3, Vec4},
     mesh::{Model, Vertex},
     renderer::{Context, GpuMesh, Light, Material, MaterialBuilder, RenderPass},
     time::{Ease, Time, Tween},
-    ui::Ui,
+    ui::EguiUi,
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ struct StateMachineDemo {
     ease_idx: usize,
     bindings: ActionMap<Action>,
     mat: Option<Material>,
-    ui: Option<Ui>,
+    egui: Option<EguiUi>,
 }
 
 impl App for StateMachineDemo {
@@ -244,7 +244,7 @@ impl App for StateMachineDemo {
             ease_idx: 0,
             bindings,
             mat: None,
-            ui: None,
+            egui: None,
         }
     }
 
@@ -274,7 +274,13 @@ impl App for StateMachineDemo {
         mat.flush(ctx);
         self.mat = Some(mat);
 
-        self.ui = Some(Ui::new(ctx));
+        self.egui = Some(EguiUi::new(ctx));
+    }
+
+    fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
+        if let Some(e) = &mut self.egui {
+            e.handle_event(event);
+        }
     }
 
     fn update(&mut self, input: &Input, time: &Time) {
@@ -305,7 +311,7 @@ impl App for StateMachineDemo {
         self.camera_angle += time.delta * 0.4;
     }
 
-    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
+    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
         let joint_mats = self
             .sm
             .joint_matrices(&self.model.clips, &self.model.skeleton);
@@ -339,26 +345,32 @@ impl App for StateMachineDemo {
         let ease_name = EASES[self.ease_idx].1;
         let bar = tween_bar(blend_progress);
 
-        let Some(ui) = &mut self.ui else { return };
-        ui.begin_frame(input, width as f32, height as f32);
-        ui.begin_panel("Animation", 16.0, 16.0, 200.0);
-        ui.label(cur_name);
-        ui.separator();
-        ui.label_dim(&format!("ease: {ease_name}"));
-        ui.label_dim(&bar);
-        ui.separator();
-        ui.label_dim("Space  next state");
-        ui.label_dim("Q / E  cycle ease");
-        ui.end_panel();
-        ui.end_frame(ctx);
+        let Some(egui) = &mut self.egui else { return };
+        let ui_ctx = egui.begin_frame();
+
+        egui::Window::new("Animation")
+            .default_pos(egui::pos2(16.0, 16.0))
+            .default_width(200.0)
+            .resizable(false)
+            .show(&ui_ctx, |ui| {
+                ui.label(cur_name);
+                ui.separator();
+                ui.label(egui::RichText::new(format!("ease: {ease_name}")).weak());
+                ui.label(egui::RichText::new(&bar).weak());
+                ui.separator();
+                ui.label(egui::RichText::new("Space  next state").weak());
+                ui.label(egui::RichText::new("Q / E  cycle ease").weak());
+            });
+
+        egui.end_frame(ctx);
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
         if let (Some(mat), Some(mesh)) = (&self.mat, &self.gpu_mesh) {
             mat.render(pass, mesh);
         }
-        if let Some(ui) = &self.ui {
-            ui.render(pass);
+        if let Some(e) = &self.egui {
+            e.render(pass);
         }
     }
 

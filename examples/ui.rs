@@ -1,6 +1,6 @@
 //! UI, persistence, and localization demo.
 //!
-//! Shows how immediate-mode widgets connect directly to persistent storage:
+//! Shows how egui widgets connect directly to persistent storage:
 //!
 //!  • Sliders / checkbox → [`Settings`] (typed key-value, saved to disk)
 //!  • Buttons            → [`SaveStore`] (slot-based save / load / delete)
@@ -12,13 +12,13 @@
 //! L — cycle language in the Locale panel.
 
 use nene::{
-    app::{App, Config, WindowId, run},
+    app::{App, Config, WindowEvent, WindowId, run},
     input::{ActionMap, Input, Key},
     locale::{Locale, from_json},
     persist::{SaveStore, Settings},
     renderer::{Context, RenderPass},
     time::Time,
-    ui::Ui,
+    ui::EguiUi,
 };
 
 // ── Saved game state ──────────────────────────────────────────────────────────
@@ -47,8 +47,9 @@ enum Action {
 }
 
 struct UiDemo {
-    ui: Option<Ui>,
+    egui: Option<EguiUi>,
 
+    fps: u32,
     speed: f32,
     intensity: f32,
     brightness: f32,
@@ -94,7 +95,8 @@ impl App for UiDemo {
         bindings.bind(Action::CycleLanguage, Key::KeyL);
 
         UiDemo {
-            ui: None,
+            egui: None,
+            fps: 0,
             speed,
             intensity,
             brightness,
@@ -112,132 +114,153 @@ impl App for UiDemo {
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        self.ui = Some(Ui::new(ctx));
+        self.egui = Some(EguiUi::new(ctx));
+    }
+
+    fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
+        if let Some(e) = &mut self.egui {
+            e.handle_event(event);
+        }
     }
 
     fn update(&mut self, input: &Input, time: &Time) {
+        self.fps = if time.delta > 0.0 {
+            (1.0 / time.delta) as u32
+        } else {
+            0
+        };
+
         if self.bindings.pressed(input, &Action::CycleLanguage) && !self.langs.is_empty() {
             self.lang_idx = (self.lang_idx + 1) % self.langs.len();
             let lang = self.langs[self.lang_idx].clone();
             self.locale.set(load_lang("examples/assets/locale", &lang));
         }
+    }
 
-        let Some(ui) = &mut self.ui else { return };
-        ui.begin_frame(input, W, H);
+    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
+        let Some(egui) = &mut self.egui else { return };
+        let ui_ctx = egui.begin_frame();
 
         // ── Left panel: Settings ──────────────────────────────────────────────
-        ui.begin_panel("Settings", 20.0, 20.0, 240.0);
-        ui.label("Parameters");
-        ui.separator();
-        ui.slider("Speed", &mut self.speed, 0.0, 10.0);
-        ui.slider("Intensity", &mut self.intensity, 0.0, 1.0);
-        ui.slider("Brightness", &mut self.brightness, 0.0, 2.0);
-        ui.separator();
-        ui.checkbox("Show FPS", &mut self.show_fps);
-        ui.separator();
-        if ui.button("Save Settings") {
-            let _ = self.settings.set("sim.speed", &self.speed);
-            let _ = self.settings.set("sim.intensity", &self.intensity);
-            let _ = self.settings.set("sim.brightness", &self.brightness);
-            let _ = self.settings.set("display.show_fps", &self.show_fps);
-            self.settings_msg = match self.settings.save() {
-                Ok(_) => "saved to disk".into(),
-                Err(e) => format!("error: {e}"),
-            };
-        }
-        ui.label_dim(&self.settings_msg.clone());
-        ui.end_panel();
+        egui::Window::new("Settings")
+            .default_pos(egui::pos2(20.0, 20.0))
+            .default_width(240.0)
+            .show(&ui_ctx, |ui| {
+                ui.label("Parameters");
+                ui.separator();
+                ui.add(egui::Slider::new(&mut self.speed, 0.0..=10.0).text("Speed"));
+                ui.add(egui::Slider::new(&mut self.intensity, 0.0..=1.0).text("Intensity"));
+                ui.add(egui::Slider::new(&mut self.brightness, 0.0..=2.0).text("Brightness"));
+                ui.separator();
+                ui.checkbox(&mut self.show_fps, "Show FPS");
+                ui.separator();
+                if ui.button("Save Settings").clicked() {
+                    let _ = self.settings.set("sim.speed", &self.speed);
+                    let _ = self.settings.set("sim.intensity", &self.intensity);
+                    let _ = self.settings.set("sim.brightness", &self.brightness);
+                    let _ = self.settings.set("display.show_fps", &self.show_fps);
+                    self.settings_msg = match self.settings.save() {
+                        Ok(_) => "saved to disk".into(),
+                        Err(e) => format!("error: {e}"),
+                    };
+                }
+                ui.label(egui::RichText::new(&self.settings_msg).weak());
+            });
 
         // ── Centre panel: Readout ─────────────────────────────────────────────
-        ui.begin_panel("Readout", 280.0, 20.0, 200.0);
-        ui.label("Live values");
-        ui.separator();
-        ui.label_dim(&format!("speed      {:.2}", self.speed));
-        ui.label_dim(&format!("intensity  {:.2}", self.intensity));
-        ui.label_dim(&format!("brightness {:.2}", self.brightness));
-        ui.separator();
-        if self.show_fps {
-            let fps = if time.delta > 0.0 {
-                (1.0 / time.delta) as u32
-            } else {
-                0
-            };
-            ui.label(&format!("FPS  {fps}"));
-        } else {
-            ui.label_dim("FPS  —");
-        }
-        ui.end_panel();
+        egui::Window::new("Readout")
+            .default_pos(egui::pos2(280.0, 20.0))
+            .default_width(200.0)
+            .show(&ui_ctx, |ui| {
+                ui.label("Live values");
+                ui.separator();
+                ui.label(egui::RichText::new(format!("speed      {:.2}", self.speed)).weak());
+                ui.label(egui::RichText::new(format!("intensity  {:.2}", self.intensity)).weak());
+                ui.label(egui::RichText::new(format!("brightness {:.2}", self.brightness)).weak());
+                ui.separator();
+                if self.show_fps {
+                    ui.label(format!("FPS  {}", self.fps));
+                } else {
+                    ui.label(egui::RichText::new("FPS  —").weak());
+                }
+            });
 
         // ── Centre-right panel: Save slots ────────────────────────────────────
-        ui.begin_panel("Save Game", 500.0, 20.0, 200.0);
-        ui.label_dim(&format!("level  {}", self.game.level));
-        ui.label_dim(&format!("score  {}", self.game.score));
-        ui.separator();
-        if ui.button("+10 Score") {
-            self.game.score += 10;
-        }
-        if ui.button("Level Up") {
-            self.game.level += 1;
-        }
-        ui.separator();
-        if ui.button("Save Game") {
-            self.save_msg = match self
-                .store
-                .set(SLOT, "game", &self.game)
-                .and_then(|_| self.store.flush(SLOT))
-            {
-                Ok(_) => format!("saved → {SLOT}.json"),
-                Err(e) => format!("error: {e}"),
-            };
-        }
-        if ui.button("Load Game") {
-            match self.store.get::<GameState>(SLOT, "game") {
-                Some(g) => {
-                    self.game = g;
-                    self.save_msg = format!("loaded {SLOT}.json");
+        egui::Window::new("Save Game")
+            .default_pos(egui::pos2(500.0, 20.0))
+            .default_width(200.0)
+            .show(&ui_ctx, |ui| {
+                ui.label(egui::RichText::new(format!("level  {}", self.game.level)).weak());
+                ui.label(egui::RichText::new(format!("score  {}", self.game.score)).weak());
+                ui.separator();
+                if ui.button("+10 Score").clicked() {
+                    self.game.score += 10;
                 }
-                None => self.save_msg = "no save found".into(),
-            }
-        }
-        if ui.button("Delete Save") {
-            self.save_msg = match self.store.delete(SLOT) {
-                Ok(_) => format!("deleted {SLOT}.json"),
-                Err(e) => format!("error: {e}"),
-            };
-        }
-        ui.separator();
-        ui.label_dim(&self.save_msg.clone());
-        ui.end_panel();
+                if ui.button("Level Up").clicked() {
+                    self.game.level += 1;
+                }
+                ui.separator();
+                if ui.button("Save Game").clicked() {
+                    self.save_msg = match self
+                        .store
+                        .set(SLOT, "game", &self.game)
+                        .and_then(|_| self.store.flush(SLOT))
+                    {
+                        Ok(_) => format!("saved → {SLOT}.json"),
+                        Err(e) => format!("error: {e}"),
+                    };
+                }
+                if ui.button("Load Game").clicked() {
+                    match self.store.get::<GameState>(SLOT, "game") {
+                        Some(g) => {
+                            self.game = g;
+                            self.save_msg = format!("loaded {SLOT}.json");
+                        }
+                        None => self.save_msg = "no save found".into(),
+                    }
+                }
+                if ui.button("Delete Save").clicked() {
+                    self.save_msg = match self.store.delete(SLOT) {
+                        Ok(_) => format!("deleted {SLOT}.json"),
+                        Err(e) => format!("error: {e}"),
+                    };
+                }
+                ui.separator();
+                ui.label(egui::RichText::new(&self.save_msg).weak());
+            });
 
         // ── Right panel: Locale ───────────────────────────────────────────────
         let score_str = self.game.score.to_string();
-        ui.begin_panel("Locale", 720.0, 20.0, 220.0);
         let lang = self
             .langs
             .get(self.lang_idx)
             .map(|s| s.as_str())
             .unwrap_or("en");
-        ui.label(&format!("Language: {lang}"));
-        ui.separator();
-        ui.label(&self.locale.t("menu.start"));
-        ui.label(&self.locale.t("menu.quit"));
-        ui.separator();
-        ui.label(&self.locale.t_with("hud.score", &[("score", &score_str)]));
-        ui.label(&self.locale.t_with("dialog.greet", &[("name", "Player")]));
-        ui.separator();
-        ui.label_dim("L  cycle language");
-        ui.end_panel();
-    }
+        let start_text = self.locale.t("menu.start").into_owned();
+        let quit_text = self.locale.t("menu.quit").into_owned();
+        let score_text = self.locale.t_with("hud.score", &[("score", &score_str)]);
+        let greet_text = self.locale.t_with("dialog.greet", &[("name", "Player")]);
+        egui::Window::new("Locale")
+            .default_pos(egui::pos2(720.0, 20.0))
+            .default_width(220.0)
+            .show(&ui_ctx, |ui| {
+                ui.label(format!("Language: {lang}"));
+                ui.separator();
+                ui.label(&start_text);
+                ui.label(&quit_text);
+                ui.separator();
+                ui.label(&score_text);
+                ui.label(&greet_text);
+                ui.separator();
+                ui.label(egui::RichText::new("L  cycle language").weak());
+            });
 
-    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
-        if let Some(ui) = &mut self.ui {
-            ui.end_frame(ctx);
-        }
+        egui.end_frame(ctx);
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-        if let Some(ui) = &self.ui {
-            ui.render(pass);
+        if let Some(e) = &self.egui {
+            e.render(pass);
         }
     }
 

@@ -99,7 +99,7 @@ use std::{
 
 use winit::{
     application::ApplicationHandler,
-    event::{DeviceEvent, DeviceId, WindowEvent},
+    event::{DeviceEvent, DeviceId},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::Window as WinitWindow,
 };
@@ -134,6 +134,7 @@ impl Default for Config {
 /// Prevents the spiral-of-death when a frame takes longer than expected.
 pub const MAX_FIXED_STEPS: u32 = 8;
 
+pub use winit::event::WindowEvent;
 pub use winit::window::WindowId;
 
 // ── App trait ─────────────────────────────────────────────────────────────────
@@ -167,6 +168,22 @@ pub trait App: Sized + 'static {
 
     /// Called once per window per frame to issue draw calls.
     fn render(&mut self, _id: WindowId, _pass: &mut RenderPass) {}
+
+    /// Called for every raw winit [`WindowEvent`] before nene processes it.
+    ///
+    /// Use this to forward events to [`EguiUi`](crate::ui::EguiUi):
+    /// ```no_run
+    /// # use nene::app::{App, WindowId, WindowEvent};
+    /// # use nene::ui::EguiUi;
+    /// # struct MyApp { egui: Option<EguiUi> }
+    /// # impl App for MyApp {
+    /// #     fn new() -> Self { MyApp { egui: None } }
+    /// fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
+    ///     if let Some(e) = &mut self.egui { e.handle_event(event); }
+    /// }
+    /// # }
+    /// ```
+    fn on_window_event(&mut self, _id: WindowId, _event: &WindowEvent) {}
 
     /// Called when a window is closed by the user.
     ///
@@ -260,6 +277,9 @@ impl<A: App> ApplicationHandler for AppRunner<A> {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        if let Some(app) = &mut self.app {
+            app.on_window_event(id, &event);
+        }
         match event {
             WindowEvent::CloseRequested => {
                 if let Some(app) = &mut self.app {

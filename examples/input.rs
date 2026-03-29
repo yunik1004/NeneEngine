@@ -15,13 +15,13 @@
 //! R              — reset HP          (emits event → combat system)
 
 use nene::{
-    app::{App, Config, WindowId, run},
+    app::{App, Config, WindowEvent, WindowId, run},
     event::Events,
     input::{ActionMap, GamepadAxis, Input, Key, MouseButton},
     math::{Mat4, Vec2, Vec3, Vec4},
     renderer::{Context, FlatObject, RenderPass},
     time::Time,
-    ui::Ui,
+    ui::EguiUi,
 };
 
 // ── Event types ───────────────────────────────────────────────────────────────
@@ -68,17 +68,14 @@ enum Action {
 }
 
 struct InputDemo {
-    // Direct-input state
     pos: Vec2,
     color: Vec4,
-    // Event bus
     events: Events<GameEvent>,
     hp: i32,
     log: Vec<String>,
     bindings: ActionMap<Action>,
-    // GPU
     square: Option<FlatObject>,
-    ui: Option<Ui>,
+    egui: Option<EguiUi>,
 }
 
 impl App for InputDemo {
@@ -106,20 +103,24 @@ impl App for InputDemo {
             log: vec!["Ready.".into()],
             bindings,
             square: None,
-            ui: None,
+            egui: None,
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.square = Some(FlatObject::new(ctx, QUAD, Vec4::new(0.3, 0.6, 1.0, 1.0)));
-        self.ui = Some(Ui::new(ctx));
+        self.egui = Some(EguiUi::new(ctx));
+    }
+
+    fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
+        if let Some(e) = &mut self.egui {
+            e.handle_event(event);
+        }
     }
 
     fn update(&mut self, input: &Input, time: &Time) {
-        // ── advance event buffers ────────────────────────────────────────
         self.events.update();
 
-        // ── combat system ────────────────────────────────────────────────
         let mut secondary: Vec<GameEvent> = Vec::new();
         for ev in self.events.read() {
             match ev {
@@ -147,7 +148,6 @@ impl App for InputDemo {
             self.events.emit(ev);
         }
 
-        // ── movement ─────────────────────────────────────────────────────
         let speed = 5.0 * time.delta;
         let mut dir = Vec2::ZERO;
         if self.bindings.down(input, &Action::MoveUp) {
@@ -162,7 +162,6 @@ impl App for InputDemo {
         if self.bindings.down(input, &Action::MoveRight) {
             dir.x += 1.0;
         }
-        // Gamepad axis still uses raw input (axes don't map to discrete bindings)
         if let Some((id, _)) = input.gamepads().next() {
             dir.x += input.gamepad_axis(id, GamepadAxis::LeftStickX);
             dir.y += input.gamepad_axis(id, GamepadAxis::LeftStickY);
@@ -180,7 +179,6 @@ impl App for InputDemo {
             Vec4::new(0.3, 0.6, 1.0, 1.0)
         };
 
-        // ── event emitters ────────────────────────────────────────────────
         if self.bindings.pressed(input, &Action::Attack) {
             self.events.emit(GameEvent::Attack(10));
         }
@@ -192,44 +190,52 @@ impl App for InputDemo {
         }
     }
 
-    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
+    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
         if let Some(square) = &mut self.square {
             square.color = self.color;
             let mvp = ortho() * Mat4::from_translation(Vec3::new(self.pos.x, self.pos.y, 0.0));
             square.set_transform(ctx, mvp);
         }
 
-        let Some(ui) = &mut self.ui else { return };
-        ui.begin_frame(input, W as f32, H as f32);
+        let Some(egui) = &mut self.egui else { return };
+        let ui_ctx = egui.begin_frame();
 
-        ui.begin_panel("Status", 20.0, 20.0, 200.0);
-        ui.label("Event Bus");
-        ui.separator();
         let bar = hp_bar(self.hp, MAX_HP);
-        ui.label_dim(&format!("HP  {bar} {}/{MAX_HP}", self.hp));
-        ui.separator();
-        ui.label_dim("Z  attack  -10");
-        ui.label_dim("X  heal   +15");
-        ui.label_dim("R  reset");
-        ui.end_panel();
+        egui::Window::new("Status")
+            .default_pos(egui::pos2(20.0, 20.0))
+            .default_width(200.0)
+            .resizable(false)
+            .show(&ui_ctx, |ui| {
+                ui.label("Event Bus");
+                ui.separator();
+                ui.label(egui::RichText::new(format!("HP  {bar} {}/{MAX_HP}", self.hp)).weak());
+                ui.separator();
+                ui.label(egui::RichText::new("Z  attack  -10").weak());
+                ui.label(egui::RichText::new("X  heal   +15").weak());
+                ui.label(egui::RichText::new("R  reset").weak());
+            });
 
-        ui.begin_panel("Log", 240.0, 20.0, 220.0);
-        ui.label("Event log");
-        ui.separator();
-        for line in &self.log {
-            ui.label_dim(line);
-        }
-        ui.end_panel();
+        egui::Window::new("Log")
+            .default_pos(egui::pos2(240.0, 20.0))
+            .default_width(220.0)
+            .resizable(false)
+            .show(&ui_ctx, |ui| {
+                ui.label("Event log");
+                ui.separator();
+                for line in &self.log {
+                    ui.label(egui::RichText::new(line).weak());
+                }
+            });
 
-        ui.end_frame(ctx);
+        egui.end_frame(ctx);
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
         if let Some(square) = &self.square {
             square.render(pass);
         }
-        if let Some(ui) = &self.ui {
-            ui.render(pass);
+        if let Some(e) = &self.egui {
+            e.render(pass);
         }
     }
 

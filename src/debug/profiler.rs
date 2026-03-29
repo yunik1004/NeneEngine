@@ -195,32 +195,44 @@ impl Profiler {
         return std::iter::empty();
     }
 
-    pub fn draw_overlay(&self, ui: &mut crate::ui::Ui, x: f32, y: f32) {
+    pub fn draw_overlay(&self, ctx: &egui::Context, x: f32, y: f32) {
         #[cfg(debug_assertions)]
         {
-            ui.begin_panel("Profiler", x, y, 200.0);
-            ui.label("Frame time");
-            ui.separator();
-            ui.label_dim(&format!("fps      {:.0}", self.fps));
-            ui.label_dim(&format!("cur      {:.2} ms", self.frame_ms));
-            ui.label_dim(&format!("avg      {:.2} ms", self.avg_ms));
-            ui.label_dim(&format!("min      {:.2} ms", self.min_ms));
-            ui.label_dim(&format!("max      {:.2} ms", self.max_ms));
-            if let Some(last) = self.history.back()
-                && !last.scopes.is_empty()
-            {
-                ui.separator();
-                ui.label("Scopes");
-                ui.separator();
-                for scope in &last.scopes {
-                    ui.label_dim(&format!("{:<10} {:.2} ms", scope.name, scope.ms));
-                }
-            }
-            ui.end_panel();
+            egui::Window::new("Profiler")
+                .default_pos(egui::pos2(x, y))
+                .default_width(200.0)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    ui.label("Frame time");
+                    ui.separator();
+                    ui.label(egui::RichText::new(format!("fps      {:.0}", self.fps)).weak());
+                    ui.label(
+                        egui::RichText::new(format!("cur      {:.2} ms", self.frame_ms)).weak(),
+                    );
+                    ui.label(egui::RichText::new(format!("avg      {:.2} ms", self.avg_ms)).weak());
+                    ui.label(egui::RichText::new(format!("min      {:.2} ms", self.min_ms)).weak());
+                    ui.label(egui::RichText::new(format!("max      {:.2} ms", self.max_ms)).weak());
+                    if let Some(last) = self.history.back()
+                        && !last.scopes.is_empty()
+                    {
+                        ui.separator();
+                        ui.label("Scopes");
+                        ui.separator();
+                        for scope in &last.scopes {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{:<10} {:.2} ms",
+                                    scope.name, scope.ms
+                                ))
+                                .weak(),
+                            );
+                        }
+                    }
+                });
         }
         #[cfg(not(debug_assertions))]
         {
-            let _ = (ui, x, y);
+            let _ = (ctx, x, y);
         }
     }
 

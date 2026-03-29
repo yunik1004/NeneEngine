@@ -9,14 +9,14 @@
 use std::f32::consts::TAU;
 
 use nene::{
-    app::{App, Config, WindowId, run},
+    app::{App, Config, WindowEvent, WindowId, run},
     camera::Camera,
     input::{ActionMap, Input, Key},
     math::{Mat4, Vec2, Vec3, Vec4},
     mesh::cube,
     renderer::{Context, FlatObject, GpuMesh, Material, MaterialBuilder, RenderPass},
     time::Time,
-    ui::Ui,
+    ui::EguiUi,
 };
 
 // ── 2D ───────────────────────────────────────────────────────────────────────
@@ -142,7 +142,7 @@ struct PhysicsDemo {
     bindings: ActionMap<Action>,
     s2d: Option<State2D>,
     s3d: Option<State3D>,
-    ui: Option<Ui>,
+    egui: Option<EguiUi>,
 }
 
 impl App for PhysicsDemo {
@@ -154,14 +154,20 @@ impl App for PhysicsDemo {
             bindings,
             s2d: None,
             s3d: None,
-            ui: None,
+            egui: None,
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.s2d = Some(init_2d(ctx));
         self.s3d = Some(init_3d(ctx));
-        self.ui = Some(Ui::new(ctx));
+        self.egui = Some(EguiUi::new(ctx));
+    }
+
+    fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
+        if let Some(e) = &mut self.egui {
+            e.handle_event(event);
+        }
     }
 
     fn update(&mut self, input: &Input, time: &Time) {
@@ -180,7 +186,7 @@ impl App for PhysicsDemo {
         }
     }
 
-    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
+    fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
         let (width, height) = {
             let cfg = ctx.surface_config();
             (cfg.width, cfg.height)
@@ -210,15 +216,20 @@ impl App for PhysicsDemo {
             }
         }
 
+        let Some(egui) = &mut self.egui else { return };
+        let ui_ctx = egui.begin_frame();
+
         let label = if self.mode_3d { "Mode: 3D" } else { "Mode: 2D" };
-        if let Some(ui) = &mut self.ui {
-            ui.begin_frame(input, width as f32, height as f32);
-            ui.begin_panel("Physics", 16.0, 16.0, 160.0);
-            ui.label(label);
-            ui.label_dim("Tab to switch");
-            ui.end_panel();
-            ui.end_frame(ctx);
-        }
+        egui::Window::new("Physics")
+            .default_pos(egui::pos2(16.0, 16.0))
+            .default_width(160.0)
+            .resizable(false)
+            .show(&ui_ctx, |ui| {
+                ui.label(label);
+                ui.label(egui::RichText::new("Tab to switch").weak());
+            });
+
+        egui.end_frame(ctx);
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
@@ -233,8 +244,8 @@ impl App for PhysicsDemo {
                 s.cube_mat.render(pass, &s.cube_mesh);
             }
         }
-        if let Some(ui) = &self.ui {
-            ui.render(pass);
+        if let Some(e) = &self.egui {
+            e.render(pass);
         }
     }
 

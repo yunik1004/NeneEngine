@@ -407,10 +407,6 @@ impl HeadlessContext {
         })
     }
 
-    pub(crate) fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
-        self.gpu.create_vertex_buffer(data)
-    }
-
     pub(crate) fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         data: &T,
@@ -551,7 +547,6 @@ impl HeadlessContext {
 pub(crate) trait RenderContext {
     fn create_scene_target(&self, width: u32, height: u32) -> RenderTarget;
     fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline;
-    fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer;
     fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         data: &T,
@@ -561,7 +556,6 @@ pub(crate) trait RenderContext {
         buf: &UniformBuffer,
         data: &T,
     );
-    fn create_text_renderer(&self) -> TextRenderer;
 }
 
 #[allow(private_interfaces)]
@@ -571,9 +565,6 @@ impl RenderContext for Context {
     }
     fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
         self.create_pipeline(desc)
-    }
-    fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
-        self.create_vertex_buffer(data)
     }
     fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
@@ -587,13 +578,6 @@ impl RenderContext for Context {
         data: &T,
     ) {
         self.update_uniform_buffer(buf, data)
-    }
-    fn create_text_renderer(&self) -> TextRenderer {
-        TextRenderer::new_raw(
-            &self.gpu.device,
-            &self.gpu.queue,
-            self.surface_config.format,
-        )
     }
 }
 
@@ -605,9 +589,6 @@ impl RenderContext for HeadlessContext {
     fn create_pipeline(&self, desc: PipelineDescriptor) -> Pipeline {
         self.create_pipeline(desc)
     }
-    fn create_vertex_buffer<T: bytemuck::Pod>(&self, data: &[T]) -> VertexBuffer {
-        self.create_vertex_buffer(data)
-    }
     fn create_uniform_buffer<T: encase::ShaderType + encase::internal::WriteInto>(
         &self,
         data: &T,
@@ -620,9 +601,6 @@ impl RenderContext for HeadlessContext {
         data: &T,
     ) {
         self.update_uniform_buffer(buf, data)
-    }
-    fn create_text_renderer(&self) -> TextRenderer {
-        self.create_text_renderer()
     }
 }
 
@@ -933,6 +911,10 @@ impl Context {
 
     pub(crate) fn queue(&self) -> &wgpu::Queue {
         &self.gpu.queue
+    }
+
+    pub(crate) fn window(&self) -> &Arc<Window> {
+        &self.window
     }
 
     pub fn surface_config(&self) -> &wgpu::SurfaceConfiguration {
