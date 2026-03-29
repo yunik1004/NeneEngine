@@ -16,6 +16,7 @@ pub mod pak;
 pub mod particle;
 pub mod persist;
 pub mod physics;
+pub mod picking;
 pub mod renderer;
 pub mod scene;
 pub mod sprite;

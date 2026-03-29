@@ -1,4 +1,5 @@
 use crate::math::{Mat4, Vec3, Vec4};
+use crate::picking::Ray;
 
 /// Projection mode for a [`Camera`].
 #[derive(Debug, Clone, Copy)]
@@ -113,6 +114,35 @@ impl Camera {
     /// Combined view-projection matrix.
     pub fn view_proj(&self, aspect: f32) -> Mat4 {
         self.projection(aspect) * self.view()
+    }
+
+    /// Unproject a screen-space pixel `(x, y)` into a world-space [`Ray`].
+    ///
+    /// - `x`, `y` — pixel coords, origin at **top-left**, as returned by
+    ///   [`crate::input::Input::cursor_position`].
+    /// - `width`, `height` — surface dimensions in pixels.
+    /// - `aspect` — `width / height`.
+    ///
+    /// Works for both perspective and orthographic projections.
+    pub fn screen_to_ray(&self, x: f32, y: f32, width: f32, height: f32, aspect: f32) -> Ray {
+        // Map pixel to NDC: x ∈ [-1, 1], y ∈ [-1, 1] (y flipped — screen Y is down)
+        let ndc_x = 2.0 * x / width - 1.0;
+        let ndc_y = 1.0 - 2.0 * y / height;
+
+        let inv_vp = self.view_proj(aspect).inverse();
+
+        // Unproject near plane (z = 0 in wgpu NDC) and far plane (z = 1).
+        let near_h = inv_vp * Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
+        let far_h = inv_vp * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+
+        let near_w = Vec3::new(
+            near_h.x / near_h.w,
+            near_h.y / near_h.w,
+            near_h.z / near_h.w,
+        );
+        let far_w = Vec3::new(far_h.x / far_h.w, far_h.y / far_h.w, far_h.z / far_h.w);
+
+        Ray::new(near_w, far_w - near_w)
     }
 }
 

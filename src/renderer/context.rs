@@ -921,6 +921,21 @@ impl Context {
         &self.surface_config
     }
 
+    /// Window size in **logical pixels** — the same coordinate space as
+    /// [`Input::mouse_pos`](crate::input::Input::mouse_pos).
+    ///
+    /// Use this for anything that needs to match cursor coordinates (ray
+    /// casting, UI layout, aspect ratio). For GPU texture dimensions use
+    /// [`surface_config`](Self::surface_config) instead.
+    pub fn logical_size(&self) -> (f32, f32) {
+        let scale = self.window.scale_factor();
+        let cfg = &self.surface_config;
+        (
+            (cfg.width as f64 / scale) as f32,
+            (cfg.height as f64 / scale) as f32,
+        )
+    }
+
     pub(crate) fn render_with<F: FnOnce(&mut RenderPass<'_>)>(&mut self, draw: F) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(f)
