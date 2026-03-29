@@ -61,6 +61,11 @@ pub struct Input {
     pad_pressed: HashSet<(GamepadId, GamepadButton)>,
     pad_released: HashSet<(GamepadId, GamepadButton)>,
     pad_axes: HashMap<(GamepadId, GamepadAxis), f32>,
+
+    // Simulated per-player gamepad state (headless testing only)
+    sim_player_held: HashSet<(u8, GamepadButton)>,
+    sim_player_pressed: HashSet<(u8, GamepadButton)>,
+    sim_player_released: HashSet<(u8, GamepadButton)>,
 }
 
 impl Input {
@@ -80,6 +85,9 @@ impl Input {
             pad_pressed: HashSet::new(),
             pad_released: HashSet::new(),
             pad_axes: HashMap::new(),
+            sim_player_held: HashSet::new(),
+            sim_player_pressed: HashSet::new(),
+            sim_player_released: HashSet::new(),
         }
     }
 
@@ -129,6 +137,8 @@ impl Input {
         self.scroll_delta = Vec2::ZERO;
         self.pad_pressed.clear();
         self.pad_released.clear();
+        self.sim_player_pressed.clear();
+        self.sim_player_released.clear();
     }
 
     /// Take a snapshot of all transient (just-this-frame) state and clear it.
@@ -312,6 +322,49 @@ impl Input {
             Some(g) => Box::new(g.gamepads()),
             None => Box::new(std::iter::empty()),
         }
+    }
+
+    /// True every frame the button is held for the given player slot (0 = first connected pad).
+    ///
+    /// Falls back to simulated state when no real gamepad is connected (useful in tests).
+    pub fn gamepad_player_down(&self, player: u8, btn: GamepadButton) -> bool {
+        if let Some((id, _)) = self.gamepads().nth(player as usize) {
+            self.gamepad_down(id, btn)
+        } else {
+            self.sim_player_held.contains(&(player, btn))
+        }
+    }
+
+    /// True only on the frame the button was first pressed for the given player slot.
+    pub fn gamepad_player_pressed(&self, player: u8, btn: GamepadButton) -> bool {
+        if let Some((id, _)) = self.gamepads().nth(player as usize) {
+            self.gamepad_pressed(id, btn)
+        } else {
+            self.sim_player_pressed.contains(&(player, btn))
+        }
+    }
+
+    /// True only on the frame the button was released for the given player slot.
+    pub fn gamepad_player_released(&self, player: u8, btn: GamepadButton) -> bool {
+        if let Some((id, _)) = self.gamepads().nth(player as usize) {
+            self.gamepad_released(id, btn)
+        } else {
+            self.sim_player_released.contains(&(player, btn))
+        }
+    }
+
+    /// Inject a gamepad button press for a player slot (for testing or replay).
+    pub fn simulate_gamepad_press_for_player(&mut self, player: u8, btn: GamepadButton) {
+        if !self.sim_player_held.contains(&(player, btn)) {
+            self.sim_player_pressed.insert((player, btn));
+            self.sim_player_held.insert((player, btn));
+        }
+    }
+
+    /// Inject a gamepad button release for a player slot (for testing or replay).
+    pub fn simulate_gamepad_release_for_player(&mut self, player: u8, btn: GamepadButton) {
+        self.sim_player_held.remove(&(player, btn));
+        self.sim_player_released.insert((player, btn));
     }
 }
 

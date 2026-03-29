@@ -1,4 +1,4 @@
-use nene::input::{ActionMap, Binding, Key, MouseButton};
+use nene::input::{ActionMap, Binding, GamepadButton, Key, MouseButton};
 
 #[derive(Hash, PartialEq, Eq, Debug)]
 enum Action {
@@ -166,4 +166,77 @@ fn binding_from_key() {
 fn binding_from_mouse() {
     let b: Binding = MouseButton::Right.into();
     assert_eq!(b, Binding::Mouse(MouseButton::Right));
+}
+
+#[test]
+fn binding_from_gamepad_player() {
+    let b: Binding = (1u8, GamepadButton::South).into();
+    assert_eq!(b, Binding::GamepadPlayer(1, GamepadButton::South));
+}
+
+// ── GamepadPlayer bindings ─────────────────────────────────────────────────────
+
+#[test]
+fn gamepad_player_binding_pressed() {
+    let mut map = ActionMap::new();
+    map.bind(Action::Jump, (0u8, GamepadButton::South));
+
+    let mut input = make_input();
+    input.simulate_gamepad_press_for_player(0, GamepadButton::South);
+
+    assert!(map.pressed(&input, &Action::Jump));
+    assert!(map.down(&input, &Action::Jump));
+    assert!(!map.released(&input, &Action::Jump));
+}
+
+#[test]
+fn gamepad_player_binding_released() {
+    let mut map = ActionMap::new();
+    map.bind(Action::Jump, (0u8, GamepadButton::South));
+
+    let mut input = make_input();
+    input.simulate_gamepad_press_for_player(0, GamepadButton::South);
+    input.begin_frame();
+    input.simulate_gamepad_release_for_player(0, GamepadButton::South);
+
+    assert!(!map.pressed(&input, &Action::Jump));
+    assert!(!map.down(&input, &Action::Jump));
+    assert!(map.released(&input, &Action::Jump));
+}
+
+#[test]
+fn gamepad_player_different_players_independent() {
+    let mut map_p1 = ActionMap::new();
+    map_p1.bind(Action::Jump, (0u8, GamepadButton::South));
+
+    let mut map_p2 = ActionMap::new();
+    map_p2.bind(Action::Jump, (1u8, GamepadButton::South));
+
+    let mut input = make_input();
+    input.simulate_gamepad_press_for_player(0, GamepadButton::South); // only P1 presses
+
+    assert!(map_p1.pressed(&input, &Action::Jump));
+    assert!(!map_p2.pressed(&input, &Action::Jump)); // P2 unaffected
+}
+
+#[test]
+fn gamepad_player_wrong_player_not_triggered() {
+    let mut map = ActionMap::new();
+    map.bind(Action::Jump, (1u8, GamepadButton::South)); // bound to P2
+
+    let mut input = make_input();
+    input.simulate_gamepad_press_for_player(0, GamepadButton::South); // P1 presses
+
+    assert!(!map.pressed(&input, &Action::Jump)); // P2 binding not triggered
+}
+
+#[test]
+fn gamepad_player_direct_api() {
+    let mut input = make_input();
+    input.simulate_gamepad_press_for_player(0, GamepadButton::East);
+
+    assert!(input.gamepad_player_pressed(0, GamepadButton::East));
+    assert!(input.gamepad_player_down(0, GamepadButton::East));
+    assert!(!input.gamepad_player_released(0, GamepadButton::East));
+    assert!(!input.gamepad_player_pressed(1, GamepadButton::East)); // P2 unaffected
 }

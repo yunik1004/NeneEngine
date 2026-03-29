@@ -10,6 +10,9 @@ pub enum Binding {
     Mouse(MouseButton),
     /// Matches the button on any connected gamepad.
     Gamepad(GamepadButton),
+    /// Matches the button on the gamepad assigned to a specific player slot (0-based).
+    /// Player 0 = first connected gamepad, player 1 = second, etc.
+    GamepadPlayer(u8, GamepadButton),
 }
 
 impl From<Key> for Binding {
@@ -27,6 +30,12 @@ impl From<MouseButton> for Binding {
 impl From<GamepadButton> for Binding {
     fn from(b: GamepadButton) -> Self {
         Binding::Gamepad(b)
+    }
+}
+
+impl From<(u8, GamepadButton)> for Binding {
+    fn from((player, btn): (u8, GamepadButton)) -> Self {
+        Binding::GamepadPlayer(player, btn)
     }
 }
 
@@ -107,9 +116,7 @@ impl<A: Hash + Eq> ActionMap<A> {
     }
 
     fn any(&self, action: &A, f: impl Fn(&Binding) -> bool) -> bool {
-        self.bindings
-            .get(action)
-            .is_some_and(|bs| bs.iter().any(f))
+        self.bindings.get(action).is_some_and(|bs| bs.iter().any(f))
     }
 }
 
@@ -120,6 +127,7 @@ fn binding_pressed(input: &Input, b: &Binding) -> bool {
         Binding::Gamepad(btn) => input
             .gamepads()
             .any(|(id, _)| input.gamepad_pressed(id, *btn)),
+        Binding::GamepadPlayer(player, btn) => input.gamepad_player_pressed(*player, *btn),
     }
 }
 
@@ -128,6 +136,7 @@ fn binding_down(input: &Input, b: &Binding) -> bool {
         Binding::Key(k) => input.key_down(*k),
         Binding::Mouse(m) => input.mouse_down(*m),
         Binding::Gamepad(btn) => input.gamepads().any(|(id, _)| input.gamepad_down(id, *btn)),
+        Binding::GamepadPlayer(player, btn) => input.gamepad_player_down(*player, *btn),
     }
 }
 
@@ -138,5 +147,6 @@ fn binding_released(input: &Input, b: &Binding) -> bool {
         Binding::Gamepad(btn) => input
             .gamepads()
             .any(|(id, _)| input.gamepad_released(id, *btn)),
+        Binding::GamepadPlayer(player, btn) => input.gamepad_player_released(*player, *btn),
     }
 }
