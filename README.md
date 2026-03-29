@@ -46,7 +46,7 @@ fn main() { run::<MyGame>(); }
 
 ## App lifecycle
 
-```
+```rust
 App::new()            — pure init, no GPU
 App::window_ready()   — create GPU resources
 loop:
@@ -58,7 +58,7 @@ loop:
 ## Modules
 
 | Module | Description |
-|--------|-------------|
+| --- | --- |
 | `app` | App trait, window config, event loop |
 | `renderer` | wgpu context, materials, meshes, textures, shadows |
 | `camera` | Perspective/orthographic camera, frustum culling, ray casting |
@@ -92,7 +92,7 @@ cargo run --example <name>
 ```
 
 | Example | Description |
-|---------|-------------|
+| --- | --- |
 | `egui_demo` | egui slider, text input, checkbox |
 | `ui` | UI + persistence + localization |
 | `input` | Direct input queries and event bus |
