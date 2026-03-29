@@ -56,4 +56,6 @@ pub(super) struct TextEntry {
     pub y: f32,
     pub size: f32,
     pub color: [f32; 4],
+    /// `None` → system default font, `Some(name)` → loaded font family name.
+    pub family: Option<String>,
 }

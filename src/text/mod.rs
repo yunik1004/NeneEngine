@@ -4,7 +4,7 @@ pub use atlas::ATLAS_SIZE;
 
 use std::collections::HashMap;
 
-use cosmic_text::{Attrs, Buffer, CacheKey, FontSystem, Metrics, Shaping, SwashCache};
+use cosmic_text::{Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, SwashCache};
 use wgpu::util::DeviceExt;
 
 use crate::renderer::{Context, RenderPass, Texture};
@@ -209,7 +209,26 @@ impl TextRenderer {
         }
     }
 
-    /// Queue a string to be drawn at the given position.
+    /// Load a font file from disk and register it with the text renderer.
+    ///
+    /// After loading, reference the font by its family name in
+    /// [`queue_with_font`](Self::queue_with_font).
+    pub fn load_font_file(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<(), std::io::Error> {
+        self.font_system.db_mut().load_font_file(path)
+    }
+
+    /// Load a font from an in-memory byte buffer (e.g. from a `.npak` archive).
+    ///
+    /// After loading, reference the font by its family name in
+    /// [`queue_with_font`](Self::queue_with_font).
+    pub fn load_font_bytes(&mut self, bytes: Vec<u8>) {
+        self.font_system.db_mut().load_font_data(bytes);
+    }
+
+    /// Queue a string using the system default font.
     /// Call `prepare` before rendering.
     pub fn queue(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
         self.pending.push(TextEntry {
@@ -218,6 +237,32 @@ impl TextRenderer {
             y,
             size,
             color,
+            family: None,
+        });
+    }
+
+    /// Queue a string using a specific font family.
+    ///
+    /// `family` must match the family name of a font previously loaded with
+    /// [`load_font_file`](Self::load_font_file) or
+    /// [`load_font_bytes`](Self::load_font_bytes).
+    /// Falls back to the system default if the family is not found.
+    pub fn queue_with_font(
+        &mut self,
+        text: &str,
+        x: f32,
+        y: f32,
+        size: f32,
+        color: [f32; 4],
+        family: &str,
+    ) {
+        self.pending.push(TextEntry {
+            text: text.to_owned(),
+            x,
+            y,
+            size,
+            color,
+            family: Some(family.to_owned()),
         });
     }
 
@@ -253,10 +298,14 @@ impl TextRenderer {
             let metrics = Metrics::new(entry.size, entry.size * 1.2);
             let mut buffer = Buffer::new(&mut self.font_system, metrics);
             buffer.set_size(&mut self.font_system, None, None);
+            let attrs = match entry.family.as_deref() {
+                Some(name) => Attrs::new().family(Family::Name(name)),
+                None => Attrs::new(),
+            };
             buffer.set_text(
                 &mut self.font_system,
                 &entry.text,
-                &Attrs::new(),
+                &attrs,
                 Shaping::Advanced,
                 None,
             );
@@ -281,26 +330,10 @@ impl TextRenderer {
                     let v1 = (g.atlas_y + g.height) as f32 / ATLAS_SIZE as f32;
 
                     let c = entry.color;
-                    let tl = TextVertex {
-                        pos: [gx, gy],
-                        uv: [u0, v0],
-                        color: c,
-                    };
-                    let tr = TextVertex {
-                        pos: [gx + gw, gy],
-                        uv: [u1, v0],
-                        color: c,
-                    };
-                    let bl = TextVertex {
-                        pos: [gx, gy + gh],
-                        uv: [u0, v1],
-                        color: c,
-                    };
-                    let br = TextVertex {
-                        pos: [gx + gw, gy + gh],
-                        uv: [u1, v1],
-                        color: c,
-                    };
+                    let tl = TextVertex { pos: [gx, gy], uv: [u0, v0], color: c };
+                    let tr = TextVertex { pos: [gx + gw, gy], uv: [u1, v0], color: c };
+                    let bl = TextVertex { pos: [gx, gy + gh], uv: [u0, v1], color: c };
+                    let br = TextVertex { pos: [gx + gw, gy + gh], uv: [u1, v1], color: c };
                     vertices.extend_from_slice(&[tl, tr, bl, tr, br, bl]);
                 }
             }
@@ -435,14 +468,18 @@ impl TextRenderer {
         let mut vertices: Vec<TextVertex> = Vec::new();
 
         for entry in &entries {
-            let metrics = cosmic_text::Metrics::new(entry.size, entry.size * 1.2);
-            let mut buffer = cosmic_text::Buffer::new(&mut self.font_system, metrics);
+            let metrics = Metrics::new(entry.size, entry.size * 1.2);
+            let mut buffer = Buffer::new(&mut self.font_system, metrics);
             buffer.set_size(&mut self.font_system, None, None);
+            let attrs = match entry.family.as_deref() {
+                Some(name) => Attrs::new().family(Family::Name(name)),
+                None => Attrs::new(),
+            };
             buffer.set_text(
                 &mut self.font_system,
                 &entry.text,
-                &cosmic_text::Attrs::new(),
-                cosmic_text::Shaping::Advanced,
+                &attrs,
+                Shaping::Advanced,
                 None,
             );
             buffer.shape_until_scroll(&mut self.font_system, false);
@@ -465,26 +502,10 @@ impl TextRenderer {
                     let u1 = (g.atlas_x + g.width) as f32 / ATLAS_SIZE as f32;
                     let v1 = (g.atlas_y + g.height) as f32 / ATLAS_SIZE as f32;
                     let c = entry.color;
-                    let tl = TextVertex {
-                        pos: [gx, gy],
-                        uv: [u0, v0],
-                        color: c,
-                    };
-                    let tr = TextVertex {
-                        pos: [gx + gw, gy],
-                        uv: [u1, v0],
-                        color: c,
-                    };
-                    let bl = TextVertex {
-                        pos: [gx, gy + gh],
-                        uv: [u0, v1],
-                        color: c,
-                    };
-                    let br = TextVertex {
-                        pos: [gx + gw, gy + gh],
-                        uv: [u1, v1],
-                        color: c,
-                    };
+                    let tl = TextVertex { pos: [gx, gy], uv: [u0, v0], color: c };
+                    let tr = TextVertex { pos: [gx + gw, gy], uv: [u1, v0], color: c };
+                    let bl = TextVertex { pos: [gx, gy + gh], uv: [u0, v1], color: c };
+                    let br = TextVertex { pos: [gx + gw, gy + gh], uv: [u1, v1], color: c };
                     vertices.extend_from_slice(&[tl, tr, bl, tr, br, bl]);
                 }
             }
