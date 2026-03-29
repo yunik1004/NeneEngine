@@ -92,7 +92,8 @@ impl App for GltfDemo {
             mat.uniform.model = rot * self.transforms[i];
             mat.uniform.light_vp = light_vp;
             mat.uniform.color = Vec4::ONE;
-            mat.uniform.set_lights(&[Light::ambient(Vec3::ONE, 0.15), self.sun]);
+            mat.uniform
+                .set_lights(&[Light::ambient(Vec3::ONE, 0.15), self.sun]);
             mat.flush(ctx);
             ctx.shadow_pass(shadow_map, |pass| mat.shadow_draw(pass, &self.meshes[i]));
         }

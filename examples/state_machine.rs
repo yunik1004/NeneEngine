@@ -237,11 +237,7 @@ impl App for StateMachineDemo {
             camera_angle: 0.0,
             lights: [
                 Light::ambient(Vec3::new(0.7, 0.75, 1.0), 0.18),
-                Light::directional(
-                    Vec3::new(-1.0, -1.5, -0.8),
-                    Vec3::new(1.0, 0.92, 0.8),
-                    1.1,
-                ),
+                Light::directional(Vec3::new(-1.0, -1.5, -0.8), Vec3::new(1.0, 0.92, 0.8), 1.1),
             ],
             next_state: 1,
             blend_tween: None,

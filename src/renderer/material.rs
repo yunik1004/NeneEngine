@@ -132,12 +132,8 @@ impl Default for MaterialUniform {
         // Sensible defaults: a soft directional + dim ambient, matching the old
         // per-field defaults so existing examples work without changes.
         let mut lights = [GpuLight::default(); MAX_LIGHTS];
-        lights[0] = Light::directional(
-            glam::Vec3::new(1.0, -2.0, -1.0),
-            glam::Vec3::ONE,
-            1.0,
-        )
-        .to_gpu();
+        lights[0] =
+            Light::directional(glam::Vec3::new(1.0, -2.0, -1.0), glam::Vec3::ONE, 1.0).to_gpu();
         lights[1] = Light::ambient(glam::Vec3::ONE, 0.1).to_gpu();
         Self {
             view_proj: glam::Mat4::IDENTITY,

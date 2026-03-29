@@ -99,10 +99,7 @@ impl App for SceneDemo {
             .iter()
             .map(|cfg| Body {
                 id: cfg.id,
-                mat: MaterialBuilder::new()
-                    .color(cfg.color)
-                    .lights()
-                    .build(ctx),
+                mat: MaterialBuilder::new().color(cfg.color).lights().build(ctx),
                 scale: cfg.scale,
                 angle: 0.0,
                 speed: cfg.speed,
