@@ -316,10 +316,26 @@ impl TextRenderer {
                     let v1 = (g.atlas_y + g.height) as f32 / ATLAS_SIZE as f32;
 
                     let c = entry.color;
-                    let tl = TextVertex { pos: [gx, gy], uv: [u0, v0], color: c };
-                    let tr = TextVertex { pos: [gx + gw, gy], uv: [u1, v0], color: c };
-                    let bl = TextVertex { pos: [gx, gy + gh], uv: [u0, v1], color: c };
-                    let br = TextVertex { pos: [gx + gw, gy + gh], uv: [u1, v1], color: c };
+                    let tl = TextVertex {
+                        pos: [gx, gy],
+                        uv: [u0, v0],
+                        color: c,
+                    };
+                    let tr = TextVertex {
+                        pos: [gx + gw, gy],
+                        uv: [u1, v0],
+                        color: c,
+                    };
+                    let bl = TextVertex {
+                        pos: [gx, gy + gh],
+                        uv: [u0, v1],
+                        color: c,
+                    };
+                    let br = TextVertex {
+                        pos: [gx + gw, gy + gh],
+                        uv: [u1, v1],
+                        color: c,
+                    };
                     vertices.extend_from_slice(&[tl, tr, bl, tr, br, bl]);
                 }
             }
@@ -488,10 +504,26 @@ impl TextRenderer {
                     let u1 = (g.atlas_x + g.width) as f32 / ATLAS_SIZE as f32;
                     let v1 = (g.atlas_y + g.height) as f32 / ATLAS_SIZE as f32;
                     let c = entry.color;
-                    let tl = TextVertex { pos: [gx, gy], uv: [u0, v0], color: c };
-                    let tr = TextVertex { pos: [gx + gw, gy], uv: [u1, v0], color: c };
-                    let bl = TextVertex { pos: [gx, gy + gh], uv: [u0, v1], color: c };
-                    let br = TextVertex { pos: [gx + gw, gy + gh], uv: [u1, v1], color: c };
+                    let tl = TextVertex {
+                        pos: [gx, gy],
+                        uv: [u0, v0],
+                        color: c,
+                    };
+                    let tr = TextVertex {
+                        pos: [gx + gw, gy],
+                        uv: [u1, v0],
+                        color: c,
+                    };
+                    let bl = TextVertex {
+                        pos: [gx, gy + gh],
+                        uv: [u0, v1],
+                        color: c,
+                    };
+                    let br = TextVertex {
+                        pos: [gx + gw, gy + gh],
+                        uv: [u1, v1],
+                        color: c,
+                    };
                     vertices.extend_from_slice(&[tl, tr, bl, tr, br, bl]);
                 }
             }
