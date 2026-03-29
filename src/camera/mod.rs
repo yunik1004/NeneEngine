@@ -119,7 +119,7 @@ impl Camera {
     /// Unproject a screen-space pixel `(x, y)` into a world-space [`Ray`].
     ///
     /// - `x`, `y` — pixel coords, origin at **top-left**, as returned by
-    ///   [`crate::input::Input::cursor_position`].
+    ///   [`Input::mouse_pos`](crate::input::Input::mouse_pos).
     /// - `width`, `height` — surface dimensions in pixels.
     /// - `aspect` — `width / height`.
     ///
@@ -151,7 +151,7 @@ impl Camera {
 /// Six-plane view frustum extracted from a view-projection matrix.
 ///
 /// Uses the Gribb-Hartmann method. Compatible with wgpu's NDC convention
-/// (x,y ∈ [-1,1]; z ∈ [0,1]).
+/// (x,y ∈ \[-1,1\]; z ∈ \[0,1\]).
 ///
 /// Each plane is stored as `Vec4(a, b, c, d)` where the half-space
 /// `ax + by + cz + d ≥ 0` is the *inside*.

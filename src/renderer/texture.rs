@@ -27,7 +27,7 @@ pub struct RenderTarget {
 }
 
 impl RenderTarget {
-    /// The color texture, bindable as a shader input via [`RenderPass::set_texture`].
+    /// The color texture, bindable as a shader input via `RenderPass::set_texture`.
     pub fn texture(&self) -> &Texture {
         &self.texture
     }

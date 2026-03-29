@@ -125,8 +125,8 @@ impl Default for MaterialUniform {
 
 /// Per-instance data for [`MaterialBuilder::instanced`] rendering.
 ///
-/// Upload a `Vec<InstanceData>` via [`Context::create_instance_buffer`] /
-/// [`Context::update_instance_buffer`], then call
+/// Upload a `Vec<InstanceData>` via `Context::create_instance_buffer` /
+/// `Context::update_instance_buffer`, then call
 /// [`Material::render_instanced`] each frame.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]

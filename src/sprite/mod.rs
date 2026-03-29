@@ -232,7 +232,7 @@ impl SpriteBatch {
         self.index_count += 6;
     }
 
-    /// Upload sprite data to the GPU. Call in the `update` callback after all [`draw`](Self::draw) calls.
+    /// Upload sprite data to the GPU. Call after all [`queue`](Self::queue) calls.
     pub fn prepare(&self, ctx: &mut Context, camera: &Camera, aspect: f32) {
         ctx.update_uniform_buffer(&self.gpu.ubuf, &camera.view_proj(aspect));
         if !self.cpu_vertices.is_empty() {

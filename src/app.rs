@@ -201,7 +201,7 @@ pub trait App: Sized + 'static {
 
 /// Extension of [`App`] for apps that need a fixed-timestep logic tick.
 ///
-/// Use [`run_fixed::<MyApp>(hz)`] to enter the loop.
+/// Use [`run_fixed`] to enter the loop.
 ///
 /// `fixed_update` runs 0–[`MAX_FIXED_STEPS`] times per frame at a constant
 /// `delta = 1 / hz` before the variable-rate [`update`](App::update) and the

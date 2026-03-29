@@ -1,13 +1,13 @@
-//! [`GpuMesh`] — GPU geometry wrapper for [`Material`].
+//! [`GpuMesh`] — GPU geometry wrapper for [`Material`](crate::renderer::Material).
 
 use super::material::InstanceData;
 use super::{Context, IndexBuffer, InstanceBuffer, RenderPass, VertexBuffer};
 use crate::mesh::{Mesh, Vertex};
 
-/// GPU mesh for use with [`Material`].
+/// GPU mesh for use with [`Material`](crate::renderer::Material).
 ///
 /// Upload vertex and index data once; pass a reference to every
-/// [`Material`] render call instead of managing buffers separately.
+/// [`Material`](crate::renderer::Material) render call instead of managing buffers separately.
 /// For dynamic geometry (updated every frame), use [`update`](GpuMesh::update).
 /// For instanced rendering, use [`with_instances`](GpuMesh::with_instances) and
 /// [`update_instances`](GpuMesh::update_instances).

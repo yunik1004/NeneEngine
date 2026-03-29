@@ -50,7 +50,7 @@ pub struct Ui {
 }
 
 impl Ui {
-    /// Create from a nene [`Context`] (call inside [`App::window_ready`]).
+    /// Create from a nene [`Context`] (call inside [`App::window_ready`](crate::app::App::window_ready)).
     pub fn new(ctx: &Context) -> Self {
         let egui_ctx = egui::Context::default();
         let window = ctx.window().clone();
@@ -89,7 +89,7 @@ impl Ui {
         }
     }
 
-    /// Forward a raw winit event (call from [`App::on_window_event`]).
+    /// Forward a raw winit event (call from [`App::on_window_event`](crate::app::App::on_window_event)).
     pub fn handle_event(&mut self, event: &WindowEvent) {
         let _ = self.state.on_window_event(&self.window, event);
     }
@@ -105,7 +105,7 @@ impl Ui {
 
     /// Finish the frame, tessellate shapes, and upload buffers to the GPU.
     ///
-    /// Call in [`App::prepare`] after all widget calls.
+    /// Call in [`App::prepare`](crate::app::App::prepare) after all widget calls.
     pub fn end_frame(&mut self, ctx: &mut Context) {
         let output = self.ctx.end_pass();
         self.state
@@ -145,7 +145,7 @@ impl Ui {
             .submit([encoder.finish()].into_iter().chain(extra));
     }
 
-    /// Render into the current pass (call from [`App::render`]).
+    /// Render into the current pass (call from [`App::render`](crate::app::App::render)).
     pub fn render(&self, pass: &mut RenderPass) {
         // SAFETY: egui_wgpu::Renderer::render only issues draw commands within
         // the scope of the render pass; it does not store the reference.

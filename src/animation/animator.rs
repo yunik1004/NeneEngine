@@ -35,7 +35,7 @@ impl Animator {
 
     /// Compute per-joint skinning matrices for the current time.
     ///
-    /// Pass the result directly to [`SkinnedMaterial::update_joints`].
+    /// Pass the result directly to [`Material::update_joints`](crate::renderer::Material::update_joints).
     pub fn joint_matrices(&self, clip: &MeshClip, skeleton: &MeshSkeleton) -> Vec<Mat4> {
         let poses = clip.sample(self.time, skeleton.joints.len());
         skeleton.compute_joint_matrices(&poses)

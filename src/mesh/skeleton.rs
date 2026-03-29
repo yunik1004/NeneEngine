@@ -20,7 +20,7 @@ impl Skeleton {
     /// Compute the final per-joint skinning matrices from a set of local poses.
     ///
     /// Joints must be stored in topological order (parent before child), which
-    /// glTF guarantees. The result can be uploaded directly via [`JointMatrices`].
+    /// glTF guarantees. The result can be uploaded directly via `Material::update_joints`.
     pub fn compute_joint_matrices(&self, poses: &[JointPose]) -> Vec<Mat4> {
         let n = self.joints.len().min(poses.len());
         let mut global = vec![Mat4::IDENTITY; n];

@@ -94,7 +94,7 @@ pub struct Image {
 
 /// A CPU-side mesh primitive (triangles).
 ///
-/// Obtain from [`Model::load`] or construct directly.
+/// Obtain from [`Model::load`](crate::mesh::Model::load) or construct directly.
 /// Upload to the GPU with [`GpuMesh::from_mesh`](crate::renderer::GpuMesh::from_mesh).
 pub struct Mesh {
     pub vertices: Vec<Vertex>,

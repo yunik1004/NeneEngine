@@ -695,9 +695,9 @@ impl Context {
         }
     }
 
-    /// Replace the scene-wide light list. Up to [`MAX_LIGHTS`] entries are used.
+    /// Replace the scene-wide light list. Up to [`MAX_LIGHTS`](crate::renderer::MAX_LIGHTS) entries are used.
     ///
-    /// Affects all [`Material`]s built with `.lights()`. Call once per frame
+    /// Affects all [`Material`](crate::renderer::Material)s built with `.lights()`. Call once per frame
     /// before rendering. The default is a soft directional + dim ambient.
     pub fn set_lights(&mut self, lights: &[Light]) {
         let mut u = SceneLightsUniform::default();
@@ -831,7 +831,7 @@ impl Context {
     }
 
     /// Render into an off-screen [`RenderTarget`].
-    /// If the target was created with [`create_scene_target`], depth testing is active.
+    /// If the target was created with [`Self::create_scene_target`], depth testing is active.
     pub fn render_to_target<F: FnOnce(&mut RenderPass<'_>)>(
         &mut self,
         target: &RenderTarget,

@@ -1,7 +1,7 @@
 //! Mouse picking — screen-to-world ray casting and intersection tests.
 //!
 //! # Workflow
-//! 1. Get the mouse position from [`crate::input::Input::cursor_position`].
+//! 1. Get the mouse position from [`Input::mouse_pos`](crate::input::Input::mouse_pos).
 //! 2. Cast a [`Ray`] from the camera: [`crate::camera::Camera::screen_to_ray`].
 //! 3. Test the ray against each object's bounding volume.
 //!

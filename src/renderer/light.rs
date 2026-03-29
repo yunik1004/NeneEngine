@@ -55,8 +55,8 @@ pub const MAX_LIGHTS: usize = 8;
 
 /// A scene light.
 ///
-/// Pass a slice to [`Context::set_lights`] each frame to update the
-/// scene-wide light list shared by all [`Material`]s built with `.lights()`.
+/// Pass a slice to [`Context::set_lights`](crate::renderer::Context::set_lights) each frame to update the
+/// scene-wide light list shared by all [`Material`](crate::renderer::Material)s built with `.lights()`.
 ///
 /// # Example
 /// ```no_run

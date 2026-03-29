@@ -212,7 +212,7 @@ impl TextRenderer {
     /// Load a font file from disk and register it with the text renderer.
     ///
     /// After loading, reference the font by its family name in
-    /// [`queue_with_font`](Self::queue_with_font).
+    /// [`queue`](Self::queue).
     pub fn load_font_file(
         &mut self,
         path: impl AsRef<std::path::Path>,
@@ -223,7 +223,7 @@ impl TextRenderer {
     /// Load a font from an in-memory byte buffer (e.g. from a `.npak` archive).
     ///
     /// After loading, reference the font by its family name in
-    /// [`queue_with_font`](Self::queue_with_font).
+    /// [`queue`](Self::queue).
     pub fn load_font_bytes(&mut self, bytes: Vec<u8>) {
         self.font_system.db_mut().load_font_data(bytes);
     }
@@ -433,7 +433,7 @@ impl TextRenderer {
     /// Render all queued text into a new `width × height` texture and return it.
     ///
     /// Coordinates are in pixels relative to the texture's top-left corner.
-    /// The returned [`Texture`] can be passed to [`RenderPass::set_texture`].
+    /// The returned [`Texture`] can be bound as a shader input via `RenderPass::set_texture`.
     pub fn render_to_texture(&mut self, ctx: &Context, width: u32, height: u32) -> Texture {
         let device = ctx.device();
         let queue = ctx.queue();
