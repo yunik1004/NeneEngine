@@ -12,6 +12,7 @@ pub mod locale;
 pub mod math;
 pub mod mesh;
 pub mod net;
+pub mod pak;
 pub mod particle;
 pub mod persist;
 pub mod physics;

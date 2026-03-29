@@ -52,6 +52,7 @@ use std::sync::mpsc::{self, Receiver};
 
 use crate::audio::Sound;
 use crate::mesh::Model;
+use crate::pak::PakReader;
 use crate::renderer::{Context, FilterMode, Texture};
 
 // ── AssetError ────────────────────────────────────────────────────────────────
@@ -191,6 +192,9 @@ struct PendingSound {
 /// Centralised asset cache.
 ///
 /// See the [module documentation](self) for an overview and usage example.
+///
+/// Call [`set_pak`](Self::set_pak) to mount a `.npak` archive; all subsequent
+/// loads will check the archive before falling back to the filesystem.
 pub struct Assets {
     textures: HashMap<(PathBuf, u8), Handle<Texture>>,
     models: HashMap<PathBuf, Handle<Model>>,
@@ -199,6 +203,8 @@ pub struct Assets {
     pending_textures: Vec<PendingTexture>,
     pending_models: Vec<PendingModel>,
     pending_sounds: Vec<PendingSound>,
+
+    pak: Option<Arc<PakReader>>,
 
     #[cfg(debug_assertions)]
     hot: Option<HotReloader>,
@@ -217,11 +223,18 @@ impl Assets {
             pending_textures: Vec::new(),
             pending_models: Vec::new(),
             pending_sounds: Vec::new(),
+            pak: None,
             #[cfg(debug_assertions)]
             hot: None,
             #[cfg(debug_assertions)]
             texture_filters: HashMap::new(),
         }
+    }
+
+    /// Mount a `.npak` archive. All subsequent loads check the archive before
+    /// the filesystem. Replaces any previously mounted archive.
+    pub fn set_pak(&mut self, pak: PakReader) {
+        self.pak = Some(Arc::new(pak));
     }
 
     // ── Hot reload ────────────────────────────────────────────────────────────
@@ -506,9 +519,15 @@ impl Assets {
         path: &Path,
         filter: FilterMode,
     ) -> Result<Handle<Texture>, AssetError> {
-        let img = image::open(path)
-            .map_err(|e| AssetError::Decode(e.to_string()))?
-            .into_rgba8();
+        let img = if let Some(bytes) = self.pak_read(path) {
+            image::load_from_memory(&bytes)
+                .map_err(|e| AssetError::Decode(e.to_string()))?
+                .into_rgba8()
+        } else {
+            image::open(path)
+                .map_err(|e| AssetError::Decode(e.to_string()))?
+                .into_rgba8()
+        };
         let texture = ctx.create_texture_with(img.width(), img.height(), &img, filter);
         let handle = Handle::new(texture);
         self.textures
@@ -586,7 +605,15 @@ impl Assets {
     }
 
     fn load_sound(&mut self, path: &Path) -> Result<Handle<Sound>, AssetError> {
-        let sound = Sound::load(path).map_err(|e| AssetError::Decode(e.to_string()))?;
+        let sound = if let Some(bytes) = self.pak_read(path) {
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
+            Sound::from_bytes(bytes, ext).map_err(|e| AssetError::Decode(e.to_string()))?
+        } else {
+            Sound::load(path).map_err(|e| AssetError::Decode(e.to_string()))?
+        };
         let handle = Handle::new(sound);
         self.sounds.insert(path.to_owned(), handle.clone());
         #[cfg(debug_assertions)]
@@ -620,6 +647,19 @@ impl Assets {
     /// `true` if no assets are cached.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    // ── PAK helpers ───────────────────────────────────────────────────────────
+
+    /// Look up `path` in the mounted PAK archive (if any).
+    ///
+    /// The lookup key is the path converted to a forward-slash string, with
+    /// any leading `./` stripped.
+    fn pak_read(&self, path: &Path) -> Option<Vec<u8>> {
+        let pak = self.pak.as_ref()?;
+        let key = path.to_string_lossy().replace('\\', "/");
+        let key = key.strip_prefix("./").unwrap_or(&key);
+        pak.read(key)
     }
 }
 
