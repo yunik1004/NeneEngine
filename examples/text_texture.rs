@@ -63,17 +63,19 @@ impl App for TextDemo {
                 10.0,
                 48.0,
                 [1.0, 1.0, 1.0, 1.0],
+                None,
             );
-            text.queue("nene engine", 10.0, 70.0, 32.0, [0.6, 0.9, 1.0, 1.0]);
+            text.queue("nene engine", 10.0, 70.0, 32.0, [0.6, 0.9, 1.0, 1.0], None);
             self.texture = Some(text.render_to_texture(ctx, 512, 128));
 
-            text.queue("Hello, Nene!", 20.0, 20.0, 36.0, [1.0, 1.0, 1.0, 1.0]);
+            text.queue("Hello, Nene!", 20.0, 20.0, 36.0, [1.0, 1.0, 1.0, 1.0], None);
             text.queue(
                 "↑ text baked into texture  ↑",
                 20.0,
                 64.0,
                 20.0,
                 [0.6, 0.6, 0.6, 1.0],
+                None,
             );
             text.prepare(ctx);
         }

@@ -228,33 +228,19 @@ impl TextRenderer {
         self.font_system.db_mut().load_font_data(bytes);
     }
 
-    /// Queue a string using the system default font.
-    /// Call `prepare` before rendering.
-    pub fn queue(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
-        self.pending.push(TextEntry {
-            text: text.to_owned(),
-            x,
-            y,
-            size,
-            color,
-            family: None,
-        });
-    }
-
-    /// Queue a string using a specific font family.
+    /// Queue a string to be drawn at the given position.
     ///
-    /// `family` must match the family name of a font previously loaded with
-    /// [`load_font_file`](Self::load_font_file) or
-    /// [`load_font_bytes`](Self::load_font_bytes).
-    /// Falls back to the system default if the family is not found.
-    pub fn queue_with_font(
+    /// `family` selects a font loaded with [`load_font_file`](Self::load_font_file) or
+    /// [`load_font_bytes`](Self::load_font_bytes). Pass `None` to use the system default.
+    /// Call [`prepare`](Self::prepare) before rendering.
+    pub fn queue(
         &mut self,
         text: &str,
         x: f32,
         y: f32,
         size: f32,
         color: [f32; 4],
-        family: &str,
+        family: Option<&str>,
     ) {
         self.pending.push(TextEntry {
             text: text.to_owned(),
@@ -262,7 +248,7 @@ impl TextRenderer {
             y,
             size,
             color,
-            family: Some(family.to_owned()),
+            family: family.map(str::to_owned),
         });
     }
 

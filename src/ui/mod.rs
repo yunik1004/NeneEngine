@@ -352,6 +352,7 @@ impl Ui {
                 cmd.y * sy,
                 cmd.size * sx.min(sy),
                 cmd.color,
+                None,
             );
         }
         self.text.prepare(ctx);
