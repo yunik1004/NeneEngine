@@ -42,13 +42,10 @@
 //!
 //!     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &nene::input::Input) {
 //!         let Some(mat) = &mut self.mat else { return };
+//!         ctx.set_lights(&[Light::ambient(Vec3::ONE, 0.15), self.sun]);
 //!         mat.uniform.view_proj = Mat4::IDENTITY;
 //!         mat.uniform.model     = Mat4::IDENTITY;
 //!         mat.uniform.light_vp  = self.sun.light_view_proj(Vec3::ZERO, 5.0);
-//!         mat.uniform.set_lights(&[
-//!             Light::ambient(Vec3::ONE, 0.15),
-//!             self.sun,
-//!         ]);
 //!         mat.flush(ctx);
 //!         let (Some(mesh), Some(sm)) = (&self.mesh, &self.shadow_map) else { return };
 //!         ctx.shadow_pass(sm, |pass| mat.shadow_draw(pass, mesh));
@@ -70,7 +67,7 @@ use super::{
     Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexAttribute, VertexFormat,
     VertexLayout,
     context::Context,
-    light::{GPU_LIGHT_WGSL, GpuLight, Light, MAX_LIGHTS},
+    light::{GPU_LIGHT_WGSL, scene_lights_wgsl},
     mesh::GpuMesh,
     shadow::{SHADOW_WGSL, ShadowMap},
     texture::Texture,
@@ -90,13 +87,13 @@ pub struct HasShadow;
 
 // ── MaterialUniform ───────────────────────────────────────────────────────────
 
-/// Fat uniform shared by all [`Material`] variants.
+/// Per-object uniform for all [`Material`] variants.
 ///
-/// All fields are present regardless of which features are active; the
-/// generated WGSL shader only reads what it needs.  Set the relevant fields
-/// and call [`Material::flush`] once per frame.
+/// Contains only per-object data: transforms, flat colour, rim tint, and the
+/// camera/shadow-map matrices.  Scene lights live in [`Context`]'s shared
+/// buffer and are uploaded separately via [`Context::set_lights`].
 ///
-/// Use [`set_lights`](Self::set_lights) to upload lights each frame.
+/// Mutate fields freely; call [`Material::flush`] once per frame to upload.
 #[derive(Clone, Copy, encase::ShaderType)]
 pub struct MaterialUniform {
     pub view_proj: glam::Mat4,
@@ -109,32 +106,10 @@ pub struct MaterialUniform {
     pub rim_color: glam::Vec4,
     /// World-space camera position. Required for rim lighting (`.rim()`).
     pub camera_pos: glam::Vec4,
-    /// Number of active lights in `lights`.
-    pub light_count: u32,
-    pub(crate) lights: [GpuLight; MAX_LIGHTS],
-}
-
-impl MaterialUniform {
-    /// Upload a slice of lights into the uniform.
-    ///
-    /// Silently clamps to [`MAX_LIGHTS`] entries.
-    pub fn set_lights(&mut self, lights: &[Light]) {
-        let n = lights.len().min(MAX_LIGHTS);
-        self.light_count = n as u32;
-        for (i, l) in lights.iter().take(n).enumerate() {
-            self.lights[i] = l.to_gpu();
-        }
-    }
 }
 
 impl Default for MaterialUniform {
     fn default() -> Self {
-        // Sensible defaults: a soft directional + dim ambient, matching the old
-        // per-field defaults so existing examples work without changes.
-        let mut lights = [GpuLight::default(); MAX_LIGHTS];
-        lights[0] =
-            Light::directional(glam::Vec3::new(1.0, -2.0, -1.0), glam::Vec3::ONE, 1.0).to_gpu();
-        lights[1] = Light::ambient(glam::Vec3::ONE, 0.1).to_gpu();
         Self {
             view_proj: glam::Mat4::IDENTITY,
             model: glam::Mat4::IDENTITY,
@@ -142,8 +117,6 @@ impl Default for MaterialUniform {
             color: glam::Vec4::ONE,
             rim_color: glam::Vec4::ONE,
             camera_pos: glam::Vec4::ZERO,
-            light_count: 2,
-            lights,
         }
     }
 }
@@ -266,10 +239,8 @@ impl<T, S> MaterialBuilder<T, S> {
         self
     }
 
-    /// Enable the light loop — reads up to [`MAX_LIGHTS`] lights from
-    /// [`MaterialUniform::lights`].
-    ///
-    /// Call [`MaterialUniform::set_lights`] each frame to update them.
+    /// Enable the light loop — reads lights from the scene-level buffer
+    /// uploaded via [`Context::set_lights`].
     pub fn lights(mut self) -> Self {
         self.feat.lights = true;
         self
@@ -361,8 +332,11 @@ impl<T, S> MaterialBuilder<T, S> {
     pub fn build(self, ctx: &mut Context) -> Material<T, S> {
         let main_wgsl = self.custom_wgsl.unwrap_or_else(|| gen_main_wgsl(self.feat));
         let mut desc = PipelineDescriptor::new(main_wgsl, crate::mesh::Vertex::layout())
-            .with_uniform()
+            .with_uniform() // group(0) = MaterialU
             .with_depth();
+        if self.feat.lights {
+            desc = desc.with_uniform(); // group(1) = SceneLights
+        }
         if self.feat.texture {
             desc = desc.with_texture().with_alpha_blend();
         }
@@ -404,6 +378,7 @@ impl<T, S> MaterialBuilder<T, S> {
             shadow_pipeline,
             ubuf,
             joint_buf,
+            light_offset: self.feat.lights as u32,
             uniform: self.init,
             _phantom: PhantomData,
         }
@@ -431,6 +406,11 @@ pub struct Material<T = NoTexture, S = NoShadow> {
     shadow_pipeline: Option<Pipeline>,
     ubuf: UniformBuffer,
     joint_buf: Option<StorageBuffer>,
+    /// Group slot offset due to the scene-lights bind group (0 or 1).
+    ///
+    /// When `.lights()` is active the light buffer occupies group(1), shifting
+    /// texture / shadow / joint groups up by one.
+    light_offset: u32,
     /// CPU-side copy of the uniform. Mutate fields freely; call
     /// [`flush`](Material::flush) to upload changes to the GPU.
     pub uniform: MaterialUniform,
@@ -476,6 +456,11 @@ impl<T, S> Material<T, S> {
     pub fn render_instanced(&self, pass: &mut RenderPass, mesh: &GpuMesh) {
         pass.set_pipeline(&self.pipeline);
         pass.set_uniform(0, &self.ubuf);
+        if self.light_offset > 0
+            && let Some(lb) = pass.scene_lights
+        {
+            pass.set_uniform(1, lb);
+        }
         mesh.draw_instanced(pass);
     }
 
@@ -488,15 +473,21 @@ impl<T, S> Material<T, S> {
     ) {
         pass.set_pipeline(&self.pipeline);
         pass.set_uniform(0, &self.ubuf);
+        if self.light_offset > 0
+            && let Some(lb) = pass.scene_lights
+        {
+            pass.set_uniform(1, lb);
+        }
+        // Texture / shadow / joints shift by light_offset (0 or 1).
+        let off = self.light_offset;
         if let Some(t) = texture {
-            pass.set_texture(1, t);
+            pass.set_texture(1 + off, t);
         }
         if let Some(sm) = shadow_map {
-            pass.set_shadow_map(2, sm);
+            pass.set_shadow_map(2 + off, sm);
         }
-        // Main pipeline layout: uniform(0) [→ texture(1)] [→ shadow(2)] [→ storage(3) if skinned]
         if let Some(jbuf) = &self.joint_buf {
-            pass.set_storage(3, jbuf);
+            pass.set_storage(3 + off, jbuf);
         }
         mesh.draw(pass);
     }
@@ -540,29 +531,18 @@ impl Material<HasTexture, HasShadow> {
 
 // ── WGSL generation ───────────────────────────────────────────────────────────
 
-/// The MaterialU WGSL struct declaration.
-///
-/// Depends on `GpuLight` being declared first (included when `lights` is
-/// enabled). When `lights` is disabled the array is still present in the
-/// uniform buffer (the struct is always the same size) but the loop body is
-/// skipped.
-fn material_u_wgsl() -> String {
-    format!(
-        "
-struct MaterialU {{
-    view_proj:   mat4x4<f32>,
-    model:       mat4x4<f32>,
-    light_vp:    mat4x4<f32>,
-    color:       vec4<f32>,
-    rim_color:   vec4<f32>,
-    camera_pos:  vec4<f32>,
-    light_count: u32,
-    lights:      array<GpuLight, {MAX_LIGHTS}>,
-}}
-@group(0) @binding(0) var<uniform> u: MaterialU;
-"
-    )
+/// The MaterialU WGSL struct (per-object data only; lights are in SceneLights).
+const MATERIAL_U_WGSL: &str = "
+struct MaterialU {
+    view_proj:  mat4x4<f32>,
+    model:      mat4x4<f32>,
+    light_vp:   mat4x4<f32>,
+    color:      vec4<f32>,
+    rim_color:  vec4<f32>,
+    camera_pos: vec4<f32>,
 }
+@group(0) @binding(0) var<uniform> u: MaterialU;
+";
 
 pub(crate) fn gen_main_wgsl(feat: Features) -> String {
     let needs_normal = feat.lights || feat.shadow || feat.rim;
@@ -583,28 +563,36 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
 
     let mut s = String::new();
 
-    // GpuLight struct is always included (the uniform contains it regardless of
-    // whether the light loop is active) so MaterialU layout never changes.
-    s.push_str(GPU_LIGHT_WGSL);
+    // lights — declared before MaterialU so SceneLights can reference GpuLight
+    if feat.lights {
+        s.push_str(GPU_LIGHT_WGSL);
+        s.push_str(&scene_lights_wgsl(1));
+    }
     if feat.shadow {
         s.push_str(SHADOW_WGSL);
     }
-    s.push_str(&material_u_wgsl());
+    s.push_str(MATERIAL_U_WGSL);
 
+    // texture / shadow / joints shift up by 1 when lights occupy group(1)
+    let g = 1u32 + feat.lights as u32;
     if feat.texture {
-        s.push_str(
-            "@group(1) @binding(0) var t_diffuse: texture_2d<f32>;\n\
-             @group(1) @binding(1) var s_diffuse: sampler;\n",
-        );
+        s.push_str(&format!(
+            "@group({g}) @binding(0) var t_diffuse: texture_2d<f32>;\n\
+             @group({g}) @binding(1) var s_diffuse: sampler;\n"
+        ));
     }
     if feat.shadow {
-        s.push_str(
-            "@group(2) @binding(0) var shadow_tex:  texture_depth_2d;\n\
-             @group(2) @binding(1) var shadow_samp: sampler_comparison;\n",
-        );
+        let sg = g + feat.texture as u32;
+        s.push_str(&format!(
+            "@group({sg}) @binding(0) var shadow_tex:  texture_depth_2d;\n\
+             @group({sg}) @binding(1) var shadow_samp: sampler_comparison;\n"
+        ));
     }
     if feat.skinned {
-        s.push_str("@group(3) @binding(0) var<storage, read> joint_mats: array<mat4x4<f32>>;\n");
+        let jg = g + feat.texture as u32 + feat.shadow as u32;
+        s.push_str(&format!(
+            "@group({jg}) @binding(0) var<storage, read> joint_mats: array<mat4x4<f32>>;\n"
+        ));
     }
 
     // VOut struct
@@ -721,8 +709,8 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
             );
         }
         s.push_str(
-            "\tfor (var i = 0u; i < u.light_count; i++) {\n\
-             \t\tlet l = u.lights[i];\n\
+            "\tfor (var i = 0u; i < scene.light_count; i++) {\n\
+             \t\tlet l = scene.lights[i];\n\
              \t\tif (l.kind == 0u) {\n\
              \t\t\tlight += l.color * l.intensity;\n\
              \t\t} else if (l.kind == 1u) {\n\
@@ -760,8 +748,7 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
 
 pub(crate) fn gen_shadow_wgsl(feat: Features) -> String {
     let mut s = String::new();
-    s.push_str(GPU_LIGHT_WGSL);
-    s.push_str(&material_u_wgsl());
+    s.push_str(MATERIAL_U_WGSL);
     // Shadow pipeline layout: uniform(0) [→ storage(1) if skinned]
     if feat.skinned {
         s.push_str("@group(1) @binding(0) var<storage, read> joint_mats: array<mat4x4<f32>>;\n");

@@ -266,11 +266,11 @@ impl App for StateMachineDemo {
             .rim()
             .skinned(self.model.skeleton.joints.len())
             .build(ctx);
+        ctx.set_lights(&self.lights);
         mat.uniform.color = Vec4::new(0.9, 0.6, 0.2, 1.0);
         mat.uniform.rim_color = Vec4::new(0.6, 0.9, 1.0, 1.0);
         mat.uniform.view_proj = camera.view_proj(aspect);
         mat.uniform.camera_pos = cam_pos.extend(1.0);
-        mat.uniform.set_lights(&self.lights);
         mat.flush(ctx);
         self.mat = Some(mat);
 

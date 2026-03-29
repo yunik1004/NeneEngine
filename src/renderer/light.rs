@@ -55,17 +55,19 @@ pub const MAX_LIGHTS: usize = 8;
 
 /// A scene light.
 ///
-/// Pass a slice to [`MaterialUniform::set_lights`] each frame.
+/// Pass a slice to [`Context::set_lights`] each frame to update the
+/// scene-wide light list shared by all [`Material`]s built with `.lights()`.
 ///
 /// # Example
-/// ```
-/// # use nene::renderer::{Light, MaterialUniform};
+/// ```no_run
+/// # use nene::renderer::{Context, Light};
 /// # use nene::math::Vec3;
-/// let mut u = MaterialUniform::default();
-/// u.set_lights(&[
+/// # fn example(ctx: &mut Context) {
+/// ctx.set_lights(&[
 ///     Light::ambient(Vec3::ONE, 0.15),
 ///     Light::directional(Vec3::new(1.0, -2.0, -1.0), Vec3::ONE, 1.0),
 /// ]);
+/// # }
 /// ```
 #[derive(Debug, Clone, Copy)]
 pub enum Light {
@@ -175,7 +177,41 @@ impl Light {
     }
 }
 
-// ── WGSL snippet ──────────────────────────────────────────────────────────────
+// ── SceneLightsUniform ────────────────────────────────────────────────────────
+
+/// Scene-level light uniform — owned by [`Context`], uploaded once per frame.
+///
+/// Use [`Context::set_lights`] to update lights. The default contains a soft
+/// directional + dim ambient so meshes render without explicit setup.
+#[derive(Clone, Copy, encase::ShaderType)]
+pub(crate) struct SceneLightsUniform {
+    pub light_count: u32,
+    pub lights: [GpuLight; MAX_LIGHTS],
+}
+
+impl SceneLightsUniform {
+    pub(crate) fn set(&mut self, lights: &[Light]) {
+        let n = lights.len().min(MAX_LIGHTS);
+        self.light_count = n as u32;
+        for (i, l) in lights.iter().take(n).enumerate() {
+            self.lights[i] = l.to_gpu();
+        }
+    }
+}
+
+impl Default for SceneLightsUniform {
+    fn default() -> Self {
+        let mut lights = [GpuLight::default(); MAX_LIGHTS];
+        lights[0] = Light::directional(Vec3::new(1.0, -2.0, -1.0), Vec3::ONE, 1.0).to_gpu();
+        lights[1] = Light::ambient(Vec3::ONE, 0.1).to_gpu();
+        Self {
+            light_count: 2,
+            lights,
+        }
+    }
+}
+
+// ── WGSL snippets ─────────────────────────────────────────────────────────────
 
 /// WGSL `GpuLight` struct declaration.
 ///
@@ -190,3 +226,16 @@ struct GpuLight {
     radius:    f32,
 }
 "#;
+
+/// Generate the WGSL `SceneLights` struct + uniform binding at `group`.
+pub(crate) fn scene_lights_wgsl(group: u32) -> String {
+    format!(
+        "
+struct SceneLights {{
+    light_count: u32,
+    lights:      array<GpuLight, {MAX_LIGHTS}>,
+}}
+@group({group}) @binding(0) var<uniform> scene: SceneLights;
+"
+    )
+}

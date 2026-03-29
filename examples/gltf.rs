@@ -86,14 +86,13 @@ impl App for GltfDemo {
         let vp = camera_view_proj(aspect);
         let light_vp = self.sun.light_view_proj(Vec3::ZERO, 5.0);
         let rot = Mat4::from_rotation_y(self.angle);
+        ctx.set_lights(&[Light::ambient(Vec3::ONE, 0.15), self.sun]);
 
         for i in 0..self.meshes.len() {
             mat.uniform.view_proj = vp;
             mat.uniform.model = rot * self.transforms[i];
             mat.uniform.light_vp = light_vp;
             mat.uniform.color = Vec4::ONE;
-            mat.uniform
-                .set_lights(&[Light::ambient(Vec3::ONE, 0.15), self.sun]);
             mat.flush(ctx);
             ctx.shadow_pass(shadow_map, |pass| mat.shadow_draw(pass, &self.meshes[i]));
         }

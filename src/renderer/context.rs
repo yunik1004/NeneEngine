@@ -3,6 +3,7 @@ use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 use super::builtin::BuiltinPipeline;
+use super::light::{Light, SceneLightsUniform};
 use super::shadow::{self, ShadowMap};
 use super::texture::{self, FilterMode, RenderTarget, Texture};
 use super::uniform;
@@ -534,7 +535,7 @@ impl HeadlessContext {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            let mut pass = RenderPass::new(wgpu_pass);
+            let mut pass = RenderPass::new(wgpu_pass, None);
             draw(&mut pass);
         }
         self.gpu.queue.submit([encoder.finish()]);
@@ -651,6 +652,7 @@ pub struct Context {
     surface_config: wgpu::SurfaceConfiguration,
     depth_view: wgpu::TextureView,
     window: Arc<Window>,
+    lights_buf: UniformBuffer,
 }
 
 impl Context {
@@ -702,13 +704,27 @@ impl Context {
 
         let depth_view = create_depth_texture(&device, size.width, size.height);
 
+        let gpu = GpuDevice { device, queue };
+        let lights_buf = gpu.create_uniform_buffer(&SceneLightsUniform::default());
+
         Self {
-            gpu: GpuDevice { device, queue },
+            gpu,
             surface,
             surface_config,
             depth_view,
             window,
+            lights_buf,
         }
+    }
+
+    /// Replace the scene-wide light list. Up to [`MAX_LIGHTS`] entries are used.
+    ///
+    /// Affects all [`Material`]s built with `.lights()`. Call once per frame
+    /// before rendering. The default is a soft directional + dim ambient.
+    pub fn set_lights(&mut self, lights: &[Light]) {
+        let mut u = SceneLightsUniform::default();
+        u.set(lights);
+        self.gpu.update_uniform_buffer(&self.lights_buf, &u);
     }
 
     /// Toggle fullscreen. Pass `true` for borderless fullscreen, `false` for windowed.
@@ -878,7 +894,7 @@ impl Context {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            let mut pass = RenderPass::new(wgpu_pass);
+            let mut pass = RenderPass::new(wgpu_pass, Some(&self.lights_buf));
             draw(&mut pass);
         }
         self.gpu.queue.submit([encoder.finish()]);
@@ -905,7 +921,7 @@ impl Context {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            let mut pass = RenderPass::new(wgpu_pass);
+            let mut pass = RenderPass::new(wgpu_pass, None);
             draw(&mut pass);
         }
         self.gpu.queue.submit([encoder.finish()]);
@@ -967,7 +983,7 @@ impl Context {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            let mut pass = RenderPass::new(wgpu_pass);
+            let mut pass = RenderPass::new(wgpu_pass, Some(&self.lights_buf));
             draw(&mut pass);
         }
 

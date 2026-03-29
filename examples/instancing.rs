@@ -55,12 +55,11 @@ impl App for InstancingDemo {
             &self.instances,
         ));
 
-        let mut mat = MaterialBuilder::new().lights().instanced().build(ctx);
-        mat.uniform.set_lights(&[
+        ctx.set_lights(&[
             Light::ambient(Vec3::ONE, 0.25),
             Light::directional(Vec3::new(1.0, 2.0, 1.0), Vec3::ONE, 0.75),
         ]);
-        self.mat = Some(mat);
+        self.mat = Some(MaterialBuilder::new().lights().instanced().build(ctx));
     }
 
     fn update(&mut self, _input: &Input, time: &Time) {

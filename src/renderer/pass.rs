@@ -5,11 +5,18 @@ use super::{
 
 pub struct RenderPass<'a> {
     pub(crate) inner: wgpu::RenderPass<'a>,
+    pub(crate) scene_lights: Option<&'a UniformBuffer>,
 }
 
 impl<'a> RenderPass<'a> {
-    pub(crate) fn new(inner: wgpu::RenderPass<'a>) -> Self {
-        Self { inner }
+    pub(crate) fn new(
+        inner: wgpu::RenderPass<'a>,
+        scene_lights: Option<&'a UniformBuffer>,
+    ) -> Self {
+        Self {
+            inner,
+            scene_lights,
+        }
     }
 
     pub(crate) fn set_pipeline(&mut self, pipeline: &Pipeline) {
