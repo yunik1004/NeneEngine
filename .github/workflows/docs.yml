@@ -12,11 +12,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install system libraries
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev libasound2-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libudev-dev libasound2-dev libvulkan-dev mesa-vulkan-drivers pulseaudio
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy -- --deny warnings
+      - name: Start virtual audio
+        run: pulseaudio --start
       - run: cargo test --no-fail-fast
+        env:
+          WGPU_BACKEND: vulkan
 
   docs:
     runs-on: ubuntu-latest
