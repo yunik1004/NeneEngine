@@ -8,8 +8,8 @@ use nene::{
     math::{Mat4, Quat, Vec3, Vec4},
     mesh::cube,
     renderer::{
-        AmbientLight, Context, DirectionalLight, InstanceData, InstancedMesh, Material,
-        MaterialBuilder, RenderPass,
+        AmbientLight, Context, DirectionalLight, GpuMesh, InstanceData, Material, MaterialBuilder,
+        RenderPass,
     },
     time::Time,
 };
@@ -34,7 +34,7 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> [f32; 3] {
 struct InstancingDemo {
     elapsed: f64,
     mat: Option<Material>,
-    mesh: Option<InstancedMesh>,
+    mesh: Option<GpuMesh>,
     instances: Vec<InstanceData>,
 }
 
@@ -51,7 +51,12 @@ impl App for InstancingDemo {
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         let (verts, indices) = cube(Vec3::ONE).mesh();
         self.instances = vec![InstanceData::new(Mat4::IDENTITY, Vec4::ONE); (GRID * GRID) as usize];
-        self.mesh = Some(InstancedMesh::new(ctx, &verts, &indices, &self.instances));
+        self.mesh = Some(GpuMesh::with_instances(
+            ctx,
+            &verts,
+            &indices,
+            &self.instances,
+        ));
 
         let mut mat = MaterialBuilder::new()
             .ambient()
@@ -96,7 +101,7 @@ impl App for InstancingDemo {
         }
 
         if let (Some(mat), Some(mesh)) = (&mut self.mat, &mut self.mesh) {
-            mesh.update(ctx, &self.instances);
+            mesh.update_instances(ctx, &self.instances);
             mat.uniform.view_proj = view_proj;
             mat.flush(ctx);
         }

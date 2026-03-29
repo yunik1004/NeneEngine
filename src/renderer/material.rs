@@ -69,7 +69,7 @@ use super::{
     VertexLayout,
     context::Context,
     light::{AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight},
-    mesh::{GpuMesh, InstancedMesh},
+    mesh::GpuMesh,
     shadow::{SHADOW_WGSL, ShadowMap},
     texture::Texture,
 };
@@ -398,12 +398,10 @@ impl<T, S> Material<T, S> {
 
     /// Instanced draw. Only valid for materials built with
     /// [`.instanced()`](MaterialBuilder::instanced).
-    pub fn render_instanced(&self, pass: &mut RenderPass, mesh: &InstancedMesh) {
+    pub fn render_instanced(&self, pass: &mut RenderPass, mesh: &GpuMesh) {
         pass.set_pipeline(&self.pipeline);
         pass.set_uniform(0, &self.ubuf);
-        pass.set_vertex_buffer(0, &mesh.vbuf);
-        pass.set_instance_buffer(1, &mesh.inst_buf);
-        pass.draw_indexed_instanced(&mesh.ibuf, mesh.count());
+        mesh.draw_instanced(pass);
     }
 
     fn draw_inner(
