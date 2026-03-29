@@ -8,17 +8,12 @@ use super::Vertex;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-fn colored(x: f32, y: f32, z: f32, color: Vec4) -> Vertex {
-    Vertex { position: Vec3::new(x, y, z), color, ..Vertex::default() }
+fn colored(position: Vec3, color: Vec4) -> Vertex {
+    Vertex { position, color, ..Vertex::default() }
 }
 
-fn textured(position: [f32; 3], normal: [f32; 3], uv: [f32; 2]) -> Vertex {
-    Vertex {
-        position: Vec3::from(position),
-        normal: Vec3::from(normal),
-        uv: Vec2::from(uv),
-        ..Vertex::default()
-    }
+fn textured(position: Vec3, normal: Vec3, uv: Vec2) -> Vertex {
+    Vertex { position, normal, uv, ..Vertex::default() }
 }
 
 // ── Flat primitives ───────────────────────────────────────────────────────────
@@ -27,12 +22,12 @@ fn textured(position: [f32; 3], normal: [f32; 3], uv: [f32; 2]) -> Vertex {
 pub fn rect(x: f32, y: f32, w: f32, h: f32, color: Vec4) -> Vec<Vertex> {
     let (x1, y1, x2, y2) = (x, y, x + w, y + h);
     vec![
-        colored(x1, y1, 0.0, color),
-        colored(x2, y1, 0.0, color),
-        colored(x2, y2, 0.0, color),
-        colored(x1, y1, 0.0, color),
-        colored(x2, y2, 0.0, color),
-        colored(x1, y2, 0.0, color),
+        colored(Vec3::new(x1, y1, 0.0), color),
+        colored(Vec3::new(x2, y1, 0.0), color),
+        colored(Vec3::new(x2, y2, 0.0), color),
+        colored(Vec3::new(x1, y1, 0.0), color),
+        colored(Vec3::new(x2, y2, 0.0), color),
+        colored(Vec3::new(x1, y2, 0.0), color),
     ]
 }
 
@@ -45,22 +40,13 @@ pub fn circle(cx: f32, cy: f32, radius: f32, color: Vec4) -> Vec<Vertex> {
 pub fn circle_segments(cx: f32, cy: f32, radius: f32, color: Vec4, segments: u32) -> Vec<Vertex> {
     let n = segments.max(3) as usize;
     let mut out = Vec::with_capacity(n * 3);
+    let centre = Vec3::new(cx, cy, 0.0);
     for i in 0..n {
         let a0 = TAU * i as f32 / n as f32;
         let a1 = TAU * (i + 1) as f32 / n as f32;
-        out.push(colored(cx, cy, 0.0, color));
-        out.push(colored(
-            cx + a0.cos() * radius,
-            cy + a0.sin() * radius,
-            0.0,
-            color,
-        ));
-        out.push(colored(
-            cx + a1.cos() * radius,
-            cy + a1.sin() * radius,
-            0.0,
-            color,
-        ));
+        out.push(colored(centre, color));
+        out.push(colored(Vec3::new(cx + a0.cos() * radius, cy + a0.sin() * radius, 0.0), color));
+        out.push(colored(Vec3::new(cx + a1.cos() * radius, cy + a1.sin() * radius, 0.0), color));
     }
     out
 }
@@ -68,9 +54,9 @@ pub fn circle_segments(cx: f32, cy: f32, radius: f32, color: Vec4, segments: u32
 /// Filled triangle.
 pub fn triangle(a: Vec2, b: Vec2, c: Vec2, color: Vec4) -> Vec<Vertex> {
     vec![
-        colored(a.x, a.y, 0.0, color),
-        colored(b.x, b.y, 0.0, color),
-        colored(c.x, c.y, 0.0, color),
+        colored(a.extend(0.0), color),
+        colored(b.extend(0.0), color),
+        colored(c.extend(0.0), color),
     ]
 }
 
@@ -80,12 +66,12 @@ pub fn line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: Vec4) -> 
     let len = (dx * dx + dy * dy).sqrt().max(f32::EPSILON);
     let (nx, ny) = (-dy / len * thickness * 0.5, dx / len * thickness * 0.5);
     vec![
-        colored(x1 + nx, y1 + ny, 0.0, color),
-        colored(x2 + nx, y2 + ny, 0.0, color),
-        colored(x2 - nx, y2 - ny, 0.0, color),
-        colored(x1 + nx, y1 + ny, 0.0, color),
-        colored(x2 - nx, y2 - ny, 0.0, color),
-        colored(x1 - nx, y1 - ny, 0.0, color),
+        colored(Vec3::new(x1 + nx, y1 + ny, 0.0), color),
+        colored(Vec3::new(x2 + nx, y2 + ny, 0.0), color),
+        colored(Vec3::new(x2 - nx, y2 - ny, 0.0), color),
+        colored(Vec3::new(x1 + nx, y1 + ny, 0.0), color),
+        colored(Vec3::new(x2 - nx, y2 - ny, 0.0), color),
+        colored(Vec3::new(x1 - nx, y1 - ny, 0.0), color),
     ]
 }
 
@@ -115,11 +101,12 @@ impl QuadBuilder {
 
     pub fn mesh(self) -> (Vec<Vertex>, Vec<u32>) {
         let (hw, hh) = (self.w * 0.5, self.h * 0.5);
+        let n = Vec3::Z;
         let verts = vec![
-            textured([-hw, -hh, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0]),
-            textured([hw, -hh, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0]),
-            textured([hw, hh, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0]),
-            textured([-hw, hh, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0]),
+            textured(Vec3::new(-hw, -hh, 0.0), n, Vec2::new(0.0, 1.0)),
+            textured(Vec3::new( hw, -hh, 0.0), n, Vec2::new(1.0, 1.0)),
+            textured(Vec3::new( hw,  hh, 0.0), n, Vec2::new(1.0, 0.0)),
+            textured(Vec3::new(-hw,  hh, 0.0), n, Vec2::new(0.0, 0.0)),
         ];
         (verts, vec![0, 1, 2, 0, 2, 3])
     }
@@ -135,73 +122,37 @@ pub struct CubeBuilder {
 impl CubeBuilder {
     pub fn color(self, color: Vec4) -> Vec<Vertex> {
         let (hx, hy, hz) = (self.sx * 0.5, self.sy * 0.5, self.sz * 0.5);
-        let tris: [[[f32; 3]; 3]; 12] = [
-            [[-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz]],
-            [[-hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz]],
-            [[hx, -hy, -hz], [-hx, -hy, -hz], [-hx, hy, -hz]],
-            [[hx, -hy, -hz], [-hx, hy, -hz], [hx, hy, -hz]],
-            [[hx, -hy, hz], [hx, -hy, -hz], [hx, hy, -hz]],
-            [[hx, -hy, hz], [hx, hy, -hz], [hx, hy, hz]],
-            [[-hx, -hy, -hz], [-hx, -hy, hz], [-hx, hy, hz]],
-            [[-hx, -hy, -hz], [-hx, hy, hz], [-hx, hy, -hz]],
-            [[-hx, hy, hz], [hx, hy, hz], [hx, hy, -hz]],
-            [[-hx, hy, hz], [hx, hy, -hz], [-hx, hy, -hz]],
-            [[-hx, -hy, -hz], [hx, -hy, -hz], [hx, -hy, hz]],
-            [[-hx, -hy, -hz], [hx, -hy, hz], [-hx, -hy, hz]],
+        let tris: [[Vec3; 3]; 12] = [
+            [Vec3::new(-hx, -hy,  hz), Vec3::new( hx, -hy,  hz), Vec3::new( hx,  hy,  hz)],
+            [Vec3::new(-hx, -hy,  hz), Vec3::new( hx,  hy,  hz), Vec3::new(-hx,  hy,  hz)],
+            [Vec3::new( hx, -hy, -hz), Vec3::new(-hx, -hy, -hz), Vec3::new(-hx,  hy, -hz)],
+            [Vec3::new( hx, -hy, -hz), Vec3::new(-hx,  hy, -hz), Vec3::new( hx,  hy, -hz)],
+            [Vec3::new( hx, -hy,  hz), Vec3::new( hx, -hy, -hz), Vec3::new( hx,  hy, -hz)],
+            [Vec3::new( hx, -hy,  hz), Vec3::new( hx,  hy, -hz), Vec3::new( hx,  hy,  hz)],
+            [Vec3::new(-hx, -hy, -hz), Vec3::new(-hx, -hy,  hz), Vec3::new(-hx,  hy,  hz)],
+            [Vec3::new(-hx, -hy, -hz), Vec3::new(-hx,  hy,  hz), Vec3::new(-hx,  hy, -hz)],
+            [Vec3::new(-hx,  hy,  hz), Vec3::new( hx,  hy,  hz), Vec3::new( hx,  hy, -hz)],
+            [Vec3::new(-hx,  hy,  hz), Vec3::new( hx,  hy, -hz), Vec3::new(-hx,  hy, -hz)],
+            [Vec3::new(-hx, -hy, -hz), Vec3::new( hx, -hy, -hz), Vec3::new( hx, -hy,  hz)],
+            [Vec3::new(-hx, -hy, -hz), Vec3::new( hx, -hy,  hz), Vec3::new(-hx, -hy,  hz)],
         ];
         tris.iter()
-            .flat_map(|tri| tri.iter().map(|&[x, y, z]| colored(x, y, z, color)))
+            .flat_map(|tri| tri.iter().map(|&p| colored(p, color)))
             .collect()
     }
 
     pub fn mesh(self) -> (Vec<Vertex>, Vec<u32>) {
         let (hx, hy, hz) = (self.sx * 0.5, self.sy * 0.5, self.sz * 0.5);
-        struct Face {
-            normal: [f32; 3],
-            positions: [[f32; 3]; 4],
-        }
+        struct Face { normal: Vec3, positions: [Vec3; 4] }
         let faces = [
-            Face {
-                normal: [0., 0., 1.],
-                positions: [[-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz]],
-            },
-            Face {
-                normal: [0., 0., -1.],
-                positions: [
-                    [hx, -hy, -hz],
-                    [-hx, -hy, -hz],
-                    [-hx, hy, -hz],
-                    [hx, hy, -hz],
-                ],
-            },
-            Face {
-                normal: [1., 0., 0.],
-                positions: [[hx, -hy, hz], [hx, -hy, -hz], [hx, hy, -hz], [hx, hy, hz]],
-            },
-            Face {
-                normal: [-1., 0., 0.],
-                positions: [
-                    [-hx, -hy, -hz],
-                    [-hx, -hy, hz],
-                    [-hx, hy, hz],
-                    [-hx, hy, -hz],
-                ],
-            },
-            Face {
-                normal: [0., 1., 0.],
-                positions: [[-hx, hy, hz], [hx, hy, hz], [hx, hy, -hz], [-hx, hy, -hz]],
-            },
-            Face {
-                normal: [0., -1., 0.],
-                positions: [
-                    [-hx, -hy, -hz],
-                    [hx, -hy, -hz],
-                    [hx, -hy, hz],
-                    [-hx, -hy, hz],
-                ],
-            },
+            Face { normal: Vec3::Z,    positions: [Vec3::new(-hx,-hy, hz), Vec3::new( hx,-hy, hz), Vec3::new( hx, hy, hz), Vec3::new(-hx, hy, hz)] },
+            Face { normal: Vec3::NEG_Z, positions: [Vec3::new( hx,-hy,-hz), Vec3::new(-hx,-hy,-hz), Vec3::new(-hx, hy,-hz), Vec3::new( hx, hy,-hz)] },
+            Face { normal: Vec3::X,    positions: [Vec3::new( hx,-hy, hz), Vec3::new( hx,-hy,-hz), Vec3::new( hx, hy,-hz), Vec3::new( hx, hy, hz)] },
+            Face { normal: Vec3::NEG_X, positions: [Vec3::new(-hx,-hy,-hz), Vec3::new(-hx,-hy, hz), Vec3::new(-hx, hy, hz), Vec3::new(-hx, hy,-hz)] },
+            Face { normal: Vec3::Y,    positions: [Vec3::new(-hx, hy, hz), Vec3::new( hx, hy, hz), Vec3::new( hx, hy,-hz), Vec3::new(-hx, hy,-hz)] },
+            Face { normal: Vec3::NEG_Y, positions: [Vec3::new(-hx,-hy,-hz), Vec3::new( hx,-hy,-hz), Vec3::new( hx,-hy, hz), Vec3::new(-hx,-hy, hz)] },
         ];
-        let uvs = [[0.0f32, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
+        let uvs = [Vec2::new(0.0, 1.0), Vec2::new(1.0, 1.0), Vec2::new(1.0, 0.0), Vec2::new(0.0, 0.0)];
         let mut verts = Vec::with_capacity(24);
         let mut indices = Vec::with_capacity(36);
         for face in &faces {
@@ -232,10 +183,11 @@ impl SphereBuilder {
             let phi = PI * i as f32 / stacks as f32;
             for j in 0..=slices {
                 let theta = TAU * j as f32 / slices as f32;
-                let nx = phi.sin() * theta.cos();
-                let ny = phi.cos();
-                let nz = phi.sin() * theta.sin();
-                pts.push(Vec3::new(nx * self.radius, ny * self.radius, nz * self.radius));
+                pts.push(Vec3::new(
+                    phi.sin() * theta.cos() * self.radius,
+                    phi.cos() * self.radius,
+                    phi.sin() * theta.sin() * self.radius,
+                ));
             }
         }
         let mut out = Vec::new();
@@ -245,12 +197,12 @@ impl SphereBuilder {
                 let b = pts[i * row + j + 1];
                 let c = pts[(i + 1) * row + j];
                 let d = pts[(i + 1) * row + j + 1];
-                out.push(colored(a.x, a.y, a.z, color));
-                out.push(colored(c.x, c.y, c.z, color));
-                out.push(colored(b.x, b.y, b.z, color));
-                out.push(colored(b.x, b.y, b.z, color));
-                out.push(colored(c.x, c.y, c.z, color));
-                out.push(colored(d.x, d.y, d.z, color));
+                out.push(colored(a, color));
+                out.push(colored(c, color));
+                out.push(colored(b, color));
+                out.push(colored(b, color));
+                out.push(colored(c, color));
+                out.push(colored(d, color));
             }
         }
         out
@@ -265,13 +217,11 @@ impl SphereBuilder {
             let phi = PI * i as f32 / stacks as f32;
             for j in 0..=slices {
                 let theta = TAU * j as f32 / slices as f32;
-                let nx = phi.sin() * theta.cos();
-                let ny = phi.cos();
-                let nz = phi.sin() * theta.sin();
+                let n = Vec3::new(phi.sin() * theta.cos(), phi.cos(), phi.sin() * theta.sin());
                 verts.push(textured(
-                    [nx * self.radius, ny * self.radius, nz * self.radius],
-                    [nx, ny, nz],
-                    [j as f32 / slices as f32, i as f32 / stacks as f32],
+                    n * self.radius,
+                    n,
+                    Vec2::new(j as f32 / slices as f32, i as f32 / stacks as f32),
                 ));
             }
         }
@@ -304,29 +254,30 @@ impl CylinderBuilder {
         for i in 0..slices {
             let a0 = TAU * i as f32 / slices as f32;
             let a1 = TAU * (i + 1) as f32 / slices as f32;
-            let (x0, z0) = (a0.cos() * self.radius, a0.sin() * self.radius);
-            let (x1, z1) = (a1.cos() * self.radius, a1.sin() * self.radius);
-            out.push(colored(x0, -hh, z0, color));
-            out.push(colored(x1, -hh, z1, color));
-            out.push(colored(x1, hh, z1, color));
-            out.push(colored(x0, -hh, z0, color));
-            out.push(colored(x1, hh, z1, color));
-            out.push(colored(x0, hh, z0, color));
+            let p0 = Vec3::new(a0.cos() * self.radius, 0.0, a0.sin() * self.radius);
+            let p1 = Vec3::new(a1.cos() * self.radius, 0.0, a1.sin() * self.radius);
+            out.push(colored(p0 - Vec3::Y * hh, color));
+            out.push(colored(p1 - Vec3::Y * hh, color));
+            out.push(colored(p1 + Vec3::Y * hh, color));
+            out.push(colored(p0 - Vec3::Y * hh, color));
+            out.push(colored(p1 + Vec3::Y * hh, color));
+            out.push(colored(p0 + Vec3::Y * hh, color));
         }
         for (y, flip) in [(-hh, true), (hh, false)] {
+            let cap_centre = Vec3::new(0.0, y, 0.0);
             for i in 0..slices {
                 let a0 = TAU * i as f32 / slices as f32;
                 let a1 = TAU * (i + 1) as f32 / slices as f32;
-                let (x0, z0) = (a0.cos() * self.radius, a0.sin() * self.radius);
-                let (x1, z1) = (a1.cos() * self.radius, a1.sin() * self.radius);
+                let p0 = Vec3::new(a0.cos() * self.radius, y, a0.sin() * self.radius);
+                let p1 = Vec3::new(a1.cos() * self.radius, y, a1.sin() * self.radius);
                 if flip {
-                    out.push(colored(0.0, y, 0.0, color));
-                    out.push(colored(x1, y, z1, color));
-                    out.push(colored(x0, y, z0, color));
+                    out.push(colored(cap_centre, color));
+                    out.push(colored(p1, color));
+                    out.push(colored(p0, color));
                 } else {
-                    out.push(colored(0.0, y, 0.0, color));
-                    out.push(colored(x0, y, z0, color));
-                    out.push(colored(x1, y, z1, color));
+                    out.push(colored(cap_centre, color));
+                    out.push(colored(p0, color));
+                    out.push(colored(p1, color));
                 }
             }
         }
@@ -340,35 +291,26 @@ impl CylinderBuilder {
         let mut indices = Vec::new();
         for i in 0..=slices {
             let theta = TAU * i as f32 / slices as f32;
-            let nx = theta.cos();
-            let nz = theta.sin();
+            let n = Vec3::new(theta.cos(), 0.0, theta.sin());
             let u = i as f32 / slices as f32;
-            verts.push(textured(
-                [nx * self.radius, -hh, nz * self.radius],
-                [nx, 0.0, nz],
-                [u, 1.0],
-            ));
-            verts.push(textured(
-                [nx * self.radius, hh, nz * self.radius],
-                [nx, 0.0, nz],
-                [u, 0.0],
-            ));
+            verts.push(textured(n * self.radius - Vec3::Y * hh, n, Vec2::new(u, 1.0)));
+            verts.push(textured(n * self.radius + Vec3::Y * hh, n, Vec2::new(u, 0.0)));
         }
         for i in 0..slices {
             let b = (i * 2) as u32;
             indices.extend_from_slice(&[b, b + 2, b + 1, b + 1, b + 2, b + 3]);
         }
-        for (y, ny, flip) in [(-hh, -1.0f32, true), (hh, 1.0f32, false)] {
+        for (y, ny, flip) in [(-hh, Vec3::NEG_Y, true), (hh, Vec3::Y, false)] {
             let centre = verts.len() as u32;
-            verts.push(textured([0.0, y, 0.0], [0.0, ny, 0.0], [0.5, 0.5]));
+            verts.push(textured(Vec3::new(0.0, y, 0.0), ny, Vec2::new(0.5, 0.5)));
             let ring_start = verts.len() as u32;
             for i in 0..slices {
                 let theta = TAU * i as f32 / slices as f32;
                 let (cx, cz) = (theta.cos(), theta.sin());
                 verts.push(textured(
-                    [cx * self.radius, y, cz * self.radius],
-                    [0.0, ny, 0.0],
-                    [cx * 0.5 + 0.5, cz * 0.5 + 0.5],
+                    Vec3::new(cx * self.radius, y, cz * self.radius),
+                    ny,
+                    Vec2::new(cx * 0.5 + 0.5, cz * 0.5 + 0.5),
                 ));
             }
             for i in 0..slices as u32 {
@@ -387,32 +329,14 @@ impl CylinderBuilder {
 
 // ── Constructor functions ─────────────────────────────────────────────────────
 
-pub fn quad(w: f32, h: f32) -> QuadBuilder {
-    QuadBuilder { w, h }
-}
-pub fn unit_quad() -> QuadBuilder {
-    quad(1.0, 1.0)
-}
-pub fn cube(sx: f32, sy: f32, sz: f32) -> CubeBuilder {
-    CubeBuilder { sx, sy, sz }
-}
-pub fn unit_cube() -> CubeBuilder {
-    cube(1.0, 1.0, 1.0)
-}
+pub fn quad(w: f32, h: f32) -> QuadBuilder { QuadBuilder { w, h } }
+pub fn unit_quad() -> QuadBuilder { quad(1.0, 1.0) }
+pub fn cube(sx: f32, sy: f32, sz: f32) -> CubeBuilder { CubeBuilder { sx, sy, sz } }
+pub fn unit_cube() -> CubeBuilder { cube(1.0, 1.0, 1.0) }
 pub fn sphere(radius: f32, stacks: u32, slices: u32) -> SphereBuilder {
-    SphereBuilder {
-        radius,
-        stacks,
-        slices,
-    }
+    SphereBuilder { radius, stacks, slices }
 }
-pub fn unit_sphere() -> SphereBuilder {
-    sphere(1.0, 32, 32)
-}
+pub fn unit_sphere() -> SphereBuilder { sphere(1.0, 32, 32) }
 pub fn cylinder(radius: f32, height: f32, slices: u32) -> CylinderBuilder {
-    CylinderBuilder {
-        radius,
-        height,
-        slices,
-    }
+    CylinderBuilder { radius, height, slices }
 }
