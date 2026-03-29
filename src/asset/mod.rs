@@ -613,10 +613,7 @@ impl Assets {
 
     fn load_sound(&mut self, path: &Path) -> Result<Handle<Sound>, AssetError> {
         let sound = if let Some(bytes) = self.pak_read(path) {
-            let ext = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
             Sound::from_bytes(bytes, ext).map_err(|e| AssetError::Decode(e.to_string()))?
         } else {
             Sound::load(path).map_err(|e| AssetError::Decode(e.to_string()))?

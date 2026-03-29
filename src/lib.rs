@@ -41,9 +41,7 @@ pub mod ui;
 macro_rules! embed_assets {
     () => {
         #[cfg(nene_has_pak)]
-        $crate::pak::register_embedded_pak(
-            include_bytes!(env!("NENE_ASSETS_PAK"))
-        );
+        $crate::pak::register_embedded_pak(include_bytes!(env!("NENE_ASSETS_PAK")));
     };
 }
 

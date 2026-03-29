@@ -70,9 +70,7 @@ fn main() {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-fn parse_args(
-    args: &[String],
-) -> Result<(PathBuf, PathBuf, Option<[u8; 32]>), String> {
+fn parse_args(args: &[String]) -> Result<(PathBuf, PathBuf, Option<[u8; 32]>), String> {
     let mut positional: Vec<&str> = Vec::new();
     let mut key: Option<[u8; 32]> = None;
     let mut i = 1;
@@ -98,10 +96,7 @@ fn parse_args(
 
 fn parse_key(hex: &str) -> Result<[u8; 32], String> {
     if hex.len() != 64 {
-        return Err(format!(
-            "key must be 64 hex chars (got {})",
-            hex.len()
-        ));
+        return Err(format!("key must be 64 hex chars (got {})", hex.len()));
     }
     let mut out = [0u8; 32];
     for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
@@ -129,7 +124,9 @@ fn walkdir(root: &Path) -> Vec<PathBuf> {
 }
 
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {

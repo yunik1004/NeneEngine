@@ -79,7 +79,9 @@ pub struct PakBuilder {
 
 impl PakBuilder {
     pub fn new() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+        }
     }
 
     /// Add (or replace) a file entry.
@@ -131,11 +133,7 @@ impl PakBuilder {
     }
 
     /// Convenience wrapper: write directly to a file at `path`.
-    pub fn finish_file(
-        &self,
-        path: impl AsRef<Path>,
-        key: Option<&[u8; 32]>,
-    ) -> io::Result<()> {
+    pub fn finish_file(&self, path: impl AsRef<Path>, key: Option<&[u8; 32]>) -> io::Result<()> {
         let mut f = std::fs::File::create(path)?;
         self.finish(&mut f, key)
     }
@@ -184,8 +182,7 @@ impl PakReader {
             if pos + 2 > data.len() {
                 return Err(short_read());
             }
-            let path_len =
-                u16::from_le_bytes(data[pos..pos + 2].try_into().unwrap()) as usize;
+            let path_len = u16::from_le_bytes(data[pos..pos + 2].try_into().unwrap()) as usize;
             pos += 2;
 
             if pos + path_len + 16 > data.len() {
@@ -201,7 +198,12 @@ impl PakReader {
             index.insert(path, (offset, size, idx as u64));
         }
 
-        Ok(Self { data, index, encrypted, key })
+        Ok(Self {
+            data,
+            index,
+            encrypted,
+            key,
+        })
     }
 
     /// Load an archive from disk. Pass `key` if it was encrypted.

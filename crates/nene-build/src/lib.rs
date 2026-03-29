@@ -11,7 +11,7 @@
 //!
 //! Create `build.rs` (one line):
 //! ```rust,no_run
-//! fn main() { nene_build::pack_assets("assets"); }
+//! nene_build::pack_assets("assets");
 //! ```
 //!
 //! Add to your `main()` (one line):
@@ -35,7 +35,7 @@ use std::path::{Path, PathBuf};
 ///
 /// Call this from your `build.rs`:
 /// ```rust,no_run
-/// fn main() { nene_build::pack_assets("assets"); }
+/// nene_build::pack_assets("assets");
 /// ```
 pub fn pack_assets(assets_dir: impl AsRef<Path>) {
     pack_assets_with_key(assets_dir, None);
@@ -44,12 +44,7 @@ pub fn pack_assets(assets_dir: impl AsRef<Path>) {
 /// Like [`pack_assets`] but encrypts every entry with a 32-byte ChaCha20 key.
 ///
 /// The same key must be supplied to `PakReader::from_bytes` / `from_file` at
-/// runtime, or to `Assets::set_pak_key`.
-///
-/// Requires the `encrypt` feature:
-/// ```toml
-/// nene-build = { ..., features = ["encrypt"] }
-/// ```
+/// runtime.
 pub fn pack_assets_encrypted(assets_dir: impl AsRef<Path>, key: [u8; 32]) {
     pack_assets_with_key(assets_dir, Some(key));
 }
@@ -123,10 +118,7 @@ fn write_pak(
     out.write_all(&[1u8, flags])?; // version = 1
     out.write_all(&(entries.len() as u32).to_le_bytes())?;
 
-    let table_bytes: u64 = entries
-        .iter()
-        .map(|(p, _)| 2 + p.len() as u64 + 16)
-        .sum();
+    let table_bytes: u64 = entries.iter().map(|(p, _)| 2 + p.len() as u64 + 16).sum();
     let data_start: u64 = 10 + table_bytes;
 
     let mut offset = data_start;
@@ -149,7 +141,6 @@ fn write_pak(
     Ok(())
 }
 
-#[cfg(feature = "encrypt")]
 fn chacha20_xor(data: &[u8], key: &[u8; 32], idx: u64) -> Vec<u8> {
     use chacha20::ChaCha20;
     use chacha20::cipher::{KeyIvInit, StreamCipher};
@@ -159,9 +150,4 @@ fn chacha20_xor(data: &[u8], key: &[u8; 32], idx: u64) -> Vec<u8> {
     let mut buf = data.to_vec();
     cipher.apply_keystream(&mut buf);
     buf
-}
-
-#[cfg(not(feature = "encrypt"))]
-fn chacha20_xor(_data: &[u8], _key: &[u8; 32], _idx: u64) -> Vec<u8> {
-    panic!("nene-build: encryption requires the `encrypt` feature");
 }

@@ -131,7 +131,11 @@ impl Sound {
             samples.extend_from_slice(buf.samples());
         }
 
-        Ok(Self { samples, channels, sample_rate })
+        Ok(Self {
+            samples,
+            channels,
+            sample_rate,
+        })
     }
 
     /// Generate a sine-wave tone entirely in memory — no file I/O.
