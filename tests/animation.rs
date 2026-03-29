@@ -1,7 +1,8 @@
 use nene::animation::{
-    AnimChannel, AnimState, Animator, Channel, Clip, Joint, JointPose, Skeleton, SkinnedVertex,
+    AnimChannel, AnimState, Animator, Channel, Clip, Joint, JointPose, Skeleton,
     StateMachine, skinning_wgsl,
 };
+use nene::mesh::Vertex;
 use nene::math::{Mat4, Vec3};
 use nene::mesh::Model;
 
@@ -224,18 +225,17 @@ fn animator_speed_multiplier() {
     assert!(approx_eq(anim.time, 2.0));
 }
 
-// ── SkinnedVertex ─────────────────────────────────────────────────────────────
+// ── Vertex ────────────────────────────────────────────────────────────────────
 
 #[test]
 fn skinned_vertex_size() {
-    // position(12) + normal(12) + uv(8) + joints(4) + weights(16) = 52 bytes
-    assert_eq!(std::mem::size_of::<SkinnedVertex>(), 52);
+    // position(12) + normal(12) + uv(8) + color(16) + joints(4) + weights(16) = 68 bytes
+    assert_eq!(std::mem::size_of::<Vertex>(), 68);
 }
 
 #[test]
 fn skinned_vertex_layout_stride() {
-    // position(12) + normal(12) + uv(8) + joints(4) + weights(16) = 52 bytes
-    assert_eq!(std::mem::size_of::<SkinnedVertex>(), 52);
+    assert_eq!(std::mem::size_of::<Vertex>(), 68);
 }
 
 // ── skinning_wgsl ─────────────────────────────────────────────────────────────

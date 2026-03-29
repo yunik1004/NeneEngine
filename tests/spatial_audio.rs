@@ -76,7 +76,7 @@ fn listener_offset_affects_volume() {
 fn listener_offset_affects_pan() {
     let mut spatial = SpatialAudio::new(10.0);
     spatial.listener = Vec2::new(5.0, 0.0);
-    // Emitter at origin: dx = -5 → pan = -5/10 = -0.5
+    // Emitter at origin: dx = -5, dist = 5 → pan = dx/dist = -1.0
     let opts = spatial.options_for(Vec2::ZERO);
-    assert!((opts.pan - (-0.5)).abs() < 1e-5);
+    assert!((opts.pan - (-1.0)).abs() < 1e-5);
 }

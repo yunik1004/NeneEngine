@@ -1,20 +1,29 @@
-//! [`Mesh`] and [`InstancedMesh`] — GPU geometry wrappers for [`Material`].
+//! [`GpuMesh`] and [`InstancedMesh`] — GPU geometry wrappers for [`Material`].
 
 use super::material::InstanceData;
 use super::{Context, IndexBuffer, InstanceBuffer, RenderPass, VertexBuffer};
-use crate::mesh::MeshVertex;
+use crate::mesh::{Mesh, Vertex};
 
 /// GPU mesh for use with [`Material`].
 ///
 /// Upload vertex and index data once; pass a reference to every
 /// [`Material`] render call instead of managing buffers separately.
-pub struct Mesh {
+pub struct GpuMesh {
     pub(super) vbuf: VertexBuffer,
     pub(super) ibuf: IndexBuffer,
 }
 
-impl Mesh {
-    pub fn new(ctx: &mut Context, vertices: &[MeshVertex], indices: &[u32]) -> Self {
+impl GpuMesh {
+    /// Upload a [`Mesh`]'s vertex and index data to the GPU.
+    pub fn from_mesh(ctx: &mut Context, mesh: &Mesh) -> Self {
+        Self {
+            vbuf: ctx.create_vertex_buffer(&mesh.vertices),
+            ibuf: ctx.create_index_buffer(&mesh.indices),
+        }
+    }
+
+    /// Create from raw vertex and index slices.
+    pub fn new(ctx: &mut Context, vertices: &[Vertex], indices: &[u32]) -> Self {
         Self {
             vbuf: ctx.create_vertex_buffer(vertices),
             ibuf: ctx.create_index_buffer(indices),
@@ -23,8 +32,7 @@ impl Mesh {
 
     /// Bind the vertex buffer and issue the indexed draw call.
     ///
-    /// Escape hatch for custom pipelines set up via [`MaterialBuilder::shader`] —
-    /// call `Material::render` instead for the normal path.
+    /// Escape hatch for custom pipelines — call `Material::render` instead for the normal path.
     pub fn draw(&self, pass: &mut RenderPass) {
         pass.set_vertex_buffer(0, &self.vbuf);
         pass.draw_indexed(&self.ibuf);
@@ -36,8 +44,8 @@ impl Mesh {
 /// Bundles the shared geometry and the per-instance buffer.
 /// Call [`update`](InstancedMesh::update) every frame with the new instance list.
 pub struct InstancedMesh {
-    pub(super) vbuf: VertexBuffer,
-    pub(super) ibuf: IndexBuffer,
+    pub(super) vbuf:     VertexBuffer,
+    pub(super) ibuf:     IndexBuffer,
     pub(super) inst_buf: InstanceBuffer,
     count: u32,
 }
@@ -45,15 +53,15 @@ pub struct InstancedMesh {
 impl InstancedMesh {
     pub fn new(
         ctx: &mut Context,
-        vertices: &[MeshVertex],
+        vertices: &[Vertex],
         indices: &[u32],
         instances: &[InstanceData],
     ) -> Self {
         Self {
-            vbuf: ctx.create_vertex_buffer(vertices),
-            ibuf: ctx.create_index_buffer(indices),
+            vbuf:     ctx.create_vertex_buffer(vertices),
+            ibuf:     ctx.create_index_buffer(indices),
             inst_buf: ctx.create_instance_buffer(instances),
-            count: instances.len() as u32,
+            count:    instances.len() as u32,
         }
     }
 
@@ -68,9 +76,6 @@ impl InstancedMesh {
     }
 
     /// Bind geometry + instance buffer and issue the instanced draw call.
-    ///
-    /// Use as an escape hatch for custom instanced pipelines — set your
-    /// pipeline and uniforms first, then call `mesh.draw(pass)`.
     pub fn draw(&self, pass: &mut RenderPass) {
         pass.set_vertex_buffer(0, &self.vbuf);
         pass.set_instance_buffer(1, &self.inst_buf);

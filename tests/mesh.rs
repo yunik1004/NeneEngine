@@ -1,5 +1,5 @@
 use nene::math::Mat4;
-use nene::mesh::{MeshVertex, Model};
+use nene::mesh::{Model, Vertex};
 
 fn write_temp_obj(name: &str, content: &str) -> std::path::PathBuf {
     let path = std::env::temp_dir().join(name);
@@ -160,8 +160,9 @@ f 1//1 3//1 4//1
 
 #[test]
 fn mesh_vertex_size() {
-    // position [f32;3] + normal [f32;3] + uv [f32;2] = 8 * 4 = 32 bytes
-    assert_eq!(std::mem::size_of::<MeshVertex>(), 32);
+    // position[3] + normal[3] + uv[2] + color[4] = 48 bytes of f32
+    // + joints[4] (u8) + weights[4] (f32) = 4 + 16 = 20 bytes → total 68 bytes
+    assert_eq!(std::mem::size_of::<Vertex>(), 68);
 }
 
 #[test]
@@ -329,11 +330,12 @@ fn load_gltf_no_base_color() {
 
 #[test]
 fn mesh_bytemuck_pod() {
-    // Verify MeshVertex is usable as a byte slice (Pod)
-    let v = MeshVertex {
+    // Verify Vertex is usable as a byte slice (Pod)
+    let v = Vertex {
         position: [1.0, 2.0, 3.0],
         normal: [0.0, 1.0, 0.0],
         uv: [0.5, 0.5],
+        ..Vertex::default()
     };
     let _bytes: &[u8] = bytemuck::bytes_of(&v);
 }

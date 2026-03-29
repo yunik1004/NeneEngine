@@ -28,7 +28,7 @@ pub use material::{
     HasShadow, HasTexture, InstanceData, Material, MaterialBuilder, MaterialUniform, NoShadow,
     NoTexture,
 };
-pub use mesh::{InstancedMesh, Mesh};
+pub use mesh::{GpuMesh, InstancedMesh};
 pub use pass::RenderPass;
 pub(crate) use pipeline::{
     Pipeline, PipelineDescriptor, VertexAttribute, VertexFormat, VertexLayout,

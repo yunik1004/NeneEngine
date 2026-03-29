@@ -12,7 +12,7 @@ use nene::{
     debug::Profiler,
     input::Input,
     math::Mat4,
-    mesh::{ColorMesh, ColorVertex, circle_segments},
+    mesh::{ColorMesh, Vertex, circle_segments},
     renderer::{Context, RenderPass},
     time::{FixedTime, Time},
     ui::Ui,
@@ -86,7 +86,7 @@ impl App for FixedUpdateDemo {
         let Some(renderer) = &mut self.renderer else {
             return;
         };
-        let mut verts: Vec<ColorVertex> = Vec::new();
+        let mut verts: Vec<Vertex> = Vec::new();
         for ball in &self.balls {
             verts.extend_from_slice(&circle_segments(
                 ball.pos[0],

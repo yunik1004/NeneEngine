@@ -17,12 +17,12 @@
 //! ```no_run
 //! # use nene::app::{App, WindowId, run};
 //! # use nene::math::{Mat4, Vec4};
-//! # use nene::renderer::{AmbientLight, Context, DirectionalLight, HasShadow, Material,
-//! #     MaterialBuilder, Mesh, NoTexture, RenderPass, ShadowMap};
+//! # use nene::renderer::{AmbientLight, Context, DirectionalLight, GpuMesh, HasShadow, Material,
+//! #     MaterialBuilder, NoTexture, RenderPass, ShadowMap};
 //! # use nene::app::Config;
 //! struct Demo {
 //!     mat:        Option<Material<NoTexture, HasShadow>>,
-//!     mesh:       Option<Mesh>,
+//!     mesh:       Option<GpuMesh>,
 //!     shadow_map: Option<ShadowMap>,
 //!     ambient:    AmbientLight,
 //!     directional: DirectionalLight,
@@ -65,11 +65,11 @@
 use std::marker::PhantomData;
 
 use super::{
-    IndexBuffer, Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexAttribute,
-    VertexBuffer, VertexFormat, VertexLayout,
+    Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexAttribute,
+    VertexFormat, VertexLayout,
     context::Context,
     light::{AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight},
-    mesh::{InstancedMesh, Mesh},
+    mesh::{GpuMesh, InstancedMesh},
     shadow::{SHADOW_WGSL, ShadowMap},
     texture::Texture,
 };
@@ -144,32 +144,33 @@ impl InstanceData {
     /// Vertex layout for slot 1 (instance buffer). Attributes start at
     /// location 3 to follow the per-vertex `pos`/`normal`/`uv` at 0–2.
     pub(crate) fn layout() -> VertexLayout {
+        // Instance attributes start at location 6, after Vertex's 0-5.
         VertexLayout {
             stride: std::mem::size_of::<InstanceData>() as u64,
             attributes: vec![
                 VertexAttribute {
                     offset: 0,
-                    location: 3,
-                    format: VertexFormat::Float32x4,
-                },
-                VertexAttribute {
-                    offset: 16,
-                    location: 4,
-                    format: VertexFormat::Float32x4,
-                },
-                VertexAttribute {
-                    offset: 32,
-                    location: 5,
-                    format: VertexFormat::Float32x4,
-                },
-                VertexAttribute {
-                    offset: 48,
                     location: 6,
                     format: VertexFormat::Float32x4,
                 },
                 VertexAttribute {
-                    offset: 64,
+                    offset: 16,
                     location: 7,
+                    format: VertexFormat::Float32x4,
+                },
+                VertexAttribute {
+                    offset: 32,
+                    location: 8,
+                    format: VertexFormat::Float32x4,
+                },
+                VertexAttribute {
+                    offset: 48,
+                    location: 9,
+                    format: VertexFormat::Float32x4,
+                },
+                VertexAttribute {
+                    offset: 64,
+                    location: 10,
                     format: VertexFormat::Float32x4,
                 },
             ],
@@ -298,7 +299,7 @@ impl<T, S> MaterialBuilder<T, S> {
     /// Consume the builder and create a [`Material`] on the GPU.
     pub fn build(self, ctx: &mut Context) -> Material<T, S> {
         let main_wgsl = self.custom_wgsl.unwrap_or_else(|| gen_main_wgsl(self.feat));
-        let mut desc = PipelineDescriptor::new(main_wgsl, crate::mesh::MeshVertex::layout())
+        let mut desc = PipelineDescriptor::new(main_wgsl, crate::mesh::Vertex::layout())
             .with_uniform()
             .with_depth();
         if self.feat.texture {
@@ -315,7 +316,7 @@ impl<T, S> MaterialBuilder<T, S> {
         let shadow_pipeline = if self.feat.casts_shadow {
             let sdesc = PipelineDescriptor::new(
                 gen_shadow_wgsl(self.feat.instanced),
-                crate::mesh::MeshVertex::layout(),
+                crate::mesh::Vertex::layout(),
             )
             .with_uniform()
             .depth_only();
@@ -377,7 +378,7 @@ impl<T, S> Material<T, S> {
 
     /// Depth-only draw for the shadow pass. Call inside [`Context::shadow_pass`].
     /// No-op if the material was not built with `.casts_shadow()` or `.shadow()`.
-    pub fn shadow_draw(&self, pass: &mut RenderPass, mesh: &Mesh) {
+    pub fn shadow_draw(&self, pass: &mut RenderPass, mesh: &GpuMesh) {
         let Some(sp) = &self.shadow_pipeline else {
             return;
         };
@@ -400,11 +401,11 @@ impl<T, S> Material<T, S> {
     fn draw_inner(
         &self,
         pass: &mut RenderPass,
-        vbuf: &VertexBuffer,
-        ibuf: &IndexBuffer,
+        mesh: &GpuMesh,
         texture: Option<&Texture>,
         shadow_map: Option<&ShadowMap>,
     ) {
+        let (vbuf, ibuf) = (&mesh.vbuf, &mesh.ibuf);
         pass.set_pipeline(&self.pipeline);
         pass.set_uniform(0, &self.ubuf);
         if let Some(t) = texture {
@@ -422,22 +423,22 @@ impl<T, S> Material<T, S> {
 
 impl Material<NoTexture, NoShadow> {
     /// Draw the mesh.
-    pub fn render(&self, pass: &mut RenderPass, mesh: &Mesh) {
-        self.draw_inner(pass, &mesh.vbuf, &mesh.ibuf, None, None);
+    pub fn render(&self, pass: &mut RenderPass, mesh: &GpuMesh) {
+        self.draw_inner(pass, mesh, None, None);
     }
 }
 
 impl Material<HasTexture, NoShadow> {
     /// Draw the mesh with a diffuse texture.
-    pub fn render(&self, pass: &mut RenderPass, mesh: &Mesh, texture: &Texture) {
-        self.draw_inner(pass, &mesh.vbuf, &mesh.ibuf, Some(texture), None);
+    pub fn render(&self, pass: &mut RenderPass, mesh: &GpuMesh, texture: &Texture) {
+        self.draw_inner(pass, mesh, Some(texture), None);
     }
 }
 
 impl Material<NoTexture, HasShadow> {
     /// Draw the mesh, reading from a shadow map.
-    pub fn render(&self, pass: &mut RenderPass, mesh: &Mesh, shadow_map: &ShadowMap) {
-        self.draw_inner(pass, &mesh.vbuf, &mesh.ibuf, None, Some(shadow_map));
+    pub fn render(&self, pass: &mut RenderPass, mesh: &GpuMesh, shadow_map: &ShadowMap) {
+        self.draw_inner(pass, mesh, None, Some(shadow_map));
     }
 }
 
@@ -446,17 +447,11 @@ impl Material<HasTexture, HasShadow> {
     pub fn render(
         &self,
         pass: &mut RenderPass,
-        mesh: &Mesh,
+        mesh: &GpuMesh,
         texture: &Texture,
         shadow_map: &ShadowMap,
     ) {
-        self.draw_inner(
-            pass,
-            &mesh.vbuf,
-            &mesh.ibuf,
-            Some(texture),
-            Some(shadow_map),
-        );
+        self.draw_inner(pass, mesh, Some(texture), Some(shadow_map));
     }
 }
 
@@ -537,12 +532,13 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
          \t@location(2) uv:  vec2<f32>,\n",
     );
     if feat.instanced {
+        // Instance attributes start at location 6 (after Vertex's 0–5).
         s.push_str(
-            "\t@location(3) i_col0: vec4<f32>,\n\
-             \t@location(4) i_col1: vec4<f32>,\n\
-             \t@location(5) i_col2: vec4<f32>,\n\
-             \t@location(6) i_col3: vec4<f32>,\n\
-             \t@location(7) i_color: vec4<f32>,\n",
+            "\t@location(6)  i_col0:  vec4<f32>,\n\
+             \t@location(7)  i_col1:  vec4<f32>,\n\
+             \t@location(8)  i_col2:  vec4<f32>,\n\
+             \t@location(9)  i_col3:  vec4<f32>,\n\
+             \t@location(10) i_color: vec4<f32>,\n",
         );
     }
     s.push_str(") -> VOut {\n\tvar o: VOut;\n");
@@ -622,11 +618,11 @@ pub(crate) fn gen_shadow_wgsl(instanced: bool) -> String {
     );
     if instanced {
         s.push_str(
-            "\t@location(3) i_col0: vec4<f32>,\n\
-             \t@location(4) i_col1: vec4<f32>,\n\
-             \t@location(5) i_col2: vec4<f32>,\n\
-             \t@location(6) i_col3: vec4<f32>,\n\
-             \t@location(7) _i_color: vec4<f32>,\n",
+            "\t@location(6)  i_col0:   vec4<f32>,\n\
+             \t@location(7)  i_col1:   vec4<f32>,\n\
+             \t@location(8)  i_col2:   vec4<f32>,\n\
+             \t@location(9)  i_col3:   vec4<f32>,\n\
+             \t@location(10) _i_color: vec4<f32>,\n",
         );
     }
     s.push_str(") -> @builtin(position) vec4<f32> {\n");

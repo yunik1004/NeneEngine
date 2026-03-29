@@ -14,7 +14,7 @@ use nene::{
     input::{Input, Key},
     math::{Mat4, Vec2, Vec3, Vec4},
     mesh::unit_cube,
-    renderer::{Context, FlatObject, Material, MaterialBuilder, Mesh, RenderPass},
+    renderer::{Context, FlatObject, GpuMesh, Material, MaterialBuilder, RenderPass},
     time::Time,
     ui::Ui,
 };
@@ -80,9 +80,9 @@ fn init_2d(ctx: &mut Context) -> State2D {
 
 struct State3D {
     cube_mat: Material,
-    cube_mesh: Mesh,
+    cube_mesh: GpuMesh,
     floor_mat: Material,
-    floor_mesh: Mesh,
+    floor_mesh: GpuMesh,
     world: nene::physics::d3::World,
     cube_handle: nene::physics::d3::RigidBodyHandle,
 }
@@ -108,8 +108,8 @@ fn init_3d(ctx: &mut Context) -> State3D {
     );
 
     let (cube_verts, cube_indices) = unit_cube().mesh();
-    let cube_mesh = Mesh::new(ctx, &cube_verts, &cube_indices);
-    let floor_mesh = Mesh::new(ctx, &cube_verts, &cube_indices);
+    let cube_mesh = GpuMesh::new(ctx, &cube_verts, &cube_indices);
+    let floor_mesh = GpuMesh::new(ctx, &cube_verts, &cube_indices);
 
     let mut cube_mat = MaterialBuilder::new()
         .color(Vec4::new(0.6, 0.75, 1.0, 1.0))

@@ -6,7 +6,7 @@ use nene::{
     input::Input,
     math::{Mat4, Quat, Vec3, Vec4},
     mesh::unit_cube,
-    renderer::{Context, Material, MaterialBuilder, Mesh, RenderPass},
+    renderer::{Context, GpuMesh, Material, MaterialBuilder, RenderPass},
     scene::{Node, NodeId, Scene, Transform},
     time::Time,
 };
@@ -32,7 +32,7 @@ struct SceneDemo {
     scene: Scene,
     body_configs: Vec<BodyConfig>,
     camera: Camera,
-    mesh: Option<Mesh>,
+    mesh: Option<GpuMesh>,
     debug: Option<DebugDraw>,
     bodies: Vec<Body>,
 }
@@ -91,7 +91,7 @@ impl App for SceneDemo {
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         let (verts, indices) = unit_cube().mesh();
-        self.mesh = Some(Mesh::new(ctx, &verts, &indices));
+        self.mesh = Some(GpuMesh::new(ctx, &verts, &indices));
         self.debug = Some(DebugDraw::new(ctx));
 
         self.bodies = self

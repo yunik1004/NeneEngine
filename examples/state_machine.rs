@@ -17,15 +17,15 @@ use std::f32::consts::{PI, TAU};
 
 use nene::{
     animation::{
-        AnimChannel, AnimState, Channel, Clip, Joint, Skeleton, SkinnedMaterial,
-        SkinnedMaterialBuilder, SkinnedMesh, SkinnedVertex, StateMachine,
+        AnimChannel, AnimState, Channel, Clip, Joint, Mesh, Skeleton, SkinnedMaterial,
+        SkinnedMaterialBuilder, StateMachine, Vertex,
     },
     app::{App, Config, WindowId, run},
     camera::Camera,
     input::{Input, Key},
     math::{Mat4, Quat, Vec3, Vec4},
     mesh::Model,
-    renderer::{AmbientLight, Context, DirectionalLight, RenderPass},
+    renderer::{AmbientLight, Context, DirectionalLight, GpuMesh, RenderPass},
     time::{Ease, Time, Tween},
     ui::Ui,
 };
@@ -93,15 +93,11 @@ fn build_clip(name: &str, amplitude: f32, speed: f32) -> Clip {
             values: vec![Vec3::new(0.0, 1.0, 0.0)],
         }));
     }
-    Clip {
-        name: name.into(),
-        duration: DURATION,
-        channels,
-    }
+    Clip { name: name.into(), duration: DURATION, channels }
 }
 
-fn build_mesh() -> SkinnedMesh {
-    let mut vertices: Vec<SkinnedVertex> = Vec::with_capacity(RINGS * SIDES + 2);
+fn build_mesh() -> Mesh {
+    let mut vertices: Vec<Vertex> = Vec::with_capacity(RINGS * SIDES + 2);
     let mut indices: Vec<u32> = Vec::new();
 
     for k in 0..RINGS {
@@ -116,46 +112,45 @@ fn build_mesh() -> SkinnedMesh {
         for i in 0..SIDES {
             let angle = i as f32 * TAU / SIDES as f32;
             let (s, c) = angle.sin_cos();
-            vertices.push(SkinnedVertex {
+            vertices.push(Vertex {
                 position: [radius * c, y, radius * s],
-                normal: [c, 0.0, s],
-                uv: [i as f32 / SIDES as f32, t],
-                joints: [j0, j1, 0, 0],
-                weights: [w0, w1, 0.0, 0.0],
+                normal:   [c, 0.0, s],
+                uv:       [i as f32 / SIDES as f32, t],
+                joints:   [j0, j1, 0, 0],
+                weights:  [w0, w1, 0.0, 0.0],
+                ..Vertex::default()
             });
         }
     }
 
     let base_cap = vertices.len() as u32;
-    vertices.push(SkinnedVertex {
+    vertices.push(Vertex {
         position: [0.0, -0.1, 0.0],
-        normal: [0.0, -1.0, 0.0],
-        uv: [0.5, 0.0],
-        joints: [0, 0, 0, 0],
-        weights: [1.0, 0.0, 0.0, 0.0],
+        normal:   [0.0, -1.0, 0.0],
+        uv:       [0.5, 0.0],
+        joints:   [0, 0, 0, 0],
+        weights:  [1.0, 0.0, 0.0, 0.0],
+        ..Vertex::default()
     });
     let tip_cap = vertices.len() as u32;
     let tip_y = (NUM_JOINTS - 1) as f32 + 0.35;
-    vertices.push(SkinnedVertex {
+    vertices.push(Vertex {
         position: [0.0, tip_y, 0.0],
-        normal: [0.0, 1.0, 0.0],
-        uv: [0.5, 1.0],
-        joints: [(NUM_JOINTS - 1) as u8, 0, 0, 0],
-        weights: [1.0, 0.0, 0.0, 0.0],
+        normal:   [0.0, 1.0, 0.0],
+        uv:       [0.5, 1.0],
+        joints:   [(NUM_JOINTS - 1) as u8, 0, 0, 0],
+        weights:  [1.0, 0.0, 0.0, 0.0],
+        ..Vertex::default()
     });
 
     for k in 0..(RINGS - 1) {
-        let base_k = (k * SIDES) as u32;
+        let base_k  = (k * SIDES) as u32;
         let base_k1 = ((k + 1) * SIDES) as u32;
         for i in 0..SIDES as u32 {
             let next = (i + 1) % SIDES as u32;
             indices.extend_from_slice(&[
-                base_k + i,
-                base_k + next,
-                base_k1 + next,
-                base_k + i,
-                base_k1 + next,
-                base_k1 + i,
+                base_k + i, base_k + next, base_k1 + next,
+                base_k + i, base_k1 + next, base_k1 + i,
             ]);
         }
     }
@@ -169,17 +164,18 @@ fn build_mesh() -> SkinnedMesh {
         indices.extend_from_slice(&[tip_cap, last_ring + i, last_ring + next]);
     }
 
-    SkinnedMesh::new(vertices, indices)
+    let mut mesh = Mesh::new(vertices, indices);
+    mesh.skinned = true;
+    mesh
 }
 
 fn build_model() -> Model {
     Model {
-        meshes: vec![],
-        skinned_meshes: vec![build_mesh()],
+        meshes: vec![build_mesh()],
         skeleton: build_skeleton(),
         clips: vec![
-            build_clip("idle", 0.08, 0.5),
-            build_clip("wave", 0.35, 1.0),
+            build_clip("idle",   0.08, 0.5),
+            build_clip("wave",   0.35, 1.0),
             build_clip("thrash", 0.62, 2.0),
         ],
     }
@@ -188,17 +184,17 @@ fn build_model() -> Model {
 // ── App state ─────────────────────────────────────────────────────────────────
 
 struct StateMachineDemo {
-    model: Model,
-    sm: StateMachine,
+    model:       Model,
+    gpu_mesh:    Option<GpuMesh>,
+    sm:          StateMachine,
     camera_angle: f32,
-    ambient: AmbientLight,
+    ambient:     AmbientLight,
     directional: DirectionalLight,
-    next_state: usize,
+    next_state:  usize,
     blend_tween: Option<Tween<f32>>,
-    ease_idx: usize,
-    // GPU
-    mat: Option<SkinnedMaterial>,
-    ui: Option<Ui>,
+    ease_idx:    usize,
+    mat:         Option<SkinnedMaterial>,
+    ui:          Option<Ui>,
 }
 
 impl App for StateMachineDemo {
@@ -218,6 +214,7 @@ impl App for StateMachineDemo {
 
         StateMachineDemo {
             model,
+            gpu_mesh: None,
             sm,
             camera_angle: 0.0,
             ambient: AmbientLight::new(Vec3::new(0.7, 0.75, 1.0), 0.18),
@@ -245,18 +242,18 @@ impl App for StateMachineDemo {
         };
         let aspect = width as f32 / height as f32;
 
-        self.model.skinned_meshes[0].upload(ctx);
+        self.gpu_mesh = Some(GpuMesh::from_mesh(ctx, &self.model.meshes[0]));
 
         let mut mat = SkinnedMaterialBuilder::new()
             .ambient()
             .directional()
             .rim()
             .build(ctx, self.model.skeleton.joints.len());
-        mat.uniform.color = Vec4::new(0.9, 0.6, 0.2, 1.0);
-        mat.uniform.rim_color = Vec4::new(0.6, 0.9, 1.0, 1.0);
-        mat.uniform.view_proj = camera.view_proj(aspect);
+        mat.uniform.color      = Vec4::new(0.9, 0.6, 0.2, 1.0);
+        mat.uniform.rim_color  = Vec4::new(0.6, 0.9, 1.0, 1.0);
+        mat.uniform.view_proj  = camera.view_proj(aspect);
         mat.uniform.camera_pos = cam_pos.extend(1.0);
-        mat.uniform.ambient = self.ambient;
+        mat.uniform.ambient    = self.ambient;
         mat.uniform.directional = self.directional;
         mat.flush(ctx);
         self.mat = Some(mat);
@@ -293,9 +290,7 @@ impl App for StateMachineDemo {
     }
 
     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
-        let joint_mats = self
-            .sm
-            .joint_matrices(&self.model.clips, &self.model.skeleton);
+        let joint_mats = self.sm.joint_matrices(&self.model.clips, &self.model.skeleton);
         if let Some(mat) = &self.mat {
             mat.update_joints(ctx, &joint_mats);
         }
@@ -316,13 +311,13 @@ impl App for StateMachineDemo {
         let aspect = width as f32 / height as f32;
 
         if let Some(mat) = &mut self.mat {
-            mat.uniform.view_proj = camera.view_proj(aspect);
+            mat.uniform.view_proj  = camera.view_proj(aspect);
             mat.uniform.camera_pos = cam_pos.extend(1.0);
             mat.flush(ctx);
         }
 
         let blend_progress = self.blend_tween.as_ref().map_or(1.0, |t| t.value());
-        let cur_name = STATES[(self.next_state + STATES.len() - 1) % STATES.len()];
+        let cur_name  = STATES[(self.next_state + STATES.len() - 1) % STATES.len()];
         let ease_name = EASES[self.ease_idx].1;
         let bar = tween_bar(blend_progress);
 
@@ -341,8 +336,9 @@ impl App for StateMachineDemo {
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-        let Some(mat) = &self.mat else { return };
-        mat.render(pass, &self.model.skinned_meshes[0], None);
+        if let (Some(mat), Some(mesh)) = (&self.mat, &self.gpu_mesh) {
+            mat.render(pass, mesh, None);
+        }
         if let Some(ui) = &self.ui {
             ui.render(pass);
         }
@@ -364,6 +360,6 @@ fn main() {
 
 fn tween_bar(t: f32) -> String {
     let filled = (t.clamp(0.0, 1.0) * 12.0) as usize;
-    let empty = 12 - filled;
+    let empty  = 12 - filled;
     format!("[{}{}]", "█".repeat(filled), "░".repeat(empty))
 }

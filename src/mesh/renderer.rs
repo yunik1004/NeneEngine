@@ -1,35 +1,30 @@
-use std::marker::PhantomData;
-
-use bytemuck::{Pod, Zeroable};
-
 use crate::renderer::material::{Features, gen_main_wgsl, gen_shadow_wgsl};
 use crate::renderer::{
-    AmbientLight, BuiltinPipeline, Context, DirectionalLight, FilterMode, IndexBuffer,
-    MaterialUniform, Pipeline, PipelineDescriptor, RenderPass, ShadowMap, Texture, UniformBuffer,
-    VertexAttribute, VertexBuffer, VertexFormat, VertexLayout,
+    AmbientLight, Context, DirectionalLight, FilterMode, IndexBuffer, MaterialUniform, Pipeline,
+    PipelineDescriptor, RenderPass, ShadowMap, Texture, UniformBuffer, VertexBuffer,
 };
 
-use super::{ColorVertex, MeshVertex, Model};
+use super::vertex::Vertex;
+use super::Model;
 
-// ── GpuVertex trait ───────────────────────────────────────────────────────────
+// ── ColorMesh ─────────────────────────────────────────────────────────────────
 
-#[allow(private_interfaces)]
-pub(crate) trait GpuVertex: Pod + Zeroable + 'static {
-    fn create_pipeline(ctx: &mut Context) -> Pipeline;
-    const USES_TEXTURE: bool;
-}
-
-// ── Impls ─────────────────────────────────────────────────────────────────────
-
+/// Unlit WGSL shader — reads position from @location(0) and color from @location(3).
 const COLOR_WGSL: &str = "
 struct Transform { mvp: mat4x4<f32> }
 @group(0) @binding(0) var<uniform> u: Transform;
 
-struct VIn  { @location(0) pos: vec3<f32>, @location(1) color: vec4<f32> }
-struct VOut { @builtin(position) clip: vec4<f32>, @location(0) color: vec4<f32> }
+struct VIn {
+    @location(0) position: vec3<f32>,
+    @location(3) color:    vec4<f32>,
+}
+struct VOut {
+    @builtin(position) clip: vec4<f32>,
+    @location(0)       color: vec4<f32>,
+}
 
 @vertex fn vs_main(v: VIn) -> VOut {
-    return VOut(u.mvp * vec4(v.pos, 1.0), v.color);
+    return VOut(u.mvp * vec4(v.position, 1.0), v.color);
 }
 
 @fragment fn fs_main(v: VOut) -> @location(0) vec4<f32> {
@@ -37,78 +32,45 @@ struct VOut { @builtin(position) clip: vec4<f32>, @location(0) color: vec4<f32> 
 }
 ";
 
-#[allow(private_interfaces)]
-impl GpuVertex for ColorVertex {
-    fn create_pipeline(ctx: &mut Context) -> Pipeline {
-        use std::mem::offset_of;
-        ctx.create_pipeline(
-            PipelineDescriptor::new(
-                COLOR_WGSL,
-                VertexLayout {
-                    stride: std::mem::size_of::<ColorVertex>() as u64,
-                    attributes: vec![
-                        VertexAttribute {
-                            offset: offset_of!(ColorVertex, pos) as u64,
-                            location: 0,
-                            format: VertexFormat::Float32x3,
-                        },
-                        VertexAttribute {
-                            offset: offset_of!(ColorVertex, color) as u64,
-                            location: 1,
-                            format: VertexFormat::Float32x4,
-                        },
-                    ],
-                },
-            )
-            .with_uniform()
-            .with_alpha_blend(),
-        )
-    }
-    const USES_TEXTURE: bool = false;
-}
-
-#[allow(private_interfaces)]
-impl GpuVertex for MeshVertex {
-    fn create_pipeline(ctx: &mut Context) -> Pipeline {
-        ctx.create_builtin_pipeline(BuiltinPipeline::Textured3d)
-    }
-    const USES_TEXTURE: bool = true;
-}
-
-// ── Renderer<V> ───────────────────────────────────────────────────────────────
-
-pub(crate) struct Renderer<V: GpuVertex> {
+/// A dynamic mesh rendered with per-vertex colors.
+///
+/// Use this when geometry changes every frame (e.g. procedurally generated shapes).
+/// For static geometry consider [`crate::renderer::FlatObject`].
+pub struct ColorMesh {
     pipeline: Pipeline,
-    vbuf: Option<VertexBuffer>,
-    ibuf: Option<IndexBuffer>,
-    vert_count: u32,
-    ubuf: UniformBuffer,
-    texture: Option<Texture>,
-    _phantom: PhantomData<V>,
+    vbuf:     Option<VertexBuffer>,
+    ibuf:     Option<IndexBuffer>,
+    count:    u32,
+    ubuf:     UniformBuffer,
 }
 
-impl<V: GpuVertex> Renderer<V> {
+impl ColorMesh {
     pub fn new(ctx: &mut Context) -> Self {
         Self {
-            pipeline: V::create_pipeline(ctx),
-            vbuf: None,
-            ibuf: None,
-            vert_count: 0,
-            ubuf: ctx.create_uniform_buffer(&glam::Mat4::IDENTITY),
-            texture: None,
-            _phantom: PhantomData,
+            pipeline: ctx.create_pipeline(
+                PipelineDescriptor::new(COLOR_WGSL, Vertex::layout())
+                    .with_uniform()
+                    .with_alpha_blend(),
+            ),
+            vbuf:  None,
+            ibuf:  None,
+            count: 0,
+            ubuf:  ctx.create_uniform_buffer(&glam::Mat4::IDENTITY),
         }
     }
 
-    pub fn set_geometry(&mut self, ctx: &mut Context, verts: &[V]) {
+    /// Upload new vertex data. Must be called at least once before [`render`](Self::render).
+    pub fn set_geometry(&mut self, ctx: &mut Context, verts: &[Vertex]) {
         if verts.is_empty() {
-            self.vert_count = 0;
+            self.count = 0;
             return;
         }
-        self.vbuf = Some(ctx.create_vertex_buffer(verts));
-        self.vert_count = verts.len() as u32;
+        self.vbuf  = Some(ctx.create_vertex_buffer(verts));
+        self.count = verts.len() as u32;
+        self.ibuf  = None;
     }
 
+    /// Upload index data (optional).
     pub fn set_indices(&mut self, ctx: &mut Context, indices: &[u32]) {
         self.ibuf = if indices.is_empty() {
             None
@@ -117,112 +79,22 @@ impl<V: GpuVertex> Renderer<V> {
         };
     }
 
-    pub fn set_texture(&mut self, texture: Texture) {
-        self.texture = Some(texture);
-    }
-
+    /// Update the model-view-projection transform.
     pub fn set_transform(&mut self, ctx: &mut Context, mvp: glam::Mat4) {
         ctx.update_uniform_buffer(&self.ubuf, &mvp);
     }
 
+    /// Draw the mesh into `pass`.
     pub fn render(&self, pass: &mut RenderPass) {
         let Some(vbuf) = &self.vbuf else { return };
-        if V::USES_TEXTURE && self.texture.is_none() {
-            #[cfg(debug_assertions)]
-            eprintln!(
-                "[nene] TexturedMesh::render() skipped — call set_texture() before rendering"
-            );
-            return;
-        }
         pass.set_pipeline(&self.pipeline);
         pass.set_uniform(0, &self.ubuf);
-        if let Some(tex) = &self.texture {
-            pass.set_texture(1, tex);
-        }
         pass.set_vertex_buffer(0, vbuf);
         if let Some(ibuf) = &self.ibuf {
             pass.draw_indexed(ibuf);
         } else {
-            pass.draw(0..self.vert_count);
+            pass.draw(0..self.count);
         }
-    }
-}
-
-// ── ColorMesh ─────────────────────────────────────────────────────────────────
-
-/// A dynamic mesh rendered with per-vertex colors.
-///
-/// Use this when geometry changes every frame (e.g. procedurally generated shapes).
-/// For static geometry consider [`crate::renderer::FlatObject`].
-pub struct ColorMesh {
-    inner: Renderer<ColorVertex>,
-}
-
-impl ColorMesh {
-    /// Create an empty mesh. Call [`set_geometry`](Self::set_geometry) before rendering.
-    pub fn new(ctx: &mut Context) -> Self {
-        Self {
-            inner: Renderer::new(ctx),
-        }
-    }
-
-    /// Upload new vertex data. Must be called at least once before [`render`](Self::render).
-    pub fn set_geometry(&mut self, ctx: &mut Context, verts: &[ColorVertex]) {
-        self.inner.set_geometry(ctx, verts);
-    }
-
-    /// Update the model-view-projection transform.
-    pub fn set_transform(&mut self, ctx: &mut Context, mvp: glam::Mat4) {
-        self.inner.set_transform(ctx, mvp);
-    }
-
-    /// Draw the mesh into `pass`.
-    pub fn render(&self, pass: &mut RenderPass) {
-        self.inner.render(pass);
-    }
-}
-
-// ── TexturedMesh ──────────────────────────────────────────────────────────────
-
-/// A dynamic textured 3D mesh.
-///
-/// Renders [`MeshVertex`] geometry with a UV-mapped texture and an MVP transform.
-pub struct TexturedMesh {
-    inner: Renderer<MeshVertex>,
-}
-
-impl TexturedMesh {
-    /// Create an empty mesh. Call [`set_geometry`](Self::set_geometry) and
-    /// [`set_texture`](Self::set_texture) before rendering.
-    pub fn new(ctx: &mut Context) -> Self {
-        Self {
-            inner: Renderer::new(ctx),
-        }
-    }
-
-    /// Upload vertex data.
-    pub fn set_geometry(&mut self, ctx: &mut Context, verts: &[MeshVertex]) {
-        self.inner.set_geometry(ctx, verts);
-    }
-
-    /// Upload index data.
-    pub fn set_indices(&mut self, ctx: &mut Context, indices: &[u32]) {
-        self.inner.set_indices(ctx, indices);
-    }
-
-    /// Assign the texture to sample during rendering.
-    pub fn set_texture(&mut self, texture: Texture) {
-        self.inner.set_texture(texture);
-    }
-
-    /// Update the model-view-projection transform.
-    pub fn set_transform(&mut self, ctx: &mut Context, mvp: glam::Mat4) {
-        self.inner.set_transform(ctx, mvp);
-    }
-
-    /// Draw the mesh into `pass`.
-    pub fn render(&self, pass: &mut RenderPass) {
-        self.inner.render(pass);
     }
 }
 
@@ -267,19 +139,19 @@ impl TexturedMesh {
 /// ```
 pub struct LitShadowedModel {
     shadow_pipeline: Pipeline,
-    main_pipeline: Pipeline,
-    vbufs: Vec<VertexBuffer>,
-    ibufs: Vec<IndexBuffer>,
-    textures: Vec<Texture>,
+    main_pipeline:   Pipeline,
+    vbufs:           Vec<VertexBuffer>,
+    ibufs:           Vec<IndexBuffer>,
+    textures:        Vec<Texture>,
     mesh_transforms: Vec<glam::Mat4>,
-    uniforms: Vec<UniformBuffer>,
+    uniforms:        Vec<UniformBuffer>,
 }
 
 impl LitShadowedModel {
     /// Upload all mesh data from `model` to the GPU.
     pub fn new(ctx: &mut Context, model: &Model) -> Self {
         let shadow_pipeline = ctx.create_pipeline(
-            PipelineDescriptor::new(gen_shadow_wgsl(false), MeshVertex::layout())
+            PipelineDescriptor::new(gen_shadow_wgsl(false), Vertex::layout())
                 .with_uniform()
                 .depth_only(),
         );
@@ -293,7 +165,7 @@ impl LitShadowedModel {
                     casts_shadow: true,
                     instanced: false,
                 }),
-                MeshVertex::layout(),
+                Vertex::layout(),
             )
             .with_uniform()
             .with_texture()
@@ -304,13 +176,13 @@ impl LitShadowedModel {
 
         let blank = MaterialUniform::default();
 
-        let mut vbufs = Vec::new();
-        let mut ibufs = Vec::new();
-        let mut textures = Vec::new();
+        let mut vbufs           = Vec::new();
+        let mut ibufs           = Vec::new();
+        let mut textures        = Vec::new();
         let mut mesh_transforms = Vec::new();
-        let mut uniforms = Vec::new();
+        let mut uniforms        = Vec::new();
 
-        for mesh in &model.meshes {
+        for mesh in model.meshes.iter().filter(|m| !m.skinned) {
             vbufs.push(ctx.create_vertex_buffer(&mesh.vertices));
             ibufs.push(ctx.create_index_buffer(&mesh.indices));
             textures.push(match &mesh.base_color {
@@ -323,21 +195,10 @@ impl LitShadowedModel {
             uniforms.push(ctx.create_uniform_buffer(&blank));
         }
 
-        Self {
-            shadow_pipeline,
-            main_pipeline,
-            vbufs,
-            ibufs,
-            textures,
-            mesh_transforms,
-            uniforms,
-        }
+        Self { shadow_pipeline, main_pipeline, vbufs, ibufs, textures, mesh_transforms, uniforms }
     }
 
     /// Upload per-frame uniforms for all meshes.
-    ///
-    /// `transform` is a global transform applied on top of each mesh's own
-    /// node transform (e.g. a rotation or world-space placement).
     pub fn prepare(
         &self,
         ctx: &mut Context,
@@ -364,8 +225,6 @@ impl LitShadowedModel {
     }
 
     /// Submit draw calls for the depth-only shadow pass.
-    ///
-    /// Call this inside [`Context::shadow_pass`].
     pub fn shadow_draw(&self, pass: &mut RenderPass) {
         pass.set_pipeline(&self.shadow_pipeline);
         for i in 0..self.vbufs.len() {

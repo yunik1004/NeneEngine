@@ -1,9 +1,9 @@
 //! [`SkinnedMaterial`] — GPU material for skeletal meshes.
 
 use crate::math::Mat4;
-use crate::mesh::{SkinnedMesh, SkinnedVertex};
+use crate::mesh::Vertex;
 use crate::renderer::{
-    AmbientLight, Context, DirectionalLight, Pipeline, PipelineDescriptor, RenderPass,
+    AmbientLight, Context, DirectionalLight, GpuMesh, Pipeline, PipelineDescriptor, RenderPass,
     StorageBuffer, Texture, UniformBuffer,
     light::{AMBIENT_LIGHT_WGSL, DIRECTIONAL_LIGHT_WGSL},
 };
@@ -103,7 +103,7 @@ impl SkinnedMaterialBuilder {
     /// be animated with this material.
     pub fn build(self, ctx: &mut Context, joint_count: usize) -> SkinnedMaterial {
         let shader = gen_skinned_wgsl(self.feat);
-        let mut desc = PipelineDescriptor::new(shader, SkinnedVertex::layout())
+        let mut desc = PipelineDescriptor::new(shader, Vertex::layout())
             .with_uniform() // group 0: scene
             .with_storage() // group 1: joint matrices
             .with_depth();
@@ -158,19 +158,14 @@ impl SkinnedMaterial {
     /// Draw the mesh.
     ///
     /// Pass `Some(&texture)` if the material was built with [`.texture()`](SkinnedMaterialBuilder::texture).
-    /// The mesh must have been [`upload`](SkinnedMesh::upload)ed first.
-    pub fn render(&self, pass: &mut RenderPass, mesh: &SkinnedMesh, texture: Option<&Texture>) {
-        let (Some(vbuf), Some(ibuf)) = (&mesh.vbuf, &mesh.ibuf) else {
-            return; // not uploaded yet
-        };
+    pub fn render(&self, pass: &mut RenderPass, mesh: &GpuMesh, texture: Option<&Texture>) {
         pass.set_pipeline(&self.pipeline);
         pass.set_uniform(0, &self.ubuf);
         pass.set_storage(1, &self.joint_buf);
         if let Some(t) = texture {
             pass.set_texture(2, t);
         }
-        pass.set_vertex_buffer(0, vbuf);
-        pass.draw_indexed(ibuf);
+        mesh.draw(pass);
     }
 }
 
@@ -232,14 +227,14 @@ fn gen_skinned_wgsl(feat: Features) -> String {
     }
     s.push_str("}\n");
 
-    // Vertex shader
+    // Vertex shader — matches Vertex layout: loc 4 = joints, loc 5 = weights.
     s.push_str(
         "@vertex\nfn vs_main(\n\
          \t@location(0) position: vec3<f32>,\n\
          \t@location(1) normal:   vec3<f32>,\n\
          \t@location(2) uv:       vec2<f32>,\n\
-         \t@location(3) joints:   vec4<u32>,\n\
-         \t@location(4) weights:  vec4<f32>,\n\
+         \t@location(4) joints:   vec4<u32>,\n\
+         \t@location(5) weights:  vec4<f32>,\n\
          ) -> VOut {\n\
          \tlet skin =\n\
          \t\t  weights.x * joint_mats[joints.x]\n\

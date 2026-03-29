@@ -1,6 +1,4 @@
-pub use crate::mesh::{
-    AnimChannel, Channel, Clip, Joint, JointPose, Skeleton, SkinnedMesh, SkinnedVertex,
-};
+pub use crate::mesh::{AnimChannel, Channel, Clip, Joint, JointPose, Mesh, Skeleton, Vertex};
 
 mod animator;
 mod skinned_material;

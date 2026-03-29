@@ -24,13 +24,13 @@
 //! use nene::app::{App, Config, WindowId, run};
 //! use nene::input::Input;
 //! use nene::math::{Mat4, Vec4};
-//! use nene::renderer::{Context, Material, MaterialBuilder, Mesh, RenderPass};
+//! use nene::renderer::{Context, GpuMesh, Material, MaterialBuilder, RenderPass};
 //! use nene::time::Time;
-//! use nene::mesh::MeshVertex;
+//! use nene::mesh::Vertex;
 //!
 //! struct MyGame {
 //!     mat:  Option<Material>,
-//!     mesh: Option<Mesh>,
+//!     mesh: Option<GpuMesh>,
 //! }
 //!
 //! impl App for MyGame {
@@ -38,7 +38,7 @@
 //!
 //!     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
 //!         self.mat  = Some(MaterialBuilder::new().ambient().build(ctx));
-//!         self.mesh = Some(Mesh::new(ctx, &[], &[]));
+//!         self.mesh = Some(GpuMesh::new(ctx, &[], &[]));
 //!     }
 //!
 //!     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
