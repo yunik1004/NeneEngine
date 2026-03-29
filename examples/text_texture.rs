@@ -10,7 +10,7 @@ use nene::{
     app::{App, Config, WindowId, run},
     camera::Camera,
     input::Input,
-    math::Vec3,
+    math::{Vec2, Vec3},
     mesh::quad,
     renderer::{Context, GpuMesh, HasTexture, Material, MaterialBuilder, RenderPass, Texture},
     text::TextRenderer,
@@ -39,7 +39,7 @@ impl App for TextDemo {
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        let (verts, indices) = quad(4.0, 1.0).mesh();
+        let (verts, indices) = quad(Vec2::new(4.0, 1.0)).mesh();
         self.mesh = Some(GpuMesh::new(ctx, &verts, &indices));
         self.mat = Some(MaterialBuilder::new().texture().build(ctx));
         self.text = Some(TextRenderer::new(ctx));

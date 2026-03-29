@@ -11,7 +11,7 @@ use nene::{
     app::{App, Config, FixedApp, WindowId, run_fixed},
     debug::Profiler,
     input::Input,
-    math::{Mat4, Vec4},
+    math::{Mat4, Vec2, Vec4},
     mesh::{Vertex, circle_segments},
     renderer::{Context, GpuMesh, Material, MaterialBuilder, RenderPass},
     time::{FixedTime, Time},
@@ -88,8 +88,7 @@ impl App for FixedUpdateDemo {
         let mut verts: Vec<Vertex> = Vec::new();
         for ball in &self.balls {
             verts.extend_from_slice(&circle_segments(
-                ball.pos[0],
-                ball.pos[1],
+                Vec2::from(ball.pos),
                 ball.radius,
                 ball.color,
                 SIDES,
