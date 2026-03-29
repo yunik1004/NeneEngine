@@ -24,7 +24,7 @@ use nene::{
     mesh::{Model, Vertex},
     renderer::{Context, GpuMesh, Light, Material, MaterialBuilder, RenderPass},
     time::{Ease, Time, Tween},
-    ui::EguiUi,
+    ui::Ui,
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ struct StateMachineDemo {
     ease_idx: usize,
     bindings: ActionMap<Action>,
     mat: Option<Material>,
-    egui: Option<EguiUi>,
+    egui: Option<Ui>,
 }
 
 impl App for StateMachineDemo {
@@ -274,7 +274,7 @@ impl App for StateMachineDemo {
         mat.flush(ctx);
         self.mat = Some(mat);
 
-        self.egui = Some(EguiUi::new(ctx));
+        self.egui = Some(Ui::new(ctx));
     }
 
     fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {

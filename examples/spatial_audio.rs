@@ -20,7 +20,7 @@ use nene::{
     math::{Vec2, Vec3},
     renderer::{Context, RenderPass},
     time::Time,
-    ui::EguiUi,
+    ui::Ui,
 };
 
 const W: u32 = 720;
@@ -48,7 +48,7 @@ struct SpatialAudioDemo {
     opts_pan: f32,
     bindings: ActionMap<Action>,
     debug: Option<DebugDraw>,
-    egui: Option<EguiUi>,
+    egui: Option<Ui>,
 }
 
 impl App for SpatialAudioDemo {
@@ -77,7 +77,7 @@ impl App for SpatialAudioDemo {
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.debug = Some(DebugDraw::new(ctx));
-        self.egui = Some(EguiUi::new(ctx));
+        self.egui = Some(Ui::new(ctx));
     }
 
     fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {

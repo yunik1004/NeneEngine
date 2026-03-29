@@ -21,7 +21,7 @@ use nene::{
     mesh::circle,
     renderer::{Context, GpuMesh, Material, MaterialBuilder, RenderPass},
     time::Time,
-    ui::EguiUi,
+    ui::Ui,
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ struct EcsDemo {
     bindings: ActionMap<Action>,
     mat: Option<Material>,
     mesh: Option<GpuMesh>,
-    egui: Option<EguiUi>,
+    egui: Option<Ui>,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -153,7 +153,7 @@ impl App for EcsDemo {
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.mat = Some(MaterialBuilder::new().vertex_color().build(ctx));
         self.mesh = Some(GpuMesh::new(ctx, &[], &[]));
-        self.egui = Some(EguiUi::new(ctx));
+        self.egui = Some(Ui::new(ctx));
     }
 
     fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {

@@ -18,7 +18,7 @@ use nene::{
     persist::{SaveStore, Settings},
     renderer::{Context, RenderPass},
     time::Time,
-    ui::EguiUi,
+    ui::Ui,
 };
 
 // ── Saved game state ──────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ enum Action {
 }
 
 struct UiDemo {
-    egui: Option<EguiUi>,
+    egui: Option<Ui>,
 
     fps: u32,
     speed: f32,
@@ -114,7 +114,7 @@ impl App for UiDemo {
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        self.egui = Some(EguiUi::new(ctx));
+        self.egui = Some(Ui::new(ctx));
     }
 
     fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {

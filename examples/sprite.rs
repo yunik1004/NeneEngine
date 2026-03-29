@@ -19,7 +19,7 @@ use nene::{
     renderer::{Context, FilterMode, RenderPass},
     sprite::{Sprite, SpriteBatch, UvRect},
     time::Time,
-    ui::EguiUi,
+    ui::Ui,
 };
 
 const W: u32 = 960;
@@ -86,7 +86,7 @@ struct SpriteDemo {
     bindings: ActionMap<Action>,
     batch: Option<SpriteBatch>,
     texture: Option<nene::renderer::Texture>,
-    egui: Option<EguiUi>,
+    egui: Option<Ui>,
 }
 
 impl App for SpriteDemo {
@@ -123,7 +123,7 @@ impl App for SpriteDemo {
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.batch = Some(SpriteBatch::new(ctx, OBJECT_COUNT + 1));
         self.texture = Some(make_texture(ctx));
-        self.egui = Some(EguiUi::new(ctx));
+        self.egui = Some(Ui::new(ctx));
     }
 
     fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {

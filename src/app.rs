@@ -171,11 +171,11 @@ pub trait App: Sized + 'static {
 
     /// Called for every raw winit [`WindowEvent`] before nene processes it.
     ///
-    /// Use this to forward events to [`EguiUi`](crate::ui::EguiUi):
+    /// Use this to forward events to [`Ui`](crate::ui::Ui):
     /// ```no_run
     /// # use nene::app::{App, WindowId, WindowEvent};
-    /// # use nene::ui::EguiUi;
-    /// # struct MyApp { egui: Option<EguiUi> }
+    /// # use nene::ui::Ui;
+    /// # struct MyApp { egui: Option<Ui> }
     /// # impl App for MyApp {
     /// #     fn new() -> Self { MyApp { egui: None } }
     /// fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {

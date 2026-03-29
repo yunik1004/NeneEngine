@@ -18,7 +18,7 @@ use nene::{
     net::{Client, ClientEvent},
     renderer::{Context, RenderPass},
     time::Time,
-    ui::EguiUi,
+    ui::Ui,
 };
 use std::collections::HashMap;
 
@@ -69,7 +69,7 @@ struct MultiplayerClientDemo {
     status: String,
     bindings: ActionMap<Action>,
     debug: Option<DebugDraw>,
-    egui: Option<EguiUi>,
+    egui: Option<Ui>,
 }
 
 impl App for MultiplayerClientDemo {
@@ -101,7 +101,7 @@ impl App for MultiplayerClientDemo {
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.debug = Some(DebugDraw::new(ctx));
-        self.egui = Some(EguiUi::new(ctx));
+        self.egui = Some(Ui::new(ctx));
     }
 
     fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {

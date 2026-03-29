@@ -12,15 +12,15 @@ use crate::renderer::{Context, RenderPass};
 /// ```no_run
 /// use nene::app::{App, Config, WindowId, WindowEvent, run};
 /// use nene::renderer::{Context, RenderPass};
-/// use nene::ui::EguiUi;
+/// use nene::ui::Ui;
 ///
-/// struct MyApp { egui: Option<EguiUi> }
+/// struct MyApp { egui: Option<Ui> }
 ///
 /// impl App for MyApp {
 ///     fn new() -> Self { MyApp { egui: None } }
 ///
 ///     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-///         self.egui = Some(EguiUi::new(ctx));
+///         self.egui = Some(Ui::new(ctx));
 ///     }
 ///
 ///     fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
@@ -39,7 +39,7 @@ use crate::renderer::{Context, RenderPass};
 ///     }
 /// }
 /// ```
-pub struct EguiUi {
+pub struct Ui {
     ctx: egui::Context,
     renderer: egui_wgpu::Renderer,
     state: egui_winit::State,
@@ -49,7 +49,7 @@ pub struct EguiUi {
     window: Arc<Window>,
 }
 
-impl EguiUi {
+impl Ui {
     /// Create from a nene [`Context`] (call inside [`App::window_ready`]).
     pub fn new(ctx: &Context) -> Self {
         let egui_ctx = egui::Context::default();

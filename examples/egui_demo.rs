@@ -4,11 +4,11 @@ use nene::{
     input::Input,
     renderer::{Context, RenderPass},
     time::Time,
-    ui::EguiUi,
+    ui::Ui,
 };
 
 struct EguiDemo {
-    egui: Option<EguiUi>,
+    egui: Option<Ui>,
     name: String,
     age: f32,
     dark: bool,
@@ -25,7 +25,7 @@ impl App for EguiDemo {
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        let e = EguiUi::new(ctx);
+        let e = Ui::new(ctx);
         // Dark theme by default — flip to light if you prefer:
         // egui::Context::set_visuals(&egui::Visuals::light());
         self.egui = Some(e);

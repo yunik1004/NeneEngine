@@ -21,7 +21,7 @@ use nene::{
     math::{Mat4, Vec2, Vec3, Vec4},
     renderer::{Context, FlatObject, RenderPass},
     time::Time,
-    ui::EguiUi,
+    ui::Ui,
 };
 
 // ── Event types ───────────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ struct InputDemo {
     log: Vec<String>,
     bindings: ActionMap<Action>,
     square: Option<FlatObject>,
-    egui: Option<EguiUi>,
+    egui: Option<Ui>,
 }
 
 impl App for InputDemo {
@@ -109,7 +109,7 @@ impl App for InputDemo {
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.square = Some(FlatObject::new(ctx, QUAD, Vec4::new(0.3, 0.6, 1.0, 1.0)));
-        self.egui = Some(EguiUi::new(ctx));
+        self.egui = Some(Ui::new(ctx));
     }
 
     fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {

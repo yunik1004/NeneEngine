@@ -17,7 +17,7 @@ use nene::{
     renderer::{Context, FilterMode, RenderPass, Texture},
     tilemap::{TileMap, TileMapRenderer, TileSet},
     time::Time,
-    ui::EguiUi,
+    ui::Ui,
 };
 
 const COLS: u32 = 20;
@@ -135,7 +135,7 @@ struct PathfindingDemo {
     tileset: Option<TileSet>,
     renderer: Option<TileMapRenderer>,
     overlay_renderer: Option<TileMapRenderer>,
-    egui: Option<EguiUi>,
+    egui: Option<Ui>,
 }
 
 impl App for PathfindingDemo {
@@ -180,7 +180,7 @@ impl App for PathfindingDemo {
         self.tileset = Some(TileSet::new(texture, 48, 16, 16, 16));
         self.renderer = Some(TileMapRenderer::new(ctx, TILE));
         self.overlay_renderer = Some(TileMapRenderer::new(ctx, TILE));
-        self.egui = Some(EguiUi::new(ctx));
+        self.egui = Some(Ui::new(ctx));
     }
 
     fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {

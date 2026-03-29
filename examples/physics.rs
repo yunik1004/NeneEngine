@@ -16,7 +16,7 @@ use nene::{
     mesh::cube,
     renderer::{Context, FlatObject, GpuMesh, Material, MaterialBuilder, RenderPass},
     time::Time,
-    ui::EguiUi,
+    ui::Ui,
 };
 
 // ── 2D ───────────────────────────────────────────────────────────────────────
@@ -142,7 +142,7 @@ struct PhysicsDemo {
     bindings: ActionMap<Action>,
     s2d: Option<State2D>,
     s3d: Option<State3D>,
-    egui: Option<EguiUi>,
+    egui: Option<Ui>,
 }
 
 impl App for PhysicsDemo {
@@ -161,7 +161,7 @@ impl App for PhysicsDemo {
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.s2d = Some(init_2d(ctx));
         self.s3d = Some(init_3d(ctx));
-        self.egui = Some(EguiUi::new(ctx));
+        self.egui = Some(Ui::new(ctx));
     }
 
     fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {

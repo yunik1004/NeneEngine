@@ -1,20 +1,20 @@
-//! egui UI integration ([`EguiUi`]).
+//! egui UI integration ([`Ui`]).
 //!
 //! # Quick start
 //! ```no_run
 //! use nene::{
 //!     app::{App, Config, WindowId, WindowEvent, run},
 //!     renderer::{Context, RenderPass},
-//!     ui::EguiUi,
+//!     ui::Ui,
 //! };
 //!
-//! struct MyApp { egui: Option<EguiUi> }
+//! struct MyApp { egui: Option<Ui> }
 //!
 //! impl App for MyApp {
 //!     fn new() -> Self { MyApp { egui: None } }
 //!
 //!     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-//!         self.egui = Some(EguiUi::new(ctx));
+//!         self.egui = Some(Ui::new(ctx));
 //!     }
 //!
 //!     fn on_window_event(&mut self, _id: WindowId, event: &WindowEvent) {
@@ -35,4 +35,4 @@
 //! ```
 
 pub mod egui_ui;
-pub use egui_ui::EguiUi;
+pub use egui_ui::Ui;
