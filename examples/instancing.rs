@@ -6,7 +6,7 @@ use nene::{
     app::{App, Config, WindowId, run},
     input::Input,
     math::{Mat4, Quat, Vec3, Vec4},
-    mesh::unit_cube,
+    mesh::cube,
     renderer::{
         AmbientLight, Context, DirectionalLight, InstanceData, InstancedMesh, Material,
         MaterialBuilder, RenderPass,
@@ -49,7 +49,7 @@ impl App for InstancingDemo {
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        let (verts, indices) = unit_cube().mesh();
+        let (verts, indices) = cube(Vec3::ONE).mesh();
         self.instances = vec![InstanceData::new(Mat4::IDENTITY, Vec4::ONE); (GRID * GRID) as usize];
         self.mesh = Some(InstancedMesh::new(ctx, &verts, &indices, &self.instances));
 

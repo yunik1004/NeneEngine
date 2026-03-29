@@ -267,7 +267,11 @@ impl App for EcsDemo {
             .filter_map(|(e, pos)| {
                 let r = self.world.get::<Radius>(e)?;
                 let c = self.world.get::<Color>(e)?;
-                Some(circle(Vec2::new(pos.x, pos.y), r.0, Vec4::new(c.r, c.g, c.b, 1.0)))
+                Some(circle(
+                    Vec2::new(pos.x, pos.y),
+                    r.0,
+                    Vec4::new(c.r, c.g, c.b, 1.0),
+                ))
             })
             .flatten()
             .collect();

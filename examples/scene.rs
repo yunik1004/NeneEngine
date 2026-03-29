@@ -5,7 +5,7 @@ use nene::{
     debug::{DebugDraw, color},
     input::Input,
     math::{Mat4, Quat, Vec3, Vec4},
-    mesh::unit_cube,
+    mesh::cube,
     renderer::{Context, GpuMesh, Material, MaterialBuilder, RenderPass},
     scene::{Node, NodeId, Scene, Transform},
     time::Time,
@@ -90,7 +90,7 @@ impl App for SceneDemo {
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        let (verts, indices) = unit_cube().mesh();
+        let (verts, indices) = cube(Vec3::ONE).mesh();
         self.mesh = Some(GpuMesh::new(ctx, &verts, &indices));
         self.debug = Some(DebugDraw::new(ctx));
 

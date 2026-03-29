@@ -13,7 +13,7 @@ use nene::{
     camera::Camera,
     input::{Input, Key},
     math::{Mat4, Vec2, Vec3, Vec4},
-    mesh::unit_cube,
+    mesh::cube,
     renderer::{Context, FlatObject, GpuMesh, Material, MaterialBuilder, RenderPass},
     time::Time,
     ui::Ui,
@@ -107,7 +107,7 @@ fn init_3d(ctx: &mut Context) -> State3D {
         cube_h,
     );
 
-    let (cube_verts, cube_indices) = unit_cube().mesh();
+    let (cube_verts, cube_indices) = cube(Vec3::ONE).mesh();
     let cube_mesh = GpuMesh::new(ctx, &cube_verts, &cube_indices);
     let floor_mesh = GpuMesh::new(ctx, &cube_verts, &cube_indices);
 
