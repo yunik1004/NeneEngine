@@ -19,7 +19,7 @@ use nene::{
     animation::{AnimChannel, AnimState, Channel, Clip, Joint, Mesh, Skeleton, StateMachine},
     app::{App, Config, WindowId, run},
     camera::Camera,
-    input::{Input, Key},
+    input::{ActionMap, Input, Key},
     math::{Mat4, Quat, Vec2, Vec3, Vec4},
     mesh::{Model, Vertex},
     renderer::{
@@ -190,6 +190,13 @@ fn build_model() -> Model {
 
 // ── App state ─────────────────────────────────────────────────────────────────
 
+#[derive(Hash, PartialEq, Eq)]
+enum Action {
+    NextState,
+    EaseNext,
+    EasePrev,
+}
+
 struct StateMachineDemo {
     model: Model,
     gpu_mesh: Option<GpuMesh>,
@@ -200,6 +207,7 @@ struct StateMachineDemo {
     next_state: usize,
     blend_tween: Option<Tween<f32>>,
     ease_idx: usize,
+    bindings: ActionMap<Action>,
     mat: Option<Material>,
     ui: Option<Ui>,
 }
@@ -219,6 +227,12 @@ impl App for StateMachineDemo {
         }
         sm.current = 0;
 
+        let mut bindings = ActionMap::new();
+        bindings
+            .bind(Action::NextState, Key::Space)
+            .bind(Action::EaseNext, Key::KeyE)
+            .bind(Action::EasePrev, Key::KeyQ);
+
         StateMachineDemo {
             model,
             gpu_mesh: None,
@@ -233,6 +247,7 @@ impl App for StateMachineDemo {
             next_state: 1,
             blend_tween: None,
             ease_idx: 0,
+            bindings,
             mat: None,
             ui: None,
         }
@@ -271,14 +286,14 @@ impl App for StateMachineDemo {
 
     fn update(&mut self, input: &Input, time: &Time) {
         let n_eases = EASES.len();
-        if input.key_pressed(Key::KeyE) {
+        if self.bindings.pressed(input, &Action::EaseNext) {
             self.ease_idx = (self.ease_idx + 1) % n_eases;
         }
-        if input.key_pressed(Key::KeyQ) {
+        if self.bindings.pressed(input, &Action::EasePrev) {
             self.ease_idx = (self.ease_idx + n_eases - 1) % n_eases;
         }
 
-        if input.key_pressed(Key::Space) {
+        if self.bindings.pressed(input, &Action::NextState) {
             let name = STATES[self.next_state];
             self.sm.trigger(name, BLEND_DURATION);
             self.next_state = (self.next_state + 1) % STATES.len();

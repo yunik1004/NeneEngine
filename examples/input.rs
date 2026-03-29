@@ -17,7 +17,7 @@
 use nene::{
     app::{App, Config, WindowId, run},
     event::Events,
-    input::{GamepadAxis, Input, Key, MouseButton},
+    input::{ActionMap, GamepadAxis, Input, Key, MouseButton},
     math::{Mat4, Vec2, Vec3, Vec4},
     renderer::{Context, FlatObject, RenderPass},
     time::Time,
@@ -54,6 +54,19 @@ fn ortho() -> Mat4 {
     Mat4::orthographic_rh(-8.0, 8.0, -4.5, 4.5, -1.0, 1.0)
 }
 
+#[derive(Hash, PartialEq, Eq)]
+enum Action {
+    MoveUp,
+    MoveDown,
+    MoveLeft,
+    MoveRight,
+    PrintPos,
+    Tint,
+    Attack,
+    Heal,
+    Reset,
+}
+
 struct InputDemo {
     // Direct-input state
     pos: Vec2,
@@ -62,6 +75,7 @@ struct InputDemo {
     events: Events<GameEvent>,
     hp: i32,
     log: Vec<String>,
+    bindings: ActionMap<Action>,
     // GPU
     square: Option<FlatObject>,
     ui: Option<Ui>,
@@ -69,12 +83,28 @@ struct InputDemo {
 
 impl App for InputDemo {
     fn new() -> Self {
+        let mut bindings = ActionMap::new();
+        bindings
+            .bind(Action::MoveUp, Key::KeyW)
+            .bind(Action::MoveUp, Key::ArrowUp)
+            .bind(Action::MoveDown, Key::KeyS)
+            .bind(Action::MoveDown, Key::ArrowDown)
+            .bind(Action::MoveLeft, Key::KeyA)
+            .bind(Action::MoveLeft, Key::ArrowLeft)
+            .bind(Action::MoveRight, Key::KeyD)
+            .bind(Action::MoveRight, Key::ArrowRight)
+            .bind(Action::PrintPos, Key::Space)
+            .bind(Action::Tint, MouseButton::Left)
+            .bind(Action::Attack, Key::KeyZ)
+            .bind(Action::Heal, Key::KeyX)
+            .bind(Action::Reset, Key::KeyR);
         InputDemo {
             pos: Vec2::ZERO,
             color: Vec4::new(0.3, 0.6, 1.0, 1.0),
             events: Events::new(),
             hp: MAX_HP,
             log: vec!["Ready.".into()],
+            bindings,
             square: None,
             ui: None,
         }
@@ -120,18 +150,19 @@ impl App for InputDemo {
         // ── movement ─────────────────────────────────────────────────────
         let speed = 5.0 * time.delta;
         let mut dir = Vec2::ZERO;
-        if input.key_down(Key::KeyW) || input.key_down(Key::ArrowUp) {
+        if self.bindings.down(input, &Action::MoveUp) {
             dir.y += 1.0;
         }
-        if input.key_down(Key::KeyS) || input.key_down(Key::ArrowDown) {
+        if self.bindings.down(input, &Action::MoveDown) {
             dir.y -= 1.0;
         }
-        if input.key_down(Key::KeyA) || input.key_down(Key::ArrowLeft) {
+        if self.bindings.down(input, &Action::MoveLeft) {
             dir.x -= 1.0;
         }
-        if input.key_down(Key::KeyD) || input.key_down(Key::ArrowRight) {
+        if self.bindings.down(input, &Action::MoveRight) {
             dir.x += 1.0;
         }
+        // Gamepad axis still uses raw input (axes don't map to discrete bindings)
         if let Some((id, _)) = input.gamepads().next() {
             dir.x += input.gamepad_axis(id, GamepadAxis::LeftStickX);
             dir.y += input.gamepad_axis(id, GamepadAxis::LeftStickY);
@@ -139,24 +170,24 @@ impl App for InputDemo {
         if dir != Vec2::ZERO {
             self.pos += dir.normalize() * speed;
         }
-        if input.key_pressed(Key::Space) {
+        if self.bindings.pressed(input, &Action::PrintPos) {
             println!("pos = {:?}", self.pos);
         }
 
-        self.color = if input.mouse_down(MouseButton::Left) {
+        self.color = if self.bindings.down(input, &Action::Tint) {
             Vec4::new(1.0, 0.2, 0.2, 1.0)
         } else {
             Vec4::new(0.3, 0.6, 1.0, 1.0)
         };
 
         // ── event emitters ────────────────────────────────────────────────
-        if input.key_pressed(Key::KeyZ) {
+        if self.bindings.pressed(input, &Action::Attack) {
             self.events.emit(GameEvent::Attack(10));
         }
-        if input.key_pressed(Key::KeyX) {
+        if self.bindings.pressed(input, &Action::Heal) {
             self.events.emit(GameEvent::Heal(15));
         }
-        if input.key_pressed(Key::KeyR) {
+        if self.bindings.pressed(input, &Action::Reset) {
             self.events.emit(GameEvent::Reset);
         }
     }

@@ -11,7 +11,7 @@ use std::f32::consts::TAU;
 use nene::{
     app::{App, Config, WindowId, run},
     camera::Camera,
-    input::{Input, Key},
+    input::{ActionMap, Input, Key},
     math::{Mat4, Vec2, Vec3, Vec4},
     mesh::cube,
     renderer::{Context, FlatObject, GpuMesh, Material, MaterialBuilder, RenderPass},
@@ -132,8 +132,14 @@ fn init_3d(ctx: &mut Context) -> State3D {
 
 // ── App state ─────────────────────────────────────────────────────────────────
 
+#[derive(Hash, PartialEq, Eq)]
+enum Action {
+    SwitchMode,
+}
+
 struct PhysicsDemo {
     mode_3d: bool,
+    bindings: ActionMap<Action>,
     s2d: Option<State2D>,
     s3d: Option<State3D>,
     ui: Option<Ui>,
@@ -141,8 +147,11 @@ struct PhysicsDemo {
 
 impl App for PhysicsDemo {
     fn new() -> Self {
+        let mut bindings = ActionMap::new();
+        bindings.bind(Action::SwitchMode, Key::Tab);
         PhysicsDemo {
             mode_3d: false,
+            bindings,
             s2d: None,
             s3d: None,
             ui: None,
@@ -156,7 +165,7 @@ impl App for PhysicsDemo {
     }
 
     fn update(&mut self, input: &Input, time: &Time) {
-        if input.key_pressed(Key::Tab) {
+        if self.bindings.pressed(input, &Action::SwitchMode) {
             self.mode_3d = !self.mode_3d;
         }
 

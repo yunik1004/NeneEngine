@@ -16,7 +16,7 @@ use nene::{
     audio::{AudioDevice, Sound, SpatialAudio},
     camera::Camera,
     debug::DebugDraw,
-    input::{Input, Key},
+    input::{ActionMap, Input, Key},
     math::{Vec2, Vec3},
     renderer::{Context, RenderPass},
     time::Time,
@@ -30,6 +30,11 @@ const ORBIT_RADIUS: f32 = 6.0;
 const ORBIT_SPEED: f32 = 0.8; // radians / second
 const TONE_HZ: f32 = 440.0;
 
+#[derive(Hash, PartialEq, Eq)]
+enum Action {
+    TogglePause,
+}
+
 struct SpatialAudioDemo {
     #[allow(dead_code)] // must stay alive to keep the audio stream running
     audio: AudioDevice,
@@ -38,6 +43,7 @@ struct SpatialAudioDemo {
     camera: Camera,
     angle: f32,
     paused: bool,
+    bindings: ActionMap<Action>,
     debug: Option<DebugDraw>,
     ui: Option<Ui>,
 }
@@ -48,6 +54,8 @@ impl App for SpatialAudioDemo {
         let sound = Arc::new(Sound::sine_wave(TONE_HZ, 0.5, 44100));
         let spatial = SpatialAudio::new(MAX_DIST);
         let source = spatial.play_source(&audio, &sound, Vec2::new(ORBIT_RADIUS, 0.0), true);
+        let mut bindings = ActionMap::new();
+        bindings.bind(Action::TogglePause, Key::Space);
         SpatialAudioDemo {
             audio,
             spatial,
@@ -55,6 +63,7 @@ impl App for SpatialAudioDemo {
             camera: Camera::orthographic(Vec3::new(0.0, 0.0, 20.0), 28.0, 0.1, 100.0),
             angle: 0.0,
             paused: false,
+            bindings,
             debug: None,
             ui: None,
         }
@@ -66,7 +75,7 @@ impl App for SpatialAudioDemo {
     }
 
     fn update(&mut self, input: &Input, time: &Time) {
-        if input.key_pressed(Key::Space) {
+        if self.bindings.pressed(input, &Action::TogglePause) {
             self.paused = !self.paused;
         }
 

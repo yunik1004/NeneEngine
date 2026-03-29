@@ -13,7 +13,7 @@
 use nene::{
     ai::pathfinding::{TileMapGraph, find_path},
     app::{App, Config, WindowId, run},
-    input::{Input, Key, MouseButton},
+    input::{ActionMap, Input, Key, MouseButton},
     renderer::{Context, FilterMode, RenderPass, Texture},
     tilemap::{TileMap, TileMapRenderer, TileSet},
     time::Time,
@@ -115,6 +115,14 @@ fn screen_to_tile(sx: f32, sy: f32) -> Option<(u32, u32)> {
     Some((col as u32, row as u32))
 }
 
+#[derive(Hash, PartialEq, Eq)]
+enum Action {
+    SetStart,
+    SetGoal,
+    ToggleDiagonal,
+    RandomizeWalls,
+}
+
 struct PathfindingDemo {
     map: TileMap,
     overlay: TileMap,
@@ -123,6 +131,7 @@ struct PathfindingDemo {
     goal: (u32, u32),
     diagonal: bool,
     path: Option<Vec<(u32, u32)>>,
+    bindings: ActionMap<Action>,
     // GPU
     tileset: Option<TileSet>,
     renderer: Option<TileMapRenderer>,
@@ -144,6 +153,13 @@ impl App for PathfindingDemo {
         let path = find_path(&TileMapGraph::new(&map, false), start, goal);
         rebuild_overlay(&mut overlay, &path, start, goal);
 
+        let mut bindings = ActionMap::new();
+        bindings
+            .bind(Action::SetStart, MouseButton::Left)
+            .bind(Action::SetGoal, MouseButton::Right)
+            .bind(Action::ToggleDiagonal, Key::KeyD)
+            .bind(Action::RandomizeWalls, Key::KeyR);
+
         PathfindingDemo {
             map,
             overlay,
@@ -152,6 +168,7 @@ impl App for PathfindingDemo {
             goal,
             diagonal: false,
             path,
+            bindings,
             tileset: None,
             renderer: None,
             overlay_renderer: None,
@@ -172,7 +189,7 @@ impl App for PathfindingDemo {
         let mp = input.mouse_pos();
         let (mx, my) = (mp.x, mp.y);
 
-        if input.mouse_pressed(MouseButton::Left) {
+        if self.bindings.pressed(input, &Action::SetStart) {
             if let Some(tile) = screen_to_tile(mx, my) {
                 if !self.map.is_solid(tile.0, tile.1) {
                     self.start = tile;
@@ -180,7 +197,7 @@ impl App for PathfindingDemo {
                 }
             }
         }
-        if input.mouse_pressed(MouseButton::Right) {
+        if self.bindings.pressed(input, &Action::SetGoal) {
             if let Some(tile) = screen_to_tile(mx, my) {
                 if !self.map.is_solid(tile.0, tile.1) {
                     self.goal = tile;
@@ -188,11 +205,11 @@ impl App for PathfindingDemo {
                 }
             }
         }
-        if input.key_pressed(Key::KeyD) {
+        if self.bindings.pressed(input, &Action::ToggleDiagonal) {
             self.diagonal = !self.diagonal;
             changed = true;
         }
-        if input.key_pressed(Key::KeyR) {
+        if self.bindings.pressed(input, &Action::RandomizeWalls) {
             random_walls(&mut self.map);
             self.map.set_solid(self.start.0, self.start.1, false);
             self.map.set(self.start.0, self.start.1, 0, 1);

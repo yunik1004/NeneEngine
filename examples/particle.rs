@@ -10,7 +10,7 @@
 
 use nene::{
     app::{App, Config, WindowId, run},
-    input::{Input, Key},
+    input::{ActionMap, Input, Key},
     math::{Mat4, Vec3},
     particle::{EmitterConfig, ParticleSystem},
     renderer::{Context, RenderPass},
@@ -38,6 +38,11 @@ fn camera_view_proj(time: f32) -> (Mat4, Vec3, Vec3) {
     (view_proj, cam_right, cam_up)
 }
 
+#[derive(Hash, PartialEq, Eq)]
+enum Action {
+    SparkBurst,
+}
+
 struct ParticleDemo {
     elapsed: f32,
     dt: f32,
@@ -45,6 +50,7 @@ struct ParticleDemo {
     cam_right: Vec3,
     cam_up: Vec3,
     burst_pending: bool,
+    bindings: ActionMap<Action>,
     // GPU
     fire: Option<ParticleSystem>,
     sparks: Option<ParticleSystem>,
@@ -52,6 +58,8 @@ struct ParticleDemo {
 
 impl App for ParticleDemo {
     fn new() -> Self {
+        let mut bindings = ActionMap::new();
+        bindings.bind(Action::SparkBurst, Key::Space);
         ParticleDemo {
             elapsed: 0.0,
             dt: 0.0,
@@ -59,6 +67,7 @@ impl App for ParticleDemo {
             cam_right: Vec3::X,
             cam_up: Vec3::Y,
             burst_pending: false,
+            bindings,
             fire: None,
             sparks: None,
         }
@@ -77,7 +86,7 @@ impl App for ParticleDemo {
         self.cam_right = right;
         self.cam_up = up;
 
-        if input.key_pressed(Key::Space) {
+        if self.bindings.pressed(input, &Action::SparkBurst) {
             self.burst_pending = true;
         }
     }

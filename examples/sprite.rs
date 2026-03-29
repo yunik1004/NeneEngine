@@ -14,7 +14,7 @@
 use nene::{
     app::{App, Config, WindowId, run},
     camera::{Camera, Frustum},
-    input::{Input, Key, MouseButton},
+    input::{ActionMap, Input, Key, MouseButton},
     math::{Vec2, Vec3},
     renderer::{Context, FilterMode, RenderPass},
     sprite::{Sprite, SpriteBatch, UvRect},
@@ -63,6 +63,19 @@ fn spawn_objects() -> Vec<Object> {
         .collect()
 }
 
+#[derive(Hash, PartialEq, Eq)]
+enum Action {
+    MoveUp,
+    MoveDown,
+    MoveLeft,
+    MoveRight,
+    RotateLeft,
+    RotateRight,
+    ZoomIn,
+    ZoomOut,
+    Tint,
+}
+
 struct SpriteDemo {
     objects: Vec<Object>,
     player_pos: Vec2,
@@ -70,6 +83,7 @@ struct SpriteDemo {
     camera: Camera,
     ortho_width: f32,
     visible_count: usize,
+    bindings: ActionMap<Action>,
     batch: Option<SpriteBatch>,
     texture: Option<nene::renderer::Texture>,
     ui: Option<Ui>,
@@ -77,6 +91,21 @@ struct SpriteDemo {
 
 impl App for SpriteDemo {
     fn new() -> Self {
+        let mut bindings = ActionMap::new();
+        bindings
+            .bind(Action::MoveUp, Key::KeyW)
+            .bind(Action::MoveUp, Key::ArrowUp)
+            .bind(Action::MoveDown, Key::KeyS)
+            .bind(Action::MoveDown, Key::ArrowDown)
+            .bind(Action::MoveLeft, Key::KeyA)
+            .bind(Action::MoveLeft, Key::ArrowLeft)
+            .bind(Action::MoveRight, Key::KeyD)
+            .bind(Action::MoveRight, Key::ArrowRight)
+            .bind(Action::RotateLeft, Key::KeyQ)
+            .bind(Action::RotateRight, Key::KeyE)
+            .bind(Action::ZoomIn, Key::Equal)
+            .bind(Action::ZoomOut, Key::Minus)
+            .bind(Action::Tint, MouseButton::Left);
         SpriteDemo {
             objects: spawn_objects(),
             player_pos: Vec2::ZERO,
@@ -84,6 +113,7 @@ impl App for SpriteDemo {
             camera: Camera::orthographic(Vec3::new(0.0, 0.0, 1.0), 40.0, 0.1, 100.0),
             ortho_width: 40.0,
             visible_count: 0,
+            bindings,
             batch: None,
             texture: None,
             ui: None,
@@ -101,33 +131,33 @@ impl App for SpriteDemo {
 
         // Player movement
         let mut dir = Vec2::ZERO;
-        if input.key_down(Key::KeyW) || input.key_down(Key::ArrowUp) {
+        if self.bindings.down(input, &Action::MoveUp) {
             dir.y += 1.0;
         }
-        if input.key_down(Key::KeyS) || input.key_down(Key::ArrowDown) {
+        if self.bindings.down(input, &Action::MoveDown) {
             dir.y -= 1.0;
         }
-        if input.key_down(Key::KeyA) || input.key_down(Key::ArrowLeft) {
+        if self.bindings.down(input, &Action::MoveLeft) {
             dir.x -= 1.0;
         }
-        if input.key_down(Key::KeyD) || input.key_down(Key::ArrowRight) {
+        if self.bindings.down(input, &Action::MoveRight) {
             dir.x += 1.0;
         }
         if dir != Vec2::ZERO {
             self.player_pos += dir.normalize() * 8.0 * dt;
         }
-        if input.key_down(Key::KeyQ) {
+        if self.bindings.down(input, &Action::RotateLeft) {
             self.player_angle += 2.0 * dt;
         }
-        if input.key_down(Key::KeyE) {
+        if self.bindings.down(input, &Action::RotateRight) {
             self.player_angle -= 2.0 * dt;
         }
 
         // Zoom + camera follows player
-        if input.key_down(Key::Equal) {
+        if self.bindings.down(input, &Action::ZoomIn) {
             self.ortho_width = (self.ortho_width * (1.0 - dt * 2.0)).max(5.0);
         }
-        if input.key_down(Key::Minus) {
+        if self.bindings.down(input, &Action::ZoomOut) {
             self.ortho_width = (self.ortho_width * (1.0 + dt * 2.0)).min(200.0);
         }
         let (px, py) = (self.player_pos.x, self.player_pos.y);
@@ -163,7 +193,7 @@ impl App for SpriteDemo {
         }
         self.visible_count = visible;
 
-        let tint = if input.mouse_down(MouseButton::Left) {
+        let tint = if self.bindings.down(input, &Action::Tint) {
             [1.0, 0.3, 0.3, 1.0]
         } else {
             [1.0, 1.0, 1.0, 1.0]

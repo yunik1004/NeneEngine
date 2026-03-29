@@ -13,7 +13,7 @@
 
 use nene::{
     app::{App, Config, WindowId, run},
-    input::{Input, Key},
+    input::{ActionMap, Input, Key},
     locale::{Locale, from_json},
     persist::{SaveStore, Settings},
     renderer::{Context, RenderPass},
@@ -41,6 +41,11 @@ const W: f32 = 980.0;
 const H: f32 = 580.0;
 const SLOT: &str = "save1";
 
+#[derive(Hash, PartialEq, Eq)]
+enum Action {
+    CycleLanguage,
+}
+
 struct UiDemo {
     ui: Option<Ui>,
 
@@ -58,6 +63,7 @@ struct UiDemo {
     locale: Locale,
     langs: Vec<String>,
     lang_idx: usize,
+    bindings: ActionMap<Action>,
 }
 
 impl App for UiDemo {
@@ -84,6 +90,9 @@ impl App for UiDemo {
         let langs = available_languages(locale_dir);
         let locale = Locale::new(load_lang(locale_dir, "en"));
 
+        let mut bindings = ActionMap::new();
+        bindings.bind(Action::CycleLanguage, Key::KeyL);
+
         UiDemo {
             ui: None,
             speed,
@@ -98,6 +107,7 @@ impl App for UiDemo {
             locale,
             langs,
             lang_idx: 0,
+            bindings,
         }
     }
 
@@ -106,7 +116,7 @@ impl App for UiDemo {
     }
 
     fn update(&mut self, input: &Input, time: &Time) {
-        if input.key_pressed(Key::KeyL) && !self.langs.is_empty() {
+        if self.bindings.pressed(input, &Action::CycleLanguage) && !self.langs.is_empty() {
             self.lang_idx = (self.lang_idx + 1) % self.langs.len();
             let lang = self.langs[self.lang_idx].clone();
             self.locale.set(load_lang("examples/assets/locale", &lang));

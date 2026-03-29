@@ -13,7 +13,7 @@ use nene::{
     app::{App, Config, WindowId, run},
     camera::Camera,
     debug::DebugDraw,
-    input::{Input, Key},
+    input::{ActionMap, Input, Key},
     math::Vec3,
     net::{Client, ClientEvent},
     renderer::{Context, RenderPass},
@@ -51,6 +51,14 @@ struct RemotePlayer {
     ry: f32,
 }
 
+#[derive(Hash, PartialEq, Eq)]
+enum Action {
+    MoveUp,
+    MoveDown,
+    MoveLeft,
+    MoveRight,
+}
+
 struct MultiplayerClientDemo {
     client: Client,
     camera: Camera,
@@ -59,6 +67,7 @@ struct MultiplayerClientDemo {
     others: HashMap<u32, RemotePlayer>,
     send_timer: f32,
     status: String,
+    bindings: ActionMap<Action>,
     // GPU
     debug: Option<DebugDraw>,
     ui: Option<Ui>,
@@ -67,6 +76,16 @@ struct MultiplayerClientDemo {
 impl App for MultiplayerClientDemo {
     fn new() -> Self {
         let client = Client::connect("127.0.0.1:7777").expect("connect failed");
+        let mut bindings = ActionMap::new();
+        bindings
+            .bind(Action::MoveUp, Key::KeyW)
+            .bind(Action::MoveUp, Key::ArrowUp)
+            .bind(Action::MoveDown, Key::KeyS)
+            .bind(Action::MoveDown, Key::ArrowDown)
+            .bind(Action::MoveLeft, Key::KeyA)
+            .bind(Action::MoveLeft, Key::ArrowLeft)
+            .bind(Action::MoveRight, Key::KeyD)
+            .bind(Action::MoveRight, Key::ArrowRight);
         MultiplayerClientDemo {
             client,
             camera: Camera::orthographic(Vec3::new(0.0, 0.0, 10.0), 20.0, 0.1, 100.0),
@@ -75,6 +94,7 @@ impl App for MultiplayerClientDemo {
             others: HashMap::new(),
             send_timer: 0.0,
             status: "Connecting…".into(),
+            bindings,
             debug: None,
             ui: None,
         }
@@ -124,16 +144,16 @@ impl App for MultiplayerClientDemo {
         if self.client.is_connected() {
             let mut dx = 0.0f32;
             let mut dy = 0.0f32;
-            if input.key_down(Key::KeyW) || input.key_down(Key::ArrowUp) {
+            if self.bindings.down(input, &Action::MoveUp) {
                 dy += 1.0;
             }
-            if input.key_down(Key::KeyS) || input.key_down(Key::ArrowDown) {
+            if self.bindings.down(input, &Action::MoveDown) {
                 dy -= 1.0;
             }
-            if input.key_down(Key::KeyA) || input.key_down(Key::ArrowLeft) {
+            if self.bindings.down(input, &Action::MoveLeft) {
                 dx -= 1.0;
             }
-            if input.key_down(Key::KeyD) || input.key_down(Key::ArrowRight) {
+            if self.bindings.down(input, &Action::MoveRight) {
                 dx += 1.0;
             }
             let len = (dx * dx + dy * dy).sqrt().max(1.0);

@@ -68,7 +68,10 @@ impl<A: Hash + Eq> ActionMap<A> {
     /// Add a binding for an action. Multiple bindings per action are allowed;
     /// any one of them firing is enough to trigger the action.
     pub fn bind(&mut self, action: A, binding: impl Into<Binding>) -> &mut Self {
-        self.bindings.entry(action).or_default().push(binding.into());
+        self.bindings
+            .entry(action)
+            .or_default()
+            .push(binding.into());
         self
     }
 
@@ -106,7 +109,7 @@ impl<A: Hash + Eq> ActionMap<A> {
     fn any(&self, action: &A, f: impl Fn(&Binding) -> bool) -> bool {
         self.bindings
             .get(action)
-            .map_or(false, |bs| bs.iter().any(f))
+            .is_some_and(|bs| bs.iter().any(f))
     }
 }
 
@@ -114,7 +117,9 @@ fn binding_pressed(input: &Input, b: &Binding) -> bool {
     match b {
         Binding::Key(k) => input.key_pressed(*k),
         Binding::Mouse(m) => input.mouse_pressed(*m),
-        Binding::Gamepad(btn) => input.gamepads().any(|(id, _)| input.gamepad_pressed(id, *btn)),
+        Binding::Gamepad(btn) => input
+            .gamepads()
+            .any(|(id, _)| input.gamepad_pressed(id, *btn)),
     }
 }
 
@@ -130,6 +135,8 @@ fn binding_released(input: &Input, b: &Binding) -> bool {
     match b {
         Binding::Key(k) => input.key_released(*k),
         Binding::Mouse(m) => input.mouse_released(*m),
-        Binding::Gamepad(btn) => input.gamepads().any(|(id, _)| input.gamepad_released(id, *btn)),
+        Binding::Gamepad(btn) => input
+            .gamepads()
+            .any(|(id, _)| input.gamepad_released(id, *btn)),
     }
 }

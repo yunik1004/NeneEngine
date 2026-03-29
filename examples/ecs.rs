@@ -16,7 +16,7 @@
 use nene::{
     app::{App, Config, WindowId, run},
     ecs::{Entity, World},
-    input::{Input, Key},
+    input::{ActionMap, Input, Key},
     math::{Vec2, Vec4},
     mesh::circle,
     renderer::{Context, GpuMesh, Material, MaterialBuilder, RenderPass},
@@ -59,9 +59,19 @@ struct InRange;
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
+#[derive(Hash, PartialEq, Eq)]
+enum Action {
+    MoveLeft,
+    MoveRight,
+    MoveUp,
+    MoveDown,
+    SpawnEnemies,
+}
+
 struct EcsDemo {
     world: World,
     player: Entity,
+    bindings: ActionMap<Action>,
     mat: Option<Material>,
     mesh: Option<GpuMesh>,
     ui: Option<Ui>,
@@ -117,9 +127,23 @@ impl App for EcsDemo {
         for i in 0..30 {
             spawn_enemy(&mut world, i * 137 + 42);
         }
+
+        let mut bindings = ActionMap::new();
+        bindings
+            .bind(Action::MoveLeft, Key::KeyA)
+            .bind(Action::MoveLeft, Key::ArrowLeft)
+            .bind(Action::MoveRight, Key::KeyD)
+            .bind(Action::MoveRight, Key::ArrowRight)
+            .bind(Action::MoveUp, Key::KeyW)
+            .bind(Action::MoveUp, Key::ArrowUp)
+            .bind(Action::MoveDown, Key::KeyS)
+            .bind(Action::MoveDown, Key::ArrowDown)
+            .bind(Action::SpawnEnemies, Key::Space);
+
         EcsDemo {
             world,
             player,
+            bindings,
             mat: None,
             mesh: None,
             ui: None,
@@ -142,20 +166,20 @@ impl App for EcsDemo {
             let vel = w.get_mut::<Velocity>(self.player).unwrap();
             vel.x = 0.0;
             vel.y = 0.0;
-            if input.key_down(Key::KeyA) || input.key_down(Key::ArrowLeft) {
+            if self.bindings.down(input, &Action::MoveLeft) {
                 vel.x -= PLAYER_SPEED;
             }
-            if input.key_down(Key::KeyD) || input.key_down(Key::ArrowRight) {
+            if self.bindings.down(input, &Action::MoveRight) {
                 vel.x += PLAYER_SPEED;
             }
-            if input.key_down(Key::KeyW) || input.key_down(Key::ArrowUp) {
+            if self.bindings.down(input, &Action::MoveUp) {
                 vel.y -= PLAYER_SPEED;
             }
-            if input.key_down(Key::KeyS) || input.key_down(Key::ArrowDown) {
+            if self.bindings.down(input, &Action::MoveDown) {
                 vel.y += PLAYER_SPEED;
             }
         }
-        if input.key_pressed(Key::Space) {
+        if self.bindings.pressed(input, &Action::SpawnEnemies) {
             for i in 0..10 {
                 spawn_enemy(w, seed.wrapping_add(i * 73));
             }
