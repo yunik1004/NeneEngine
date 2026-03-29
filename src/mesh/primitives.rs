@@ -6,16 +6,6 @@ use crate::math::{Vec2, Vec3, Vec4};
 
 use super::Vertex;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn colored(position: Vec3, color: Vec4) -> Vertex {
-    Vertex { position, color, ..Vertex::default() }
-}
-
-fn textured(position: Vec3, normal: Vec3, uv: Vec2) -> Vertex {
-    Vertex { position, normal, uv, ..Vertex::default() }
-}
-
 // ── Flat primitives ───────────────────────────────────────────────────────────
 
 /// Filled axis-aligned rectangle.
@@ -23,12 +13,12 @@ pub fn rect(pos: Vec2, size: Vec2, color: Vec4) -> Vec<Vertex> {
     let (x1, y1) = (pos.x, pos.y);
     let (x2, y2) = (pos.x + size.x, pos.y + size.y);
     vec![
-        colored(Vec3::new(x1, y1, 0.0), color),
-        colored(Vec3::new(x2, y1, 0.0), color),
-        colored(Vec3::new(x2, y2, 0.0), color),
-        colored(Vec3::new(x1, y1, 0.0), color),
-        colored(Vec3::new(x2, y2, 0.0), color),
-        colored(Vec3::new(x1, y2, 0.0), color),
+        Vertex { position: Vec3::new(x1, y1, 0.0), color, ..Vertex::default() },
+        Vertex { position: Vec3::new(x2, y1, 0.0), color, ..Vertex::default() },
+        Vertex { position: Vec3::new(x2, y2, 0.0), color, ..Vertex::default() },
+        Vertex { position: Vec3::new(x1, y1, 0.0), color, ..Vertex::default() },
+        Vertex { position: Vec3::new(x2, y2, 0.0), color, ..Vertex::default() },
+        Vertex { position: Vec3::new(x1, y2, 0.0), color, ..Vertex::default() },
     ]
 }
 
@@ -45,9 +35,9 @@ pub fn circle_segments(center: Vec2, radius: f32, color: Vec4, segments: u32) ->
     for i in 0..n {
         let a0 = TAU * i as f32 / n as f32;
         let a1 = TAU * (i + 1) as f32 / n as f32;
-        out.push(colored(c, color));
-        out.push(colored(Vec3::new(center.x + a0.cos() * radius, center.y + a0.sin() * radius, 0.0), color));
-        out.push(colored(Vec3::new(center.x + a1.cos() * radius, center.y + a1.sin() * radius, 0.0), color));
+        out.push(Vertex { position: c, color, ..Vertex::default() });
+        out.push(Vertex { position: Vec3::new(center.x + a0.cos() * radius, center.y + a0.sin() * radius, 0.0), color, ..Vertex::default() });
+        out.push(Vertex { position: Vec3::new(center.x + a1.cos() * radius, center.y + a1.sin() * radius, 0.0), color, ..Vertex::default() });
     }
     out
 }
@@ -55,9 +45,9 @@ pub fn circle_segments(center: Vec2, radius: f32, color: Vec4, segments: u32) ->
 /// Filled triangle.
 pub fn triangle(a: Vec2, b: Vec2, c: Vec2, color: Vec4) -> Vec<Vertex> {
     vec![
-        colored(a.extend(0.0), color),
-        colored(b.extend(0.0), color),
-        colored(c.extend(0.0), color),
+        Vertex { position: a.extend(0.0), color, ..Vertex::default() },
+        Vertex { position: b.extend(0.0), color, ..Vertex::default() },
+        Vertex { position: c.extend(0.0), color, ..Vertex::default() },
     ]
 }
 
@@ -67,12 +57,12 @@ pub fn line(a: Vec2, b: Vec2, thickness: f32, color: Vec4) -> Vec<Vertex> {
     let len = d.length().max(f32::EPSILON);
     let n = Vec2::new(-d.y, d.x) / len * thickness * 0.5;
     vec![
-        colored((a + n).extend(0.0), color),
-        colored((b + n).extend(0.0), color),
-        colored((b - n).extend(0.0), color),
-        colored((a + n).extend(0.0), color),
-        colored((b - n).extend(0.0), color),
-        colored((a - n).extend(0.0), color),
+        Vertex { position: (a + n).extend(0.0), color, ..Vertex::default() },
+        Vertex { position: (b + n).extend(0.0), color, ..Vertex::default() },
+        Vertex { position: (b - n).extend(0.0), color, ..Vertex::default() },
+        Vertex { position: (a + n).extend(0.0), color, ..Vertex::default() },
+        Vertex { position: (b - n).extend(0.0), color, ..Vertex::default() },
+        Vertex { position: (a - n).extend(0.0), color, ..Vertex::default() },
     ]
 }
 
@@ -107,12 +97,11 @@ impl QuadBuilder {
 
     pub fn mesh(self) -> (Vec<Vertex>, Vec<u32>) {
         let h = self.size * 0.5;
-        let n = Vec3::Z;
         let verts = vec![
-            textured(Vec3::new(-h.x, -h.y, 0.0), n, Vec2::new(0.0, 1.0)),
-            textured(Vec3::new( h.x, -h.y, 0.0), n, Vec2::new(1.0, 1.0)),
-            textured(Vec3::new( h.x,  h.y, 0.0), n, Vec2::new(1.0, 0.0)),
-            textured(Vec3::new(-h.x,  h.y, 0.0), n, Vec2::new(0.0, 0.0)),
+            Vertex { position: Vec3::new(-h.x, -h.y, 0.0), normal: Vec3::Z, uv: Vec2::new(0.0, 1.0), ..Vertex::default() },
+            Vertex { position: Vec3::new( h.x, -h.y, 0.0), normal: Vec3::Z, uv: Vec2::new(1.0, 1.0), ..Vertex::default() },
+            Vertex { position: Vec3::new( h.x,  h.y, 0.0), normal: Vec3::Z, uv: Vec2::new(1.0, 0.0), ..Vertex::default() },
+            Vertex { position: Vec3::new(-h.x,  h.y, 0.0), normal: Vec3::Z, uv: Vec2::new(0.0, 0.0), ..Vertex::default() },
         ];
         (verts, vec![0, 1, 2, 0, 2, 3])
     }
@@ -141,7 +130,7 @@ impl CubeBuilder {
             [Vec3::new(-h.x, -h.y, -h.z), Vec3::new( h.x, -h.y,  h.z), Vec3::new(-h.x, -h.y,  h.z)],
         ];
         tris.iter()
-            .flat_map(|tri| tri.iter().map(|&p| colored(p, color)))
+            .flat_map(|tri| tri.iter().map(|&position| Vertex { position, color, ..Vertex::default() }))
             .collect()
     }
 
@@ -161,8 +150,8 @@ impl CubeBuilder {
         let mut indices = Vec::with_capacity(36);
         for face in &faces {
             let base = verts.len() as u32;
-            for (i, &pos) in face.positions.iter().enumerate() {
-                verts.push(textured(pos, face.normal, uvs[i]));
+            for (i, &position) in face.positions.iter().enumerate() {
+                verts.push(Vertex { position, normal: face.normal, uv: uvs[i], ..Vertex::default() });
             }
             indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
         }
@@ -201,8 +190,7 @@ impl SphereBuilder {
                     pts[i * row + j], pts[i * row + j + 1],
                     pts[(i + 1) * row + j], pts[(i + 1) * row + j + 1],
                 ];
-                out.extend([colored(a, color), colored(c, color), colored(b, color),
-                             colored(b, color), colored(c, color), colored(d, color)]);
+                out.extend([a, c, b, b, c, d].map(|position| Vertex { position, color, ..Vertex::default() }));
             }
         }
         out
@@ -217,12 +205,13 @@ impl SphereBuilder {
             let phi = PI * i as f32 / stacks as f32;
             for j in 0..=slices {
                 let theta = TAU * j as f32 / slices as f32;
-                let n = Vec3::new(phi.sin() * theta.cos(), phi.cos(), phi.sin() * theta.sin());
-                verts.push(textured(
-                    n * self.radius,
-                    n,
-                    Vec2::new(j as f32 / slices as f32, i as f32 / stacks as f32),
-                ));
+                let normal = Vec3::new(phi.sin() * theta.cos(), phi.cos(), phi.sin() * theta.sin());
+                verts.push(Vertex {
+                    position: normal * self.radius,
+                    normal,
+                    uv: Vec2::new(j as f32 / slices as f32, i as f32 / stacks as f32),
+                    ..Vertex::default()
+                });
             }
         }
         let row = slices + 1;
@@ -256,11 +245,9 @@ impl CylinderBuilder {
             let a1 = TAU * (i + 1) as f32 / slices as f32;
             let p0 = Vec3::new(a0.cos() * self.radius, 0.0, a0.sin() * self.radius);
             let p1 = Vec3::new(a1.cos() * self.radius, 0.0, a1.sin() * self.radius);
-            out.extend([
-                colored(p0 - Vec3::Y * hh, color), colored(p1 - Vec3::Y * hh, color),
-                colored(p1 + Vec3::Y * hh, color), colored(p0 - Vec3::Y * hh, color),
-                colored(p1 + Vec3::Y * hh, color), colored(p0 + Vec3::Y * hh, color),
-            ]);
+            out.extend([p0 - Vec3::Y * hh, p1 - Vec3::Y * hh, p1 + Vec3::Y * hh,
+                         p0 - Vec3::Y * hh, p1 + Vec3::Y * hh, p0 + Vec3::Y * hh]
+                .map(|position| Vertex { position, color, ..Vertex::default() }));
         }
         for (y, flip) in [(-hh, true), (hh, false)] {
             let cap = Vec3::new(0.0, y, 0.0);
@@ -269,11 +256,8 @@ impl CylinderBuilder {
                 let a1 = TAU * (i + 1) as f32 / slices as f32;
                 let p0 = Vec3::new(a0.cos() * self.radius, y, a0.sin() * self.radius);
                 let p1 = Vec3::new(a1.cos() * self.radius, y, a1.sin() * self.radius);
-                if flip {
-                    out.extend([colored(cap, color), colored(p1, color), colored(p0, color)]);
-                } else {
-                    out.extend([colored(cap, color), colored(p0, color), colored(p1, color)]);
-                }
+                let tri = if flip { [cap, p1, p0] } else { [cap, p0, p1] };
+                out.extend(tri.map(|position| Vertex { position, color, ..Vertex::default() }));
             }
         }
         out
@@ -286,27 +270,28 @@ impl CylinderBuilder {
         let mut indices = Vec::new();
         for i in 0..=slices {
             let theta = TAU * i as f32 / slices as f32;
-            let n = Vec3::new(theta.cos(), 0.0, theta.sin());
+            let normal = Vec3::new(theta.cos(), 0.0, theta.sin());
             let u = i as f32 / slices as f32;
-            verts.push(textured(n * self.radius - Vec3::Y * hh, n, Vec2::new(u, 1.0)));
-            verts.push(textured(n * self.radius + Vec3::Y * hh, n, Vec2::new(u, 0.0)));
+            verts.push(Vertex { position: normal * self.radius - Vec3::Y * hh, normal, uv: Vec2::new(u, 1.0), ..Vertex::default() });
+            verts.push(Vertex { position: normal * self.radius + Vec3::Y * hh, normal, uv: Vec2::new(u, 0.0), ..Vertex::default() });
         }
         for i in 0..slices {
             let b = (i * 2) as u32;
             indices.extend_from_slice(&[b, b + 2, b + 1, b + 1, b + 2, b + 3]);
         }
-        for (y, ny, flip) in [(-hh, Vec3::NEG_Y, true), (hh, Vec3::Y, false)] {
+        for (y, normal, flip) in [(-hh, Vec3::NEG_Y, true), (hh, Vec3::Y, false)] {
             let centre = verts.len() as u32;
-            verts.push(textured(Vec3::new(0.0, y, 0.0), ny, Vec2::new(0.5, 0.5)));
+            verts.push(Vertex { position: Vec3::new(0.0, y, 0.0), normal, uv: Vec2::new(0.5, 0.5), ..Vertex::default() });
             let ring_start = verts.len() as u32;
             for i in 0..slices {
                 let theta = TAU * i as f32 / slices as f32;
                 let (cx, cz) = (theta.cos(), theta.sin());
-                verts.push(textured(
-                    Vec3::new(cx * self.radius, y, cz * self.radius),
-                    ny,
-                    Vec2::new(cx * 0.5 + 0.5, cz * 0.5 + 0.5),
-                ));
+                verts.push(Vertex {
+                    position: Vec3::new(cx * self.radius, y, cz * self.radius),
+                    normal,
+                    uv: Vec2::new(cx * 0.5 + 0.5, cz * 0.5 + 0.5),
+                    ..Vertex::default()
+                });
             }
             for i in 0..slices as u32 {
                 let a = ring_start + i;
