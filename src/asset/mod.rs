@@ -215,7 +215,14 @@ pub struct Assets {
 
 impl Assets {
     /// Create an empty cache.
+    ///
+    /// If [`embed_assets!`](crate::embed_assets) was called earlier in `main`,
+    /// the embedded `.npak` archive is automatically mounted.
     pub fn new() -> Self {
+        let pak = crate::pak::embedded_pak_bytes()
+            .and_then(|b| PakReader::from_bytes(b.to_vec(), None).ok())
+            .map(Arc::new);
+
         Self {
             textures: HashMap::new(),
             models: HashMap::new(),
@@ -223,7 +230,7 @@ impl Assets {
             pending_textures: Vec::new(),
             pending_models: Vec::new(),
             pending_sounds: Vec::new(),
-            pak: None,
+            pak,
             #[cfg(debug_assertions)]
             hot: None,
             #[cfg(debug_assertions)]

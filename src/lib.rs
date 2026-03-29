@@ -24,6 +24,29 @@ pub mod tilemap;
 pub mod time;
 pub mod ui;
 
+/// Embed the asset archive produced by `nene-build` into the binary and
+/// register it so that [`asset::Assets::new`] mounts it automatically.
+///
+/// Place this call **once**, at the top of `main()`, before `run::<App>()`:
+///
+/// ```rust,ignore
+/// fn main() {
+///     nene::embed_assets!();
+///     nene::run::<MyGame>();
+/// }
+/// ```
+///
+/// When no `build.rs` / `nene-build` is present the macro expands to nothing.
+#[macro_export]
+macro_rules! embed_assets {
+    () => {
+        #[cfg(nene_has_pak)]
+        $crate::pak::register_embedded_pak(
+            include_bytes!(env!("NENE_ASSETS_PAK"))
+        );
+    };
+}
+
 pub use nene_derive::data;
 pub use nene_derive::uniform;
 pub use nene_derive::vertex;

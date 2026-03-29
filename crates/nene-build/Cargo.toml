@@ -1,0 +1,10 @@
+[package]
+name = "nene-build"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chacha20 = { version = "0.9", optional = true }
+
+[features]
+encrypt = ["dep:chacha20"]

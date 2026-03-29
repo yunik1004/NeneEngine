@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = [".", "crates/nene-derive"]
+members = [".", "crates/nene-derive", "crates/nene-build"]
 resolver = "2"
 
 [dependencies]

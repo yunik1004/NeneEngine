@@ -1940,6 +1940,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "nene-build"
+version = "0.1.0"
+dependencies = [
+ "chacha20",
+]
+
+[[package]]
 name = "nene-derive"
 version = "0.1.0"
 dependencies = [

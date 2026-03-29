@@ -40,9 +40,28 @@
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
+use std::sync::OnceLock;
 
 use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
+
+// ── Embedded PAK (set by `embed_assets!` macro) ───────────────────────────────
+
+static EMBEDDED_PAK: OnceLock<&'static [u8]> = OnceLock::new();
+
+/// Register a compile-time-embedded PAK buffer so that [`crate::asset::Assets`]
+/// can auto-mount it in `new()`.
+///
+/// Called automatically by the [`embed_assets!`](crate::embed_assets) macro —
+/// don't call this directly.
+pub fn register_embedded_pak(bytes: &'static [u8]) {
+    let _ = EMBEDDED_PAK.set(bytes);
+}
+
+/// Return the embedded PAK bytes, if [`register_embedded_pak`] was called.
+pub(crate) fn embedded_pak_bytes() -> Option<&'static [u8]> {
+    EMBEDDED_PAK.get().copied()
+}
 
 const MAGIC: &[u8; 4] = b"NPAK";
 const VERSION: u8 = 1;
