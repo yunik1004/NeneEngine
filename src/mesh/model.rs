@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::math::{Mat4, Quat, Vec3};
+use crate::math::{Mat4, Quat, Vec2, Vec3, Vec4};
 
 use super::skeleton::{AnimChannel, Channel, Clip, Joint, Skeleton};
 use super::vertex::{Image, Mesh, Vertex};
@@ -16,11 +16,11 @@ pub type ModelError = Box<dyn std::error::Error + Send + Sync>;
 /// Static and skinned meshes are stored together in [`meshes`](Model::meshes).
 /// Skinned meshes have [`Mesh::skinned`] set to `true`.
 pub struct Model {
-    pub meshes:   Vec<Mesh>,
+    pub meshes: Vec<Mesh>,
     /// Joint hierarchy (empty if not skinned).
     pub skeleton: Skeleton,
     /// Animation clips (empty if not animated).
-    pub clips:    Vec<Clip>,
+    pub clips: Vec<Clip>,
 }
 
 impl Model {
@@ -28,7 +28,7 @@ impl Model {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, ModelError> {
         let path = path.as_ref();
         match path.extension().and_then(|e| e.to_str()) {
-            Some("obj")             => load_obj(path),
+            Some("obj") => load_obj(path),
             Some("gltf") | Some("glb") => load_gltf(path),
             ext => Err(format!("Unsupported model format: {:?}", ext).into()),
         }
@@ -62,35 +62,40 @@ fn load_obj(path: &Path) -> Result<Model, ModelError> {
             let n = mesh.positions.len() / 3;
             let vertices = (0..n)
                 .map(|i| {
-                    let position = [
+                    let position = Vec3::new(
                         mesh.positions[i * 3],
                         mesh.positions[i * 3 + 1],
                         mesh.positions[i * 3 + 2],
-                    ];
+                    );
                     let normal = if mesh.normals.len() >= (i + 1) * 3 {
-                        [
+                        Vec3::new(
                             mesh.normals[i * 3],
                             mesh.normals[i * 3 + 1],
                             mesh.normals[i * 3 + 2],
-                        ]
+                        )
                     } else {
-                        [0.0, 1.0, 0.0]
+                        Vec3::Y
                     };
                     let uv = if mesh.texcoords.len() >= (i + 1) * 2 {
-                        [mesh.texcoords[i * 2], 1.0 - mesh.texcoords[i * 2 + 1]]
+                        Vec2::new(mesh.texcoords[i * 2], 1.0 - mesh.texcoords[i * 2 + 1])
                     } else {
-                        [0.0, 0.0]
+                        Vec2::ZERO
                     };
-                    Vertex { position, normal, uv, ..Vertex::default() }
+                    Vertex {
+                        position,
+                        normal,
+                        uv,
+                        ..Vertex::default()
+                    }
                 })
                 .collect();
 
             Mesh {
                 vertices,
-                indices:    mesh.indices.clone(),
-                transform:  Mat4::IDENTITY,
+                indices: mesh.indices.clone(),
+                transform: Mat4::IDENTITY,
                 base_color: None,
-                skinned:    false,
+                skinned: false,
             }
         })
         .collect();
@@ -98,7 +103,7 @@ fn load_obj(path: &Path) -> Result<Model, ModelError> {
     Ok(Model {
         meshes,
         skeleton: Skeleton { joints: vec![] },
-        clips:    vec![],
+        clips: vec![],
     })
 }
 
@@ -153,7 +158,11 @@ fn load_gltf(path: &Path) -> Result<Model, ModelError> {
             }
         }
 
-        Ok(Model { meshes, skeleton, clips })
+        Ok(Model {
+            meshes,
+            skeleton,
+            clips,
+        })
     } else {
         let mut meshes = Vec::new();
         for scene in document.scenes() {
@@ -165,7 +174,7 @@ fn load_gltf(path: &Path) -> Result<Model, ModelError> {
         Ok(Model {
             meshes,
             skeleton: Skeleton { joints: vec![] },
-            clips:    vec![],
+            clips: vec![],
         })
     }
 }
@@ -187,25 +196,32 @@ fn collect_node(
             }
             let reader = primitive.reader(|buf| Some(&buffers[buf.index()]));
 
-            let Some(pos_iter) = reader.read_positions() else { continue };
-            let positions: Vec<[f32; 3]> = pos_iter.collect();
+            let Some(pos_iter) = reader.read_positions() else {
+                continue;
+            };
+            let positions: Vec<Vec3> = pos_iter.map(Vec3::from).collect();
             let n = positions.len();
 
-            let normals: Vec<[f32; 3]> = reader
+            let normals: Vec<Vec3> = reader
                 .read_normals()
-                .map(|it| it.collect())
-                .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; n]);
+                .map(|it| it.map(Vec3::from).collect())
+                .unwrap_or_else(|| vec![Vec3::Y; n]);
 
-            let uvs: Vec<[f32; 2]> = reader
+            let uvs: Vec<Vec2> = reader
                 .read_tex_coords(0)
-                .map(|it| it.into_f32().collect())
-                .unwrap_or_else(|| vec![[0.0, 0.0]; n]);
+                .map(|it| it.into_f32().map(Vec2::from).collect())
+                .unwrap_or_else(|| vec![Vec2::ZERO; n]);
 
             let vertices = positions
                 .into_iter()
                 .zip(normals)
                 .zip(uvs)
-                .map(|((position, normal), uv)| Vertex { position, normal, uv, ..Vertex::default() })
+                .map(|((position, normal), uv)| Vertex {
+                    position,
+                    normal,
+                    uv,
+                    ..Vertex::default()
+                })
                 .collect();
 
             let indices = reader
@@ -222,7 +238,13 @@ fn collect_node(
                     images.get(idx).map(to_rgba8)
                 });
 
-            out.push(Mesh { vertices, indices, transform: world, base_color, skinned: false });
+            out.push(Mesh {
+                vertices,
+                indices,
+                transform: world,
+                base_color,
+                skinned: false,
+            });
         }
     }
 
@@ -248,19 +270,21 @@ fn collect_skinned_node(
             }
             let reader = primitive.reader(|buf| Some(&buffers[buf.index()]));
 
-            let Some(pos_iter) = reader.read_positions() else { continue };
-            let positions: Vec<[f32; 3]> = pos_iter.collect();
+            let Some(pos_iter) = reader.read_positions() else {
+                continue;
+            };
+            let positions: Vec<Vec3> = pos_iter.map(Vec3::from).collect();
             let n = positions.len();
 
-            let normals: Vec<[f32; 3]> = reader
+            let normals: Vec<Vec3> = reader
                 .read_normals()
-                .map(|it| it.collect())
-                .unwrap_or_else(|| vec![[0.0, 1.0, 0.0]; n]);
+                .map(|it| it.map(Vec3::from).collect())
+                .unwrap_or_else(|| vec![Vec3::Y; n]);
 
-            let uvs: Vec<[f32; 2]> = reader
+            let uvs: Vec<Vec2> = reader
                 .read_tex_coords(0)
-                .map(|it| it.into_f32().collect())
-                .unwrap_or_else(|| vec![[0.0, 0.0]; n]);
+                .map(|it| it.into_f32().map(Vec2::from).collect())
+                .unwrap_or_else(|| vec![Vec2::ZERO; n]);
 
             let joints: Vec<[u8; 4]> = match reader.read_joints(0) {
                 Some(gltf::mesh::util::ReadJoints::U8(it)) => it.collect(),
@@ -270,10 +294,10 @@ fn collect_skinned_node(
                 None => vec![[0, 0, 0, 0]; n],
             };
 
-            let weights: Vec<[f32; 4]> = reader
+            let weights: Vec<Vec4> = reader
                 .read_weights(0)
-                .map(|it| it.into_f32().collect())
-                .unwrap_or_else(|| vec![[1.0, 0.0, 0.0, 0.0]; n]);
+                .map(|it| it.into_f32().map(Vec4::from).collect())
+                .unwrap_or_else(|| vec![Vec4::new(1.0, 0.0, 0.0, 0.0); n]);
 
             let vertices = positions
                 .into_iter()
@@ -302,7 +326,13 @@ fn collect_skinned_node(
                 .base_color_texture()
                 .and_then(|info| images.get(info.texture().source().index()).map(to_rgba8));
 
-            out.push(Mesh { vertices, indices, transform: world, base_color, skinned: true });
+            out.push(Mesh {
+                vertices,
+                indices,
+                transform: world,
+                base_color,
+                skinned: true,
+            });
         }
     }
 
@@ -333,15 +363,27 @@ fn load_gltf_clips(
                     match reader.read_outputs()? {
                         ReadOutputs::Translations(it) => {
                             let values = it.map(Vec3::from).collect();
-                            Some(AnimChannel::Translation(Channel { joint, times, values }))
+                            Some(AnimChannel::Translation(Channel {
+                                joint,
+                                times,
+                                values,
+                            }))
                         }
                         ReadOutputs::Rotations(rots) => {
                             let values = rots.into_f32().map(Quat::from_array).collect();
-                            Some(AnimChannel::Rotation(Channel { joint, times, values }))
+                            Some(AnimChannel::Rotation(Channel {
+                                joint,
+                                times,
+                                values,
+                            }))
                         }
                         ReadOutputs::Scales(it) => {
                             let values = it.map(Vec3::from).collect();
-                            Some(AnimChannel::Scale(Channel { joint, times, values }))
+                            Some(AnimChannel::Scale(Channel {
+                                joint,
+                                times,
+                                values,
+                            }))
                         }
                         ReadOutputs::MorphTargetWeights(_) => None,
                     }
@@ -413,9 +455,12 @@ pub(crate) fn to_rgba8(img: &gltf::image::Data) -> Image {
             .pixels
             .chunks_exact(12)
             .flat_map(|p| {
-                let r = (f32::from_le_bytes([p[0], p[1], p[2], p[3]]).clamp(0.0, 1.0) * 255.0) as u8;
-                let g = (f32::from_le_bytes([p[4], p[5], p[6], p[7]]).clamp(0.0, 1.0) * 255.0) as u8;
-                let b = (f32::from_le_bytes([p[8], p[9], p[10], p[11]]).clamp(0.0, 1.0) * 255.0) as u8;
+                let r =
+                    (f32::from_le_bytes([p[0], p[1], p[2], p[3]]).clamp(0.0, 1.0) * 255.0) as u8;
+                let g =
+                    (f32::from_le_bytes([p[4], p[5], p[6], p[7]]).clamp(0.0, 1.0) * 255.0) as u8;
+                let b =
+                    (f32::from_le_bytes([p[8], p[9], p[10], p[11]]).clamp(0.0, 1.0) * 255.0) as u8;
                 [r, g, b, 255]
             })
             .collect(),
@@ -423,14 +468,22 @@ pub(crate) fn to_rgba8(img: &gltf::image::Data) -> Image {
             .pixels
             .chunks_exact(16)
             .flat_map(|p| {
-                let r = (f32::from_le_bytes([p[0], p[1], p[2], p[3]]).clamp(0.0, 1.0) * 255.0) as u8;
-                let g = (f32::from_le_bytes([p[4], p[5], p[6], p[7]]).clamp(0.0, 1.0) * 255.0) as u8;
-                let b = (f32::from_le_bytes([p[8], p[9], p[10], p[11]]).clamp(0.0, 1.0) * 255.0) as u8;
-                let a = (f32::from_le_bytes([p[12], p[13], p[14], p[15]]).clamp(0.0, 1.0) * 255.0) as u8;
+                let r =
+                    (f32::from_le_bytes([p[0], p[1], p[2], p[3]]).clamp(0.0, 1.0) * 255.0) as u8;
+                let g =
+                    (f32::from_le_bytes([p[4], p[5], p[6], p[7]]).clamp(0.0, 1.0) * 255.0) as u8;
+                let b =
+                    (f32::from_le_bytes([p[8], p[9], p[10], p[11]]).clamp(0.0, 1.0) * 255.0) as u8;
+                let a = (f32::from_le_bytes([p[12], p[13], p[14], p[15]]).clamp(0.0, 1.0) * 255.0)
+                    as u8;
                 [r, g, b, a]
             })
             .collect(),
     };
 
-    Image { width: img.width, height: img.height, data: rgba }
+    Image {
+        width: img.width,
+        height: img.height,
+        data: rgba,
+    }
 }

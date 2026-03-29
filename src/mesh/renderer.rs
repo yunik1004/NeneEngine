@@ -4,99 +4,8 @@ use crate::renderer::{
     PipelineDescriptor, RenderPass, ShadowMap, Texture, UniformBuffer, VertexBuffer,
 };
 
-use super::vertex::Vertex;
 use super::Model;
-
-// ── ColorMesh ─────────────────────────────────────────────────────────────────
-
-/// Unlit WGSL shader — reads position from @location(0) and color from @location(3).
-const COLOR_WGSL: &str = "
-struct Transform { mvp: mat4x4<f32> }
-@group(0) @binding(0) var<uniform> u: Transform;
-
-struct VIn {
-    @location(0) position: vec3<f32>,
-    @location(3) color:    vec4<f32>,
-}
-struct VOut {
-    @builtin(position) clip: vec4<f32>,
-    @location(0)       color: vec4<f32>,
-}
-
-@vertex fn vs_main(v: VIn) -> VOut {
-    return VOut(u.mvp * vec4(v.position, 1.0), v.color);
-}
-
-@fragment fn fs_main(v: VOut) -> @location(0) vec4<f32> {
-    return v.color;
-}
-";
-
-/// A dynamic mesh rendered with per-vertex colors.
-///
-/// Use this when geometry changes every frame (e.g. procedurally generated shapes).
-/// For static geometry consider [`crate::renderer::FlatObject`].
-pub struct ColorMesh {
-    pipeline: Pipeline,
-    vbuf:     Option<VertexBuffer>,
-    ibuf:     Option<IndexBuffer>,
-    count:    u32,
-    ubuf:     UniformBuffer,
-}
-
-impl ColorMesh {
-    pub fn new(ctx: &mut Context) -> Self {
-        Self {
-            pipeline: ctx.create_pipeline(
-                PipelineDescriptor::new(COLOR_WGSL, Vertex::layout())
-                    .with_uniform()
-                    .with_alpha_blend(),
-            ),
-            vbuf:  None,
-            ibuf:  None,
-            count: 0,
-            ubuf:  ctx.create_uniform_buffer(&glam::Mat4::IDENTITY),
-        }
-    }
-
-    /// Upload new vertex data. Must be called at least once before [`render`](Self::render).
-    pub fn set_geometry(&mut self, ctx: &mut Context, verts: &[Vertex]) {
-        if verts.is_empty() {
-            self.count = 0;
-            return;
-        }
-        self.vbuf  = Some(ctx.create_vertex_buffer(verts));
-        self.count = verts.len() as u32;
-        self.ibuf  = None;
-    }
-
-    /// Upload index data (optional).
-    pub fn set_indices(&mut self, ctx: &mut Context, indices: &[u32]) {
-        self.ibuf = if indices.is_empty() {
-            None
-        } else {
-            Some(ctx.create_index_buffer(indices))
-        };
-    }
-
-    /// Update the model-view-projection transform.
-    pub fn set_transform(&mut self, ctx: &mut Context, mvp: glam::Mat4) {
-        ctx.update_uniform_buffer(&self.ubuf, &mvp);
-    }
-
-    /// Draw the mesh into `pass`.
-    pub fn render(&self, pass: &mut RenderPass) {
-        let Some(vbuf) = &self.vbuf else { return };
-        pass.set_pipeline(&self.pipeline);
-        pass.set_uniform(0, &self.ubuf);
-        pass.set_vertex_buffer(0, vbuf);
-        if let Some(ibuf) = &self.ibuf {
-            pass.draw_indexed(ibuf);
-        } else {
-            pass.draw(0..self.count);
-        }
-    }
-}
+use super::vertex::Vertex;
 
 // ── LitShadowedModel ──────────────────────────────────────────────────────────
 
@@ -139,12 +48,12 @@ impl ColorMesh {
 /// ```
 pub struct LitShadowedModel {
     shadow_pipeline: Pipeline,
-    main_pipeline:   Pipeline,
-    vbufs:           Vec<VertexBuffer>,
-    ibufs:           Vec<IndexBuffer>,
-    textures:        Vec<Texture>,
+    main_pipeline: Pipeline,
+    vbufs: Vec<VertexBuffer>,
+    ibufs: Vec<IndexBuffer>,
+    textures: Vec<Texture>,
     mesh_transforms: Vec<glam::Mat4>,
-    uniforms:        Vec<UniformBuffer>,
+    uniforms: Vec<UniformBuffer>,
 }
 
 impl LitShadowedModel {
@@ -164,6 +73,7 @@ impl LitShadowedModel {
                     shadow: true,
                     casts_shadow: true,
                     instanced: false,
+                    vertex_color: false,
                 }),
                 Vertex::layout(),
             )
@@ -176,11 +86,11 @@ impl LitShadowedModel {
 
         let blank = MaterialUniform::default();
 
-        let mut vbufs           = Vec::new();
-        let mut ibufs           = Vec::new();
-        let mut textures        = Vec::new();
+        let mut vbufs = Vec::new();
+        let mut ibufs = Vec::new();
+        let mut textures = Vec::new();
         let mut mesh_transforms = Vec::new();
-        let mut uniforms        = Vec::new();
+        let mut uniforms = Vec::new();
 
         for mesh in model.meshes.iter().filter(|m| !m.skinned) {
             vbufs.push(ctx.create_vertex_buffer(&mesh.vertices));
@@ -195,7 +105,15 @@ impl LitShadowedModel {
             uniforms.push(ctx.create_uniform_buffer(&blank));
         }
 
-        Self { shadow_pipeline, main_pipeline, vbufs, ibufs, textures, mesh_transforms, uniforms }
+        Self {
+            shadow_pipeline,
+            main_pipeline,
+            vbufs,
+            ibufs,
+            textures,
+            mesh_transforms,
+            uniforms,
+        }
     }
 
     /// Upload per-frame uniforms for all meshes.

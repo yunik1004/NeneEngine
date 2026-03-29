@@ -1,10 +1,10 @@
 use nene::animation::{
-    AnimChannel, AnimState, Animator, Channel, Clip, Joint, JointPose, Skeleton,
-    StateMachine, skinning_wgsl,
+    AnimChannel, AnimState, Animator, Channel, Clip, Joint, JointPose, Skeleton, StateMachine,
+    skinning_wgsl,
 };
-use nene::mesh::Vertex;
 use nene::math::{Mat4, Vec3};
 use nene::mesh::Model;
+use nene::mesh::Vertex;
 
 fn approx_eq(a: f32, b: f32) -> bool {
     (a - b).abs() < 1e-4

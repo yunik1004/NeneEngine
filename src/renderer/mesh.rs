@@ -8,9 +8,11 @@ use crate::mesh::{Mesh, Vertex};
 ///
 /// Upload vertex and index data once; pass a reference to every
 /// [`Material`] render call instead of managing buffers separately.
+/// For dynamic geometry (updated every frame), use [`update`](GpuMesh::update).
 pub struct GpuMesh {
     pub(super) vbuf: VertexBuffer,
-    pub(super) ibuf: IndexBuffer,
+    pub(super) ibuf: Option<IndexBuffer>,
+    count: u32,
 }
 
 impl GpuMesh {
@@ -18,24 +20,39 @@ impl GpuMesh {
     pub fn from_mesh(ctx: &mut Context, mesh: &Mesh) -> Self {
         Self {
             vbuf: ctx.create_vertex_buffer(&mesh.vertices),
-            ibuf: ctx.create_index_buffer(&mesh.indices),
+            ibuf: Some(ctx.create_index_buffer(&mesh.indices)),
+            count: 0,
         }
     }
 
     /// Create from raw vertex and index slices.
+    /// Pass an empty `indices` slice for a non-indexed (triangle-list) draw.
     pub fn new(ctx: &mut Context, vertices: &[Vertex], indices: &[u32]) -> Self {
+        let ibuf = (!indices.is_empty()).then(|| ctx.create_index_buffer(indices));
         Self {
             vbuf: ctx.create_vertex_buffer(vertices),
-            ibuf: ctx.create_index_buffer(indices),
+            ibuf,
+            count: vertices.len() as u32,
         }
     }
 
-    /// Bind the vertex buffer and issue the indexed draw call.
+    /// Re-upload vertex data for dynamic meshes. Replaces the vertex buffer each call.
+    pub fn update(&mut self, ctx: &mut Context, vertices: &[Vertex]) {
+        self.vbuf = ctx.create_vertex_buffer(vertices);
+        self.count = vertices.len() as u32;
+    }
+
+    /// Bind the vertex buffer and issue the draw call.
     ///
-    /// Escape hatch for custom pipelines — call `Material::render` instead for the normal path.
+    /// Uses indexed draw when indices were provided at creation, otherwise
+    /// issues a plain draw for non-indexed triangle lists.
     pub fn draw(&self, pass: &mut RenderPass) {
         pass.set_vertex_buffer(0, &self.vbuf);
-        pass.draw_indexed(&self.ibuf);
+        if let Some(ibuf) = &self.ibuf {
+            pass.draw_indexed(ibuf);
+        } else {
+            pass.draw(0..self.count);
+        }
     }
 }
 
@@ -44,8 +61,8 @@ impl GpuMesh {
 /// Bundles the shared geometry and the per-instance buffer.
 /// Call [`update`](InstancedMesh::update) every frame with the new instance list.
 pub struct InstancedMesh {
-    pub(super) vbuf:     VertexBuffer,
-    pub(super) ibuf:     IndexBuffer,
+    pub(super) vbuf: VertexBuffer,
+    pub(super) ibuf: IndexBuffer,
     pub(super) inst_buf: InstanceBuffer,
     count: u32,
 }
@@ -58,10 +75,10 @@ impl InstancedMesh {
         instances: &[InstanceData],
     ) -> Self {
         Self {
-            vbuf:     ctx.create_vertex_buffer(vertices),
-            ibuf:     ctx.create_index_buffer(indices),
+            vbuf: ctx.create_vertex_buffer(vertices),
+            ibuf: ctx.create_index_buffer(indices),
             inst_buf: ctx.create_instance_buffer(instances),
-            count:    instances.len() as u32,
+            count: instances.len() as u32,
         }
     }
 

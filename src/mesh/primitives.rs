@@ -2,23 +2,25 @@
 
 use std::f32::consts::{PI, TAU};
 
+use crate::math::{Vec2, Vec3, Vec4};
+
 use super::Vertex;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn colored(x: f32, y: f32, z: f32, color: [f32; 4]) -> Vertex {
     Vertex {
-        position: [x, y, z],
-        color,
+        position: Vec3::new(x, y, z),
+        color: Vec4::from(color),
         ..Vertex::default()
     }
 }
 
 fn textured(position: [f32; 3], normal: [f32; 3], uv: [f32; 2]) -> Vertex {
     Vertex {
-        position,
-        normal,
-        uv,
+        position: Vec3::from(position),
+        normal: Vec3::from(normal),
+        uv: Vec2::from(uv),
         ..Vertex::default()
     }
 }
@@ -57,8 +59,18 @@ pub fn circle_segments(
         let a0 = TAU * i as f32 / n as f32;
         let a1 = TAU * (i + 1) as f32 / n as f32;
         out.push(colored(cx, cy, 0.0, color));
-        out.push(colored(cx + a0.cos() * radius, cy + a0.sin() * radius, 0.0, color));
-        out.push(colored(cx + a1.cos() * radius, cy + a1.sin() * radius, 0.0, color));
+        out.push(colored(
+            cx + a0.cos() * radius,
+            cy + a0.sin() * radius,
+            0.0,
+            color,
+        ));
+        out.push(colored(
+            cx + a1.cos() * radius,
+            cy + a1.sin() * radius,
+            0.0,
+            color,
+        ));
     }
     out
 }
@@ -73,14 +85,7 @@ pub fn triangle(a: [f32; 2], b: [f32; 2], c: [f32; 2], color: [f32; 4]) -> Vec<V
 }
 
 /// Thick line.
-pub fn line(
-    x1: f32,
-    y1: f32,
-    x2: f32,
-    y2: f32,
-    thickness: f32,
-    color: [f32; 4],
-) -> Vec<Vertex> {
+pub fn line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: [f32; 4]) -> Vec<Vertex> {
     let (dx, dy) = (x2 - x1, y2 - y1);
     let len = (dx * dx + dy * dy).sqrt().max(f32::EPSILON);
     let (nx, ny) = (-dy / len * thickness * 0.5, dx / len * thickness * 0.5);
@@ -129,9 +134,9 @@ impl QuadBuilder {
         let (hw, hh) = (self.w * 0.5, self.h * 0.5);
         let verts = vec![
             textured([-hw, -hh, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0]),
-            textured([ hw, -hh, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0]),
-            textured([ hw,  hh, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0]),
-            textured([-hw,  hh, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0]),
+            textured([hw, -hh, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0]),
+            textured([hw, hh, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0]),
+            textured([-hw, hh, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0]),
         ];
         (verts, vec![0, 1, 2, 0, 2, 3])
     }
@@ -320,10 +325,10 @@ impl CylinderBuilder {
             let (x1, z1) = (a1.cos() * self.radius, a1.sin() * self.radius);
             out.push(colored(x0, -hh, z0, color));
             out.push(colored(x1, -hh, z1, color));
-            out.push(colored(x1,  hh, z1, color));
+            out.push(colored(x1, hh, z1, color));
             out.push(colored(x0, -hh, z0, color));
-            out.push(colored(x1,  hh, z1, color));
-            out.push(colored(x0,  hh, z0, color));
+            out.push(colored(x1, hh, z1, color));
+            out.push(colored(x0, hh, z0, color));
         }
         for (y, flip) in [(-hh, true), (hh, false)] {
             for i in 0..slices {
@@ -412,11 +417,19 @@ pub fn unit_cube() -> CubeBuilder {
     cube(1.0, 1.0, 1.0)
 }
 pub fn sphere(radius: f32, stacks: u32, slices: u32) -> SphereBuilder {
-    SphereBuilder { radius, stacks, slices }
+    SphereBuilder {
+        radius,
+        stacks,
+        slices,
+    }
 }
 pub fn unit_sphere() -> SphereBuilder {
     sphere(1.0, 32, 32)
 }
 pub fn cylinder(radius: f32, height: f32, slices: u32) -> CylinderBuilder {
-    CylinderBuilder { radius, height, slices }
+    CylinderBuilder {
+        radius,
+        height,
+        slices,
+    }
 }

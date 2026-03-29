@@ -65,8 +65,8 @@
 use std::marker::PhantomData;
 
 use super::{
-    Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexAttribute,
-    VertexFormat, VertexLayout,
+    Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexAttribute, VertexFormat,
+    VertexLayout,
     context::Context,
     light::{AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight},
     mesh::{GpuMesh, InstancedMesh},
@@ -188,6 +188,7 @@ pub(crate) struct Features {
     pub(crate) shadow: bool,
     pub(crate) casts_shadow: bool,
     pub(crate) instanced: bool,
+    pub(crate) vertex_color: bool,
 }
 
 // ── MaterialBuilder ───────────────────────────────────────────────────────────
@@ -254,6 +255,14 @@ impl<T, S> MaterialBuilder<T, S> {
     /// Use [`Material::render_instanced`] to draw.
     pub fn instanced(mut self) -> Self {
         self.feat.instanced = true;
+        self
+    }
+
+    /// Read per-vertex color from `@location(3)` (the `color` field of [`Vertex`](crate::mesh::Vertex)).
+    ///
+    /// Replaces the uniform tint color with the per-vertex color for each fragment.
+    pub fn vertex_color(mut self) -> Self {
+        self.feat.vertex_color = true;
         self
     }
 
@@ -384,8 +393,7 @@ impl<T, S> Material<T, S> {
         };
         pass.set_pipeline(sp);
         pass.set_uniform(0, &self.ubuf);
-        pass.set_vertex_buffer(0, &mesh.vbuf);
-        pass.draw_indexed(&mesh.ibuf);
+        mesh.draw(pass);
     }
 
     /// Instanced draw. Only valid for materials built with
@@ -405,7 +413,6 @@ impl<T, S> Material<T, S> {
         texture: Option<&Texture>,
         shadow_map: Option<&ShadowMap>,
     ) {
-        let (vbuf, ibuf) = (&mesh.vbuf, &mesh.ibuf);
         pass.set_pipeline(&self.pipeline);
         pass.set_uniform(0, &self.ubuf);
         if let Some(t) = texture {
@@ -414,8 +421,7 @@ impl<T, S> Material<T, S> {
         if let Some(sm) = shadow_map {
             pass.set_shadow_map(2, sm);
         }
-        pass.set_vertex_buffer(0, vbuf);
-        pass.draw_indexed(ibuf);
+        mesh.draw(pass);
     }
 }
 
@@ -484,7 +490,7 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
     let normal_loc = needs_normal.then(&mut next);
     let uv_loc = feat.texture.then(&mut next);
     let lspace_loc = feat.shadow.then(&mut next);
-    let color_loc = feat.instanced.then(next);
+    let color_loc = (feat.instanced || feat.vertex_color).then(next);
 
     let mut s = String::new();
 
@@ -531,6 +537,9 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
          \t@location(1) nor: vec3<f32>,\n\
          \t@location(2) uv:  vec2<f32>,\n",
     );
+    if feat.vertex_color {
+        s.push_str("\t@location(3) v_color: vec4<f32>,\n");
+    }
     if feat.instanced {
         // Instance attributes start at location 6 (after Vertex's 0–5).
         s.push_str(
@@ -563,7 +572,11 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
         s.push_str("\to.light_space = u.light_vp * world;\n");
     }
     if color_loc.is_some() {
-        s.push_str("\to.color = i_color;\n");
+        if feat.vertex_color {
+            s.push_str("\to.color = v_color;\n");
+        } else {
+            s.push_str("\to.color = i_color;\n");
+        }
     }
     s.push_str("\treturn o;\n}\n");
 
@@ -576,7 +589,7 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
              \tvar rgb = albedo.rgb;\n\
              \tlet alpha = albedo.a;\n",
         );
-    } else if feat.instanced {
+    } else if feat.instanced || feat.vertex_color {
         s.push_str("\tvar rgb = v.color.rgb;\n\tlet alpha = v.color.a;\n");
     } else {
         s.push_str("\tvar rgb = u.color.rgb;\n\tlet alpha = u.color.a;\n");

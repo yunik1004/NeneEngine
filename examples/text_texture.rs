@@ -18,30 +18,30 @@ use nene::{
 };
 
 struct TextDemo {
-    mesh:    Option<GpuMesh>,
-    mat:     Option<Material<HasTexture>>,
-    text:    Option<TextRenderer>,
+    mesh: Option<GpuMesh>,
+    mat: Option<Material<HasTexture>>,
+    text: Option<TextRenderer>,
     texture: Option<Texture>,
-    angle:   f32,
-    frame:   u32,
+    angle: f32,
+    frame: u32,
 }
 
 impl App for TextDemo {
     fn new() -> Self {
         TextDemo {
-            mesh:    None,
-            mat:     None,
-            text:    None,
+            mesh: None,
+            mat: None,
+            text: None,
             texture: None,
-            angle:   0.0,
-            frame:   0,
+            angle: 0.0,
+            frame: 0,
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         let (verts, indices) = quad(4.0, 1.0).mesh();
         self.mesh = Some(GpuMesh::new(ctx, &verts, &indices));
-        self.mat  = Some(MaterialBuilder::new().texture().build(ctx));
+        self.mat = Some(MaterialBuilder::new().texture().build(ctx));
         self.text = Some(TextRenderer::new(ctx));
     }
 
@@ -59,7 +59,9 @@ impl App for TextDemo {
         if let Some(text) = &mut self.text {
             text.queue(
                 &format!("Frame: {}", self.frame),
-                10.0, 10.0, 48.0,
+                10.0,
+                10.0,
+                48.0,
                 [1.0, 1.0, 1.0, 1.0],
             );
             text.queue("nene engine", 10.0, 70.0, 32.0, [0.6, 0.9, 1.0, 1.0]);
@@ -68,7 +70,9 @@ impl App for TextDemo {
             text.queue("Hello, Nene!", 20.0, 20.0, 36.0, [1.0, 1.0, 1.0, 1.0]);
             text.queue(
                 "↑ text baked into texture  ↑",
-                20.0, 64.0, 20.0,
+                20.0,
+                64.0,
+                20.0,
                 [0.6, 0.6, 0.6, 1.0],
             );
             text.prepare(ctx);
@@ -81,9 +85,7 @@ impl App for TextDemo {
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-        if let (Some(mat), Some(mesh), Some(tex)) =
-            (&self.mat, &self.mesh, &self.texture)
-        {
+        if let (Some(mat), Some(mesh), Some(tex)) = (&self.mat, &self.mesh, &self.texture) {
             mat.render(pass, mesh, tex);
         }
         if let Some(text) = &self.text {

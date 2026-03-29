@@ -13,7 +13,7 @@ cosmic-text = "0.18.2"
 cpal = "0.17.3"
 encase = "0.12.0"
 gilrs = "0.11.1"
-glam = { version = "0.30", features = ["bytemuck", "encase"] }
+glam = { version = "0.30", features = ["bytemuck", "encase", "scalar-math"] }
 gltf = "1.4.1"
 image = "0.25.10"
 nene-derive = { path = "crates/nene-derive" }

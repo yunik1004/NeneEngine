@@ -1,4 +1,4 @@
-use nene::math::Mat4;
+use nene::math::{Mat4, Vec2, Vec3};
 use nene::mesh::{Model, Vertex};
 
 fn write_temp_obj(name: &str, content: &str) -> std::path::PathBuf {
@@ -190,10 +190,10 @@ fn load_obj_positions_correct() {
     let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
 
-    let positions: Vec<[f32; 3]> = mesh.vertices.iter().map(|v| v.position).collect();
-    assert!(positions.contains(&[0.0, 0.5, 0.0]));
-    assert!(positions.contains(&[-0.5, -0.5, 0.0]));
-    assert!(positions.contains(&[0.5, -0.5, 0.0]));
+    let positions: Vec<Vec3> = mesh.vertices.iter().map(|v| v.position).collect();
+    assert!(positions.contains(&Vec3::new(0.0, 0.5, 0.0)));
+    assert!(positions.contains(&Vec3::new(-0.5, -0.5, 0.0)));
+    assert!(positions.contains(&Vec3::new(0.5, -0.5, 0.0)));
 }
 
 #[test]
@@ -204,7 +204,7 @@ fn load_obj_normals_fallback() {
     let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
     for v in &mesh.vertices {
-        assert_eq!(v.normal, [0.0, 1.0, 0.0]);
+        assert_eq!(v.normal, Vec3::Y);
     }
 }
 
@@ -216,7 +216,7 @@ fn load_obj_uv_fallback() {
     let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
     for v in &mesh.vertices {
-        assert_eq!(v.uv, [0.0, 0.0]);
+        assert_eq!(v.uv, Vec2::ZERO);
     }
 }
 
@@ -254,10 +254,10 @@ fn load_gltf_positions_correct() {
     let path = write_triangle_gltf("nene_test_tri_pos.gltf");
     let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
-    let positions: Vec<[f32; 3]> = mesh.vertices.iter().map(|v| v.position).collect();
-    assert!(positions.contains(&[-0.5, -0.5, 0.0]));
-    assert!(positions.contains(&[0.5, -0.5, 0.0]));
-    assert!(positions.contains(&[0.0, 0.5, 0.0]));
+    let positions: Vec<Vec3> = mesh.vertices.iter().map(|v| v.position).collect();
+    assert!(positions.contains(&Vec3::new(-0.5, -0.5, 0.0)));
+    assert!(positions.contains(&Vec3::new(0.5, -0.5, 0.0)));
+    assert!(positions.contains(&Vec3::new(0.0, 0.5, 0.0)));
 }
 
 #[test]
@@ -266,7 +266,7 @@ fn load_gltf_normals_correct() {
     let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
     for v in &mesh.vertices {
-        assert_eq!(v.normal, [0.0, 0.0, 1.0]);
+        assert_eq!(v.normal, Vec3::Z);
     }
 }
 
@@ -277,7 +277,7 @@ fn load_gltf_uv_fallback() {
     let model = Model::load(&path).unwrap();
     let mesh = &model.meshes[0];
     for v in &mesh.vertices {
-        assert_eq!(v.uv, [0.0, 0.0]);
+        assert_eq!(v.uv, Vec2::ZERO);
     }
 }
 
@@ -332,9 +332,9 @@ fn load_gltf_no_base_color() {
 fn mesh_bytemuck_pod() {
     // Verify Vertex is usable as a byte slice (Pod)
     let v = Vertex {
-        position: [1.0, 2.0, 3.0],
-        normal: [0.0, 1.0, 0.0],
-        uv: [0.5, 0.5],
+        position: Vec3::new(1.0, 2.0, 3.0),
+        normal: Vec3::Y,
+        uv: Vec2::new(0.5, 0.5),
         ..Vertex::default()
     };
     let _bytes: &[u8] = bytemuck::bytes_of(&v);

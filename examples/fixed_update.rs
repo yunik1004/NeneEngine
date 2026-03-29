@@ -12,8 +12,8 @@ use nene::{
     debug::Profiler,
     input::Input,
     math::Mat4,
-    mesh::{ColorMesh, Vertex, circle_segments},
-    renderer::{Context, RenderPass},
+    mesh::{Vertex, circle_segments},
+    renderer::{Context, GpuMesh, Material, MaterialBuilder, RenderPass},
     time::{FixedTime, Time},
     ui::Ui,
 };
@@ -46,8 +46,8 @@ const BALL_SPECS: [(f32, f32, f32, f32, f32, [f32; 4]); 6] = [
 struct FixedUpdateDemo {
     balls: Vec<Ball>,
     profiler: Profiler,
-    // GPU
-    renderer: Option<ColorMesh>,
+    mat: Option<Material>,
+    mesh: Option<GpuMesh>,
     ui: Option<Ui>,
 }
 
@@ -66,13 +66,15 @@ impl App for FixedUpdateDemo {
         FixedUpdateDemo {
             balls,
             profiler: Profiler::new(),
-            renderer: None,
+            mat: None,
+            mesh: None,
             ui: None,
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        self.renderer = Some(ColorMesh::new(ctx));
+        self.mat = Some(MaterialBuilder::new().vertex_color().build(ctx));
+        self.mesh = Some(GpuMesh::new(ctx, &[], &[]));
         self.ui = Some(Ui::new(ctx));
     }
 
@@ -83,9 +85,6 @@ impl App for FixedUpdateDemo {
     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, input: &Input) {
         let _s = self.profiler.scope("update");
 
-        let Some(renderer) = &mut self.renderer else {
-            return;
-        };
         let mut verts: Vec<Vertex> = Vec::new();
         for ball in &self.balls {
             verts.extend_from_slice(&circle_segments(
@@ -96,8 +95,13 @@ impl App for FixedUpdateDemo {
                 SIDES,
             ));
         }
-        renderer.set_geometry(ctx, &verts);
-        renderer.set_transform(ctx, Mat4::IDENTITY);
+        if let Some(mesh) = &mut self.mesh {
+            mesh.update(ctx, &verts);
+        }
+        if let Some(mat) = &mut self.mat {
+            mat.uniform.view_proj = Mat4::IDENTITY;
+            mat.flush(ctx);
+        }
         drop(_s);
 
         let cfg = ctx.surface_config();
@@ -110,8 +114,8 @@ impl App for FixedUpdateDemo {
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-        if let Some(renderer) = &self.renderer {
-            renderer.render(pass);
+        if let (Some(mat), Some(mesh)) = (&self.mat, &self.mesh) {
+            mat.render(pass, mesh);
         }
         if let Some(ui) = &self.ui {
             ui.render(pass);

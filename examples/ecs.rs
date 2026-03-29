@@ -17,8 +17,8 @@ use nene::{
     app::{App, Config, WindowId, run},
     ecs::{Entity, World},
     input::{Input, Key},
-    mesh::{ColorMesh, circle},
-    renderer::{Context, RenderPass},
+    mesh::circle,
+    renderer::{Context, GpuMesh, Material, MaterialBuilder, RenderPass},
     time::Time,
     ui::Ui,
 };
@@ -61,7 +61,8 @@ struct InRange;
 struct EcsDemo {
     world: World,
     player: Entity,
-    draw: Option<ColorMesh>,
+    mat: Option<Material>,
+    mesh: Option<GpuMesh>,
     ui: Option<Ui>,
 }
 
@@ -118,13 +119,15 @@ impl App for EcsDemo {
         EcsDemo {
             world,
             player,
-            draw: None,
+            mat: None,
+            mesh: None,
             ui: None,
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        self.draw = Some(ColorMesh::new(ctx));
+        self.mat = Some(MaterialBuilder::new().vertex_color().build(ctx));
+        self.mesh = Some(GpuMesh::new(ctx, &[], &[]));
         self.ui = Some(Ui::new(ctx));
     }
 
@@ -255,21 +258,24 @@ impl App for EcsDemo {
     }
 
     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &Input) {
-        if let Some(draw) = &mut self.draw {
-            let ortho = glam::Mat4::orthographic_rh(0.0, W, H, 0.0, -1.0, 1.0);
-            draw.set_transform(ctx, ortho);
-            let verts: Vec<_> = self
-                .world
-                .query::<Position>()
-                .iter()
-                .filter_map(|(e, pos)| {
-                    let r = self.world.get::<Radius>(e)?;
-                    let c = self.world.get::<Color>(e)?;
-                    Some(circle(pos.x, pos.y, r.0, [c.r, c.g, c.b, 1.0]))
-                })
-                .flatten()
-                .collect();
-            draw.set_geometry(ctx, &verts);
+        let ortho = glam::Mat4::orthographic_rh(0.0, W, H, 0.0, -1.0, 1.0);
+        let verts: Vec<_> = self
+            .world
+            .query::<Position>()
+            .iter()
+            .filter_map(|(e, pos)| {
+                let r = self.world.get::<Radius>(e)?;
+                let c = self.world.get::<Color>(e)?;
+                Some(circle(pos.x, pos.y, r.0, [c.r, c.g, c.b, 1.0]))
+            })
+            .flatten()
+            .collect();
+        if let Some(mesh) = &mut self.mesh {
+            mesh.update(ctx, &verts);
+        }
+        if let Some(mat) = &mut self.mat {
+            mat.uniform.view_proj = ortho;
+            mat.flush(ctx);
         }
         if let Some(ui) = &mut self.ui {
             ui.end_frame(ctx);
@@ -277,8 +283,8 @@ impl App for EcsDemo {
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-        if let Some(draw) = &self.draw {
-            draw.render(pass);
+        if let (Some(mat), Some(mesh)) = (&self.mat, &self.mesh) {
+            mat.render(pass, mesh);
         }
         if let Some(ui) = &self.ui {
             ui.render(pass);
