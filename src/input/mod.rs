@@ -1,3 +1,6 @@
+mod bindings;
+pub use bindings::{ActionMap, Binding};
+
 use std::collections::{HashMap, HashSet};
 
 use gilrs::{EventType, GamepadId, Gilrs};
@@ -80,8 +83,44 @@ impl Input {
         }
     }
 
-    /// Clear per-frame state. Called at the start of every frame.
-    pub(crate) fn begin_frame(&mut self) {
+    /// Headless [`Input`] with no window or gamepad context. Useful for tests.
+    pub fn new_headless() -> Self {
+        let mut s = Self::new();
+        s.gilrs = None;
+        s
+    }
+
+    /// Inject a key-press event (for testing or replay).
+    pub fn simulate_key_press(&mut self, key: Key) {
+        if !self.keys_held.contains(&key) {
+            self.keys_pressed.insert(key);
+            self.keys_held.insert(key);
+        }
+    }
+
+    /// Inject a key-release event (for testing or replay).
+    pub fn simulate_key_release(&mut self, key: Key) {
+        self.keys_held.remove(&key);
+        self.keys_released.insert(key);
+    }
+
+    /// Inject a mouse-button press event (for testing or replay).
+    pub fn simulate_mouse_press(&mut self, button: MouseButton) {
+        if !self.mouse_held.contains(&button) {
+            self.mouse_just_pressed.insert(button);
+            self.mouse_held.insert(button);
+        }
+    }
+
+    /// Inject a mouse-button release event (for testing or replay).
+    pub fn simulate_mouse_release(&mut self, button: MouseButton) {
+        self.mouse_held.remove(&button);
+        self.mouse_just_released.insert(button);
+    }
+
+    /// Clear per-frame transient state. Called at the start of every frame.
+    /// Also useful in tests to advance to the next simulated frame.
+    pub fn begin_frame(&mut self) {
         self.keys_pressed.clear();
         self.keys_released.clear();
         self.mouse_just_pressed.clear();
