@@ -14,12 +14,19 @@ jobs:
       - name: Install system libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y libudev-dev libasound2-dev libvulkan-dev mesa-vulkan-drivers pulseaudio
+          sudo apt-get install -y \
+            libudev-dev libasound2-dev libvulkan-dev mesa-vulkan-drivers \
+            pulseaudio libasound2-plugins
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy -- --deny warnings
       - name: Start virtual audio
-        run: pulseaudio --start
+        run: |
+          pulseaudio --start --exit-idle-time=-1
+          # Route ALSA → PulseAudio so cpal finds a device
+          mkdir -p ~/.config/alsa
+          echo 'pcm.!default { type pulse }
+ctl.!default { type pulse }' > ~/.config/alsa/asoundrc
       - run: cargo test --no-fail-fast
         env:
           WGPU_BACKEND: vulkan
