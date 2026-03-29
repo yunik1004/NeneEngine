@@ -20,10 +20,7 @@ pub(crate) use context::RenderContext;
 pub use context::{Context, HeadlessContext};
 pub use flat_object::FlatObject;
 pub(crate) use gpu_batch::GpuBatch;
-pub use light::{
-    AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight, POINT_LIGHT_WGSL,
-    PointLight, PointLightArray, point_light_array_wgsl,
-};
+pub use light::{Light, MAX_LIGHTS};
 pub use material::{
     HasShadow, HasTexture, InstanceData, Material, MaterialBuilder, MaterialUniform, NoShadow,
     NoTexture,

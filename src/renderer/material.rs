@@ -17,15 +17,15 @@
 //! ```no_run
 //! # use nene::app::{App, WindowId, run};
 //! # use nene::math::{Mat4, Vec4};
-//! # use nene::renderer::{AmbientLight, Context, DirectionalLight, GpuMesh, HasShadow, Material,
+//! # use nene::renderer::{Context, GpuMesh, HasShadow, Light, Material,
 //! #     MaterialBuilder, NoTexture, RenderPass, ShadowMap};
 //! # use nene::app::Config;
+//! # use nene::math::Vec3;
 //! struct Demo {
 //!     mat:        Option<Material<NoTexture, HasShadow>>,
 //!     mesh:       Option<GpuMesh>,
 //!     shadow_map: Option<ShadowMap>,
-//!     ambient:    AmbientLight,
-//!     directional: DirectionalLight,
+//!     sun:        Light,
 //! }
 //! impl App for Demo {
 //!     fn new() -> Self { todo!() }
@@ -33,8 +33,7 @@
 //!     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
 //!         self.mat = Some(
 //!             MaterialBuilder::new()
-//!                 .ambient()
-//!                 .directional()
+//!                 .lights()
 //!                 .shadow()
 //!                 .build(ctx),
 //!         );
@@ -43,10 +42,13 @@
 //!
 //!     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &nene::input::Input) {
 //!         let Some(mat) = &mut self.mat else { return };
-//!         mat.uniform.view_proj   = Mat4::IDENTITY;
-//!         mat.uniform.model       = Mat4::IDENTITY;
-//!         mat.uniform.ambient     = self.ambient;
-//!         mat.uniform.directional = self.directional;
+//!         mat.uniform.view_proj = Mat4::IDENTITY;
+//!         mat.uniform.model     = Mat4::IDENTITY;
+//!         mat.uniform.light_vp  = self.sun.light_view_proj(Vec3::ZERO, 5.0);
+//!         mat.uniform.set_lights(&[
+//!             Light::ambient(Vec3::ONE, 0.15),
+//!             self.sun,
+//!         ]);
 //!         mat.flush(ctx);
 //!         let (Some(mesh), Some(sm)) = (&self.mesh, &self.shadow_map) else { return };
 //!         ctx.shadow_pass(sm, |pass| mat.shadow_draw(pass, mesh));
@@ -68,7 +70,7 @@ use super::{
     Pipeline, PipelineDescriptor, RenderPass, UniformBuffer, VertexAttribute, VertexFormat,
     VertexLayout,
     context::Context,
-    light::{AMBIENT_LIGHT_WGSL, AmbientLight, DIRECTIONAL_LIGHT_WGSL, DirectionalLight},
+    light::{GPU_LIGHT_WGSL, GpuLight, Light, MAX_LIGHTS},
     mesh::GpuMesh,
     shadow::{SHADOW_WGSL, ShadowMap},
     texture::Texture,
@@ -93,6 +95,8 @@ pub struct HasShadow;
 /// All fields are present regardless of which features are active; the
 /// generated WGSL shader only reads what it needs.  Set the relevant fields
 /// and call [`Material::flush`] once per frame.
+///
+/// Use [`set_lights`](Self::set_lights) to upload lights each frame.
 #[derive(Clone, Copy, encase::ShaderType)]
 pub struct MaterialUniform {
     pub view_proj: glam::Mat4,
@@ -105,12 +109,36 @@ pub struct MaterialUniform {
     pub rim_color: glam::Vec4,
     /// World-space camera position. Required for rim lighting (`.rim()`).
     pub camera_pos: glam::Vec4,
-    pub ambient: AmbientLight,
-    pub directional: DirectionalLight,
+    /// Number of active lights in `lights`.
+    pub light_count: u32,
+    pub(crate) lights: [GpuLight; MAX_LIGHTS],
+}
+
+impl MaterialUniform {
+    /// Upload a slice of lights into the uniform.
+    ///
+    /// Silently clamps to [`MAX_LIGHTS`] entries.
+    pub fn set_lights(&mut self, lights: &[Light]) {
+        let n = lights.len().min(MAX_LIGHTS);
+        self.light_count = n as u32;
+        for (i, l) in lights.iter().take(n).enumerate() {
+            self.lights[i] = l.to_gpu();
+        }
+    }
 }
 
 impl Default for MaterialUniform {
     fn default() -> Self {
+        // Sensible defaults: a soft directional + dim ambient, matching the old
+        // per-field defaults so existing examples work without changes.
+        let mut lights = [GpuLight::default(); MAX_LIGHTS];
+        lights[0] = Light::directional(
+            glam::Vec3::new(1.0, -2.0, -1.0),
+            glam::Vec3::ONE,
+            1.0,
+        )
+        .to_gpu();
+        lights[1] = Light::ambient(glam::Vec3::ONE, 0.1).to_gpu();
         Self {
             view_proj: glam::Mat4::IDENTITY,
             model: glam::Mat4::IDENTITY,
@@ -118,8 +146,8 @@ impl Default for MaterialUniform {
             color: glam::Vec4::ONE,
             rim_color: glam::Vec4::ONE,
             camera_pos: glam::Vec4::ZERO,
-            ambient: AmbientLight::default(),
-            directional: DirectionalLight::default(),
+            light_count: 2,
+            lights,
         }
     }
 }
@@ -190,8 +218,7 @@ impl InstanceData {
 #[derive(Clone, Copy, Default)]
 pub(crate) struct Features {
     pub(crate) texture: bool,
-    pub(crate) ambient: bool,
-    pub(crate) directional: bool,
+    pub(crate) lights: bool,
     pub(crate) shadow: bool,
     pub(crate) casts_shadow: bool,
     pub(crate) instanced: bool,
@@ -243,15 +270,12 @@ impl<T, S> MaterialBuilder<T, S> {
         self
     }
 
-    /// Apply ambient lighting from [`MaterialUniform::ambient`].
-    pub fn ambient(mut self) -> Self {
-        self.feat.ambient = true;
-        self
-    }
-
-    /// Apply directional lighting from [`MaterialUniform::directional`].
-    pub fn directional(mut self) -> Self {
-        self.feat.directional = true;
+    /// Enable the light loop — reads up to [`MAX_LIGHTS`] lights from
+    /// [`MaterialUniform::lights`].
+    ///
+    /// Call [`MaterialUniform::set_lights`] each frame to update them.
+    pub fn lights(mut self) -> Self {
+        self.feat.lights = true;
         self
     }
 
@@ -520,24 +544,33 @@ impl Material<HasTexture, HasShadow> {
 
 // ── WGSL generation ───────────────────────────────────────────────────────────
 
-/// The MaterialU WGSL struct declaration — always identical regardless of features.
-/// Depends on AmbientLight and DirectionalLight types being declared first.
-const MATERIAL_U_WGSL: &str = "
-struct MaterialU {
+/// The MaterialU WGSL struct declaration.
+///
+/// Depends on `GpuLight` being declared first (included when `lights` is
+/// enabled). When `lights` is disabled the array is still present in the
+/// uniform buffer (the struct is always the same size) but the loop body is
+/// skipped.
+fn material_u_wgsl() -> String {
+    format!(
+        "
+struct MaterialU {{
     view_proj:   mat4x4<f32>,
     model:       mat4x4<f32>,
     light_vp:    mat4x4<f32>,
     color:       vec4<f32>,
     rim_color:   vec4<f32>,
     camera_pos:  vec4<f32>,
-    ambient:     AmbientLight,
-    directional: DirectionalLight,
-}
+    light_count: u32,
+    lights:      array<GpuLight, {MAX_LIGHTS}>,
+}}
 @group(0) @binding(0) var<uniform> u: MaterialU;
-";
+"
+    )
+}
 
 pub(crate) fn gen_main_wgsl(feat: Features) -> String {
-    let needs_normal = feat.ambient || feat.directional || feat.shadow || feat.rim;
+    let needs_normal = feat.lights || feat.shadow || feat.rim;
+    let needs_world_pos = feat.lights || feat.rim;
 
     // Assign VOut locations in order
     let mut loc = 0u32;
@@ -550,16 +583,17 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
     let uv_loc = feat.texture.then(&mut next);
     let lspace_loc = feat.shadow.then(&mut next);
     let color_loc = (feat.instanced || feat.vertex_color).then(&mut next);
-    let world_pos_loc = feat.rim.then(next);
+    let world_pos_loc = needs_world_pos.then(next);
 
     let mut s = String::new();
 
-    s.push_str(AMBIENT_LIGHT_WGSL);
-    s.push_str(DIRECTIONAL_LIGHT_WGSL);
+    // GpuLight struct is always included (the uniform contains it regardless of
+    // whether the light loop is active) so MaterialU layout never changes.
+    s.push_str(GPU_LIGHT_WGSL);
     if feat.shadow {
         s.push_str(SHADOW_WGSL);
     }
-    s.push_str(MATERIAL_U_WGSL);
+    s.push_str(&material_u_wgsl());
 
     if feat.texture {
         s.push_str(
@@ -683,21 +717,36 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
         s.push_str("\tvar rgb = u.color.rgb;\n\tlet alpha = u.color.a;\n");
     }
 
-    if feat.ambient || feat.directional {
+    if feat.lights {
         s.push_str("\tvar light = vec3<f32>(0.0);\n");
-        if feat.ambient {
-            s.push_str("\tlight += ambient_light(u.ambient);\n");
+        if feat.shadow {
+            s.push_str(
+                "\tlet shad = shadow_factor(shadow_tex, shadow_samp, v.light_space, 0.0);\n",
+            );
         }
-        if feat.directional {
-            if feat.shadow {
-                s.push_str(
-                    "\tlet shad = shadow_factor(shadow_tex, shadow_samp, v.light_space, 0.0);\n\
-                     \tlight += directional_light(u.directional, v.normal) * shad;\n",
-                );
-            } else {
-                s.push_str("\tlight += directional_light(u.directional, v.normal);\n");
-            }
+        s.push_str(
+            "\tfor (var i = 0u; i < u.light_count; i++) {\n\
+             \t\tlet l = u.lights[i];\n\
+             \t\tif (l.kind == 0u) {\n\
+             \t\t\tlight += l.color * l.intensity;\n\
+             \t\t} else if (l.kind == 1u) {\n\
+             \t\t\tlet d = max(dot(normalize(v.normal), normalize(-l.position)), 0.0);\n",
+        );
+        if feat.shadow {
+            s.push_str("\t\t\tlight += l.color * (l.intensity * d) * shad;\n");
+        } else {
+            s.push_str("\t\t\tlight += l.color * (l.intensity * d);\n");
         }
+        s.push_str(
+            "\t\t} else if (l.kind == 2u) {\n\
+             \t\t\tlet to_light = l.position - v.world_pos;\n\
+             \t\t\tlet dist = length(to_light);\n\
+             \t\t\tlet atten = clamp(1.0 - (dist / l.radius), 0.0, 1.0);\n\
+             \t\t\tlet d = max(dot(normalize(v.normal), normalize(to_light)), 0.0);\n\
+             \t\t\tlight += l.color * (l.intensity * d * atten * atten);\n\
+             \t\t}\n\
+             \t}\n",
+        );
         s.push_str("\trgb = rgb * light;\n");
     }
 
@@ -715,9 +764,8 @@ pub(crate) fn gen_main_wgsl(feat: Features) -> String {
 
 pub(crate) fn gen_shadow_wgsl(feat: Features) -> String {
     let mut s = String::new();
-    s.push_str(AMBIENT_LIGHT_WGSL);
-    s.push_str(DIRECTIONAL_LIGHT_WGSL);
-    s.push_str(MATERIAL_U_WGSL);
+    s.push_str(GPU_LIGHT_WGSL);
+    s.push_str(&material_u_wgsl());
     // Shadow pipeline layout: uniform(0) [→ storage(1) if skinned]
     if feat.skinned {
         s.push_str("@group(1) @binding(0) var<storage, read> joint_mats: array<mat4x4<f32>>;\n");

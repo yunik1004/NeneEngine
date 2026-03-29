@@ -8,8 +8,8 @@ use nene::{
     math::{Mat4, Vec3, Vec4},
     mesh::Model,
     renderer::{
-        AmbientLight, Context, DirectionalLight, FilterMode, GpuMesh, HasShadow, HasTexture,
-        Material, MaterialBuilder, RenderPass, ShadowMap, Texture,
+        Context, FilterMode, GpuMesh, HasShadow, HasTexture, Light, Material, MaterialBuilder,
+        RenderPass, ShadowMap, Texture,
     },
     time::Time,
 };
@@ -20,8 +20,7 @@ fn camera_view_proj(aspect: f32) -> Mat4 {
 
 struct GltfDemo {
     model: Model,
-    ambient: AmbientLight,
-    directional: DirectionalLight,
+    sun: Light,
     angle: f32,
     mat: Option<Material<HasTexture, HasShadow>>,
     meshes: Vec<GpuMesh>,
@@ -41,12 +40,7 @@ impl App for GltfDemo {
         };
         GltfDemo {
             model: Model::load(&path).expect("failed to load model"),
-            ambient: AmbientLight::new(Vec3::ONE, 0.15),
-            directional: DirectionalLight::new(
-                Vec3::new(1.0, -2.0, -1.0),
-                Vec3::new(1.0, 0.95, 0.9),
-                1.0,
-            ),
+            sun: Light::directional(Vec3::new(1.0, -2.0, -1.0), Vec3::new(1.0, 0.95, 0.9), 1.0),
             angle: 0.0,
             mat: None,
             meshes: Vec::new(),
@@ -59,8 +53,7 @@ impl App for GltfDemo {
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
         self.mat = Some(
             MaterialBuilder::new()
-                .ambient()
-                .directional()
+                .lights()
                 .texture()
                 .shadow()
                 .casts_shadow()
@@ -91,7 +84,7 @@ impl App for GltfDemo {
         let cfg = ctx.surface_config();
         let aspect = cfg.width as f32 / cfg.height as f32;
         let vp = camera_view_proj(aspect);
-        let light_vp = self.directional.light_view_proj(Vec3::ZERO, 5.0);
+        let light_vp = self.sun.light_view_proj(Vec3::ZERO, 5.0);
         let rot = Mat4::from_rotation_y(self.angle);
 
         for i in 0..self.meshes.len() {
@@ -99,8 +92,7 @@ impl App for GltfDemo {
             mat.uniform.model = rot * self.transforms[i];
             mat.uniform.light_vp = light_vp;
             mat.uniform.color = Vec4::ONE;
-            mat.uniform.ambient = self.ambient;
-            mat.uniform.directional = self.directional;
+            mat.uniform.set_lights(&[Light::ambient(Vec3::ONE, 0.15), self.sun]);
             mat.flush(ctx);
             ctx.shadow_pass(shadow_map, |pass| mat.shadow_draw(pass, &self.meshes[i]));
         }

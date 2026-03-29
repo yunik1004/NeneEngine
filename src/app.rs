@@ -37,7 +37,7 @@
 //!     fn new() -> Self { MyGame { mat: None, mesh: None } }
 //!
 //!     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-//!         self.mat  = Some(MaterialBuilder::new().ambient().build(ctx));
+//!         self.mat  = Some(MaterialBuilder::new().lights().build(ctx));
 //!         self.mesh = Some(GpuMesh::new(ctx, &[], &[]));
 //!     }
 //!

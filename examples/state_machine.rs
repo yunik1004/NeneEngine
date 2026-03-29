@@ -22,9 +22,7 @@ use nene::{
     input::{ActionMap, Input, Key},
     math::{Mat4, Quat, Vec2, Vec3, Vec4},
     mesh::{Model, Vertex},
-    renderer::{
-        AmbientLight, Context, DirectionalLight, GpuMesh, Material, MaterialBuilder, RenderPass,
-    },
+    renderer::{Context, GpuMesh, Light, Material, MaterialBuilder, RenderPass},
     time::{Ease, Time, Tween},
     ui::Ui,
 };
@@ -202,8 +200,7 @@ struct StateMachineDemo {
     gpu_mesh: Option<GpuMesh>,
     sm: StateMachine,
     camera_angle: f32,
-    ambient: AmbientLight,
-    directional: DirectionalLight,
+    lights: [Light; 2],
     next_state: usize,
     blend_tween: Option<Tween<f32>>,
     ease_idx: usize,
@@ -238,12 +235,14 @@ impl App for StateMachineDemo {
             gpu_mesh: None,
             sm,
             camera_angle: 0.0,
-            ambient: AmbientLight::new(Vec3::new(0.7, 0.75, 1.0), 0.18),
-            directional: DirectionalLight::new(
-                Vec3::new(-1.0, -1.5, -0.8).normalize(),
-                Vec3::new(1.0, 0.92, 0.8),
-                1.1,
-            ),
+            lights: [
+                Light::ambient(Vec3::new(0.7, 0.75, 1.0), 0.18),
+                Light::directional(
+                    Vec3::new(-1.0, -1.5, -0.8),
+                    Vec3::new(1.0, 0.92, 0.8),
+                    1.1,
+                ),
+            ],
             next_state: 1,
             blend_tween: None,
             ease_idx: 0,
@@ -267,8 +266,7 @@ impl App for StateMachineDemo {
         self.gpu_mesh = Some(GpuMesh::from_mesh(ctx, &self.model.meshes[0]));
 
         let mut mat = MaterialBuilder::new()
-            .ambient()
-            .directional()
+            .lights()
             .rim()
             .skinned(self.model.skeleton.joints.len())
             .build(ctx);
@@ -276,8 +274,7 @@ impl App for StateMachineDemo {
         mat.uniform.rim_color = Vec4::new(0.6, 0.9, 1.0, 1.0);
         mat.uniform.view_proj = camera.view_proj(aspect);
         mat.uniform.camera_pos = cam_pos.extend(1.0);
-        mat.uniform.ambient = self.ambient;
-        mat.uniform.directional = self.directional;
+        mat.uniform.set_lights(&self.lights);
         mat.flush(ctx);
         self.mat = Some(mat);
 

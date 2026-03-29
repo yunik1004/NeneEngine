@@ -101,7 +101,7 @@ impl App for SceneDemo {
                 id: cfg.id,
                 mat: MaterialBuilder::new()
                     .color(cfg.color)
-                    .directional()
+                    .lights()
                     .build(ctx),
                 scale: cfg.scale,
                 angle: 0.0,

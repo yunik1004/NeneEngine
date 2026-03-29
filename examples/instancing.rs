@@ -7,10 +7,7 @@ use nene::{
     input::Input,
     math::{Mat4, Quat, Vec3, Vec4},
     mesh::cube,
-    renderer::{
-        AmbientLight, Context, DirectionalLight, GpuMesh, InstanceData, Material, MaterialBuilder,
-        RenderPass,
-    },
+    renderer::{Context, GpuMesh, InstanceData, Light, Material, MaterialBuilder, RenderPass},
     time::Time,
 };
 
@@ -58,14 +55,11 @@ impl App for InstancingDemo {
             &self.instances,
         ));
 
-        let mut mat = MaterialBuilder::new()
-            .ambient()
-            .directional()
-            .instanced()
-            .build(ctx);
-        mat.uniform.ambient = AmbientLight::new(Vec3::ONE, 0.25);
-        mat.uniform.directional =
-            DirectionalLight::new(Vec3::new(1.0, 2.0, 1.0).normalize(), Vec3::ONE, 0.75);
+        let mut mat = MaterialBuilder::new().lights().instanced().build(ctx);
+        mat.uniform.set_lights(&[
+            Light::ambient(Vec3::ONE, 0.25),
+            Light::directional(Vec3::new(1.0, 2.0, 1.0), Vec3::ONE, 0.75),
+        ]);
         self.mat = Some(mat);
     }
 
