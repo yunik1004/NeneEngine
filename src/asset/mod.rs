@@ -526,8 +526,8 @@ impl Assets {
         path: &Path,
         filter: FilterMode,
     ) -> Result<Handle<Texture>, AssetError> {
-        let img = if let Some(bytes) = self.pak_read(path) {
-            image::load_from_memory(&bytes)
+        let img = if let Some(cow) = self.pak_read(path) {
+            image::load_from_memory(&cow)
                 .map_err(|e| AssetError::Decode(e.to_string()))?
                 .into_rgba8()
         } else {
@@ -612,9 +612,10 @@ impl Assets {
     }
 
     fn load_sound(&mut self, path: &Path) -> Result<Handle<Sound>, AssetError> {
-        let sound = if let Some(bytes) = self.pak_read(path) {
+        let sound = if let Some(cow) = self.pak_read(path) {
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-            Sound::from_bytes(bytes, ext).map_err(|e| AssetError::Decode(e.to_string()))?
+            Sound::from_bytes(cow.into_owned(), ext)
+                .map_err(|e| AssetError::Decode(e.to_string()))?
         } else {
             Sound::load(path).map_err(|e| AssetError::Decode(e.to_string()))?
         };
@@ -659,7 +660,7 @@ impl Assets {
     ///
     /// The lookup key is the path converted to a forward-slash string, with
     /// any leading `./` stripped.
-    fn pak_read(&self, path: &Path) -> Option<Vec<u8>> {
+    fn pak_read<'a>(&'a self, path: &Path) -> Option<std::borrow::Cow<'a, [u8]>> {
         let pak = self.pak.as_ref()?;
         let key = path.to_string_lossy().replace('\\', "/");
         let key = key.strip_prefix("./").unwrap_or(&key);

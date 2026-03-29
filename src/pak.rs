@@ -37,6 +37,7 @@
 //! let bytes = pak.read("textures/hero.png").unwrap();
 //! ```
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
@@ -212,19 +213,21 @@ impl PakReader {
     }
 
     /// Return the raw (decrypted) bytes of `path`, or `None` if not found.
-    pub fn read(&self, path: &str) -> Option<Vec<u8>> {
+    ///
+    /// Unencrypted entries are returned as a borrowed slice (zero-copy).
+    /// Encrypted entries are decrypted into an owned `Vec`.
+    pub fn read(&self, path: &str) -> Option<Cow<'_, [u8]>> {
         let &(offset, size, idx) = self.index.get(path)?;
         let start = offset as usize;
         let end = start + size as usize;
         if end > self.data.len() {
             return None;
         }
-        let raw = self.data[start..end].to_vec();
         if self.encrypted {
             let key = self.key.as_ref()?;
-            Some(chacha20_xor(&raw, key, idx))
+            Some(Cow::Owned(chacha20_xor(&self.data[start..end], key, idx)))
         } else {
-            Some(raw)
+            Some(Cow::Borrowed(&self.data[start..end]))
         }
     }
 
