@@ -16,16 +16,7 @@ pub struct GpuMesh {
 }
 
 impl GpuMesh {
-    /// Upload a [`Mesh`]'s vertex and index data to the GPU.
-    pub fn from_mesh(ctx: &mut Context, mesh: &Mesh) -> Self {
-        Self {
-            vbuf: ctx.create_vertex_buffer(&mesh.vertices),
-            ibuf: Some(ctx.create_index_buffer(&mesh.indices)),
-            count: 0,
-        }
-    }
-
-    /// Create from raw vertex and index slices.
+    /// Upload vertex and index data to the GPU.
     /// Pass an empty `indices` slice for a non-indexed (triangle-list) draw.
     pub fn new(ctx: &mut Context, vertices: &[Vertex], indices: &[u32]) -> Self {
         let ibuf = (!indices.is_empty()).then(|| ctx.create_index_buffer(indices));
@@ -34,6 +25,11 @@ impl GpuMesh {
             ibuf,
             count: vertices.len() as u32,
         }
+    }
+
+    /// Upload a [`Mesh`]'s vertex and index data to the GPU.
+    pub fn from_mesh(ctx: &mut Context, mesh: &Mesh) -> Self {
+        Self::new(ctx, &mesh.vertices, &mesh.indices)
     }
 
     /// Re-upload vertex data for dynamic meshes. Replaces the vertex buffer each call.
