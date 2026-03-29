@@ -1,4 +1,4 @@
-# nene
+# NeneEngine
 
 A small 2D/3D game engine in Rust. Built on a wgpu renderer with physics, animation, ECS, audio, networking, and more.
 
