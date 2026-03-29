@@ -5,9 +5,12 @@
 use nene::{
     app::{App, Config, WindowId, run},
     camera::Camera,
-    math::{Mat4, Vec3},
-    mesh::{LitShadowedModel, Model},
-    renderer::{AmbientLight, Context, DirectionalLight, RenderPass, ShadowMap},
+    math::{Mat4, Vec3, Vec4},
+    mesh::Model,
+    renderer::{
+        AmbientLight, Context, DirectionalLight, FilterMode, GpuMesh, HasShadow, HasTexture,
+        Material, MaterialBuilder, RenderPass, ShadowMap, Texture,
+    },
     time::Time,
 };
 
@@ -16,12 +19,15 @@ fn camera_view_proj(aspect: f32) -> Mat4 {
 }
 
 struct GltfDemo {
-    model: Model,
-    ambient: AmbientLight,
+    model:       Model,
+    ambient:     AmbientLight,
     directional: DirectionalLight,
-    angle: f32,
-    renderer: Option<LitShadowedModel>,
-    shadow_map: Option<ShadowMap>,
+    angle:       f32,
+    mat:         Option<Material<HasTexture, HasShadow>>,
+    meshes:      Vec<GpuMesh>,
+    textures:    Vec<Texture>,
+    shadow_map:  Option<ShadowMap>,
+    transforms:  Vec<Mat4>,
 }
 
 impl App for GltfDemo {
@@ -41,15 +47,35 @@ impl App for GltfDemo {
                 Vec3::new(1.0, 0.95, 0.9),
                 1.0,
             ),
-            angle: 0.0,
-            renderer: None,
+            angle:      0.0,
+            mat:        None,
+            meshes:     Vec::new(),
+            textures:   Vec::new(),
             shadow_map: None,
+            transforms: Vec::new(),
         }
     }
 
     fn window_ready(&mut self, _id: WindowId, ctx: &mut Context) {
-        self.renderer = Some(LitShadowedModel::new(ctx, &self.model));
+        self.mat = Some(
+            MaterialBuilder::new()
+                .ambient()
+                .directional()
+                .texture()
+                .shadow()
+                .casts_shadow()
+                .build(ctx),
+        );
         self.shadow_map = Some(ctx.create_shadow_map(1024));
+
+        for mesh in self.model.meshes.iter().filter(|m| !m.skinned) {
+            self.meshes.push(GpuMesh::from_mesh(ctx, mesh));
+            self.textures.push(match &mesh.base_color {
+                Some(img) => ctx.create_texture_with(img.width, img.height, &img.data, FilterMode::Linear),
+                None      => ctx.create_texture_with(1, 1, &[255, 255, 255, 255], FilterMode::Nearest),
+            });
+            self.transforms.push(mesh.transform);
+        }
     }
 
     fn update(&mut self, _input: &nene::input::Input, time: &Time) {
@@ -57,30 +83,34 @@ impl App for GltfDemo {
     }
 
     fn prepare(&mut self, _id: WindowId, ctx: &mut Context, _input: &nene::input::Input) {
-        let (Some(renderer), Some(shadow_map)) = (&self.renderer, &self.shadow_map) else {
-            return;
-        };
+        let (Some(mat), Some(shadow_map)) = (&mut self.mat, &self.shadow_map) else { return };
         let cfg = ctx.surface_config();
         let aspect = cfg.width as f32 / cfg.height as f32;
         let vp = camera_view_proj(aspect);
         let light_vp = self.directional.light_view_proj(Vec3::ZERO, 5.0);
-        let transform = Mat4::from_rotation_y(self.angle);
-        renderer.prepare(ctx, vp, transform, light_vp, self.ambient, self.directional);
-        ctx.shadow_pass(shadow_map, |pass| renderer.shadow_draw(pass));
+        let rot = Mat4::from_rotation_y(self.angle);
+
+        for i in 0..self.meshes.len() {
+            mat.uniform.view_proj   = vp;
+            mat.uniform.model       = rot * self.transforms[i];
+            mat.uniform.light_vp    = light_vp;
+            mat.uniform.color       = Vec4::ONE;
+            mat.uniform.ambient     = self.ambient;
+            mat.uniform.directional = self.directional;
+            mat.flush(ctx);
+            ctx.shadow_pass(shadow_map, |pass| mat.shadow_draw(pass, &self.meshes[i]));
+        }
     }
 
     fn render(&mut self, _id: WindowId, pass: &mut RenderPass) {
-        let (Some(renderer), Some(shadow_map)) = (&self.renderer, &self.shadow_map) else {
-            return;
-        };
-        renderer.render(pass, shadow_map);
+        let (Some(mat), Some(shadow_map)) = (&self.mat, &self.shadow_map) else { return };
+        for i in 0..self.meshes.len() {
+            mat.render(pass, &self.meshes[i], &self.textures[i], shadow_map);
+        }
     }
 
     fn windows() -> Vec<Config> {
-        vec![Config {
-            title: "glTF",
-            ..Config::default()
-        }]
+        vec![Config { title: "glTF", ..Config::default() }]
     }
 }
 
@@ -123,64 +153,29 @@ fn write_sample_gltf() -> std::path::PathBuf {
         [[-0.5, 0.5, -0.5], [-1., 0., 0.]],
     ];
     let uvs: &[[f32; 2]; 24] = &[
-        [0., 1.],
-        [1., 1.],
-        [1., 0.],
-        [0., 0.],
-        [0., 1.],
-        [1., 1.],
-        [1., 0.],
-        [0., 0.],
-        [0., 1.],
-        [1., 1.],
-        [1., 0.],
-        [0., 0.],
-        [0., 1.],
-        [1., 1.],
-        [1., 0.],
-        [0., 0.],
-        [0., 1.],
-        [1., 1.],
-        [1., 0.],
-        [0., 0.],
-        [0., 1.],
-        [1., 1.],
-        [1., 0.],
-        [0., 0.],
+        [0., 1.], [1., 1.], [1., 0.], [0., 0.],
+        [0., 1.], [1., 1.], [1., 0.], [0., 0.],
+        [0., 1.], [1., 1.], [1., 0.], [0., 0.],
+        [0., 1.], [1., 1.], [1., 0.], [0., 0.],
+        [0., 1.], [1., 1.], [1., 0.], [0., 0.],
+        [0., 1.], [1., 1.], [1., 0.], [0., 0.],
     ];
     let indices: Vec<u32> = (0..6u32)
-        .flat_map(|f| {
-            let b = f * 4;
-            [b, b + 1, b + 2, b, b + 2, b + 3]
-        })
+        .flat_map(|f| { let b = f * 4; [b, b + 1, b + 2, b, b + 2, b + 3] })
         .collect();
 
     let mut buf: Vec<u8> = Vec::new();
     let pos_off = buf.len();
-    for v in verts {
-        for &f in &v[0] {
-            buf.extend_from_slice(&f.to_le_bytes());
-        }
-    }
+    for v in verts { for &f in &v[0] { buf.extend_from_slice(&f.to_le_bytes()); } }
     let pos_len = buf.len() - pos_off;
     let nor_off = buf.len();
-    for v in verts {
-        for &f in &v[1] {
-            buf.extend_from_slice(&f.to_le_bytes());
-        }
-    }
+    for v in verts { for &f in &v[1] { buf.extend_from_slice(&f.to_le_bytes()); } }
     let nor_len = buf.len() - nor_off;
     let uv_off = buf.len();
-    for uv in uvs {
-        for &f in uv {
-            buf.extend_from_slice(&f.to_le_bytes());
-        }
-    }
+    for uv in uvs { for &f in uv { buf.extend_from_slice(&f.to_le_bytes()); } }
     let uv_len = buf.len() - uv_off;
     let idx_off = buf.len();
-    for &i in &indices {
-        buf.extend_from_slice(&i.to_le_bytes());
-    }
+    for &i in &indices { buf.extend_from_slice(&i.to_le_bytes()); }
     let idx_len = buf.len() - idx_off;
 
     let b64 = base64_encode(&buf);
@@ -222,16 +217,8 @@ fn base64_encode(data: &[u8]) -> String {
         let n = (b0 << 16) | (b1 << 8) | b2;
         out.push(T[((n >> 18) & 0x3f) as usize] as char);
         out.push(T[((n >> 12) & 0x3f) as usize] as char);
-        out.push(if chunk.len() > 1 {
-            T[((n >> 6) & 0x3f) as usize] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            T[(n & 0x3f) as usize] as char
-        } else {
-            '='
-        });
+        out.push(if chunk.len() > 1 { T[((n >> 6) & 0x3f) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 2 { T[(n & 0x3f) as usize] as char } else { '=' });
     }
     out
 }
