@@ -23,10 +23,8 @@ jobs:
       - name: Start virtual audio
         run: |
           pulseaudio --start --exit-idle-time=-1
-          # Route ALSA → PulseAudio so cpal finds a device
           mkdir -p ~/.config/alsa
-          echo 'pcm.!default { type pulse }
-ctl.!default { type pulse }' > ~/.config/alsa/asoundrc
+          printf 'pcm.!default { type pulse }\nctl.!default { type pulse }\n' > ~/.config/alsa/asoundrc
       - run: cargo test --no-fail-fast
         env:
           WGPU_BACKEND: vulkan
